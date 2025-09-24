@@ -1,6 +1,5 @@
 # Нормализованные отношения и функциональные зависимости
 
-
 ## Краткие описания таблиц
 
 * **USER** — аккаунты пользователей: учётные записи, логины, имя и привязка аватара.
@@ -19,9 +18,9 @@
 
 ---
 
-## USER(id, email, password, username, avatar\_file\_id, created\_at, updated\_at)
+## USER(id, email, password, username, avatar_file_id, created_at, updated_at)
 
-**PK:** `{id}`
+**PK:** `{id}`  
 **FK:** `avatar_file_id → FILE(id)`
 
 **ФЗ (минимальные)**
@@ -36,9 +35,22 @@
 * **3НФ:** да (нет транзитивных зависимостей от ключа).
 * **НФБК:** да (все детерминанты — суперклавиши `id`, `email`).
 
+```mermaid
+erDiagram
+  USERS {
+    UUID id PK
+    TEXT email 
+    TEXT password 
+    TEXT username
+    UUID avatar_file_id FK
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+  }
+```
+
 ---
 
-## FILE(id, url, mime\_type, size\_bytes, width, height, created\_at)
+## FILE(id, url, mime_type, size_bytes, width, height, created_at)
 
 **PK:** `{id}`
 
@@ -50,9 +62,9 @@
 
 ---
 
-## NOTE(id, owner\_id, parent\_note\_id, title, icon\_file\_id, is\_archived, created\_at, updated\_at, deleted\_at)
+## NOTE(id, owner_id, parent_note_id, title, icon_file_id, is_archived, created_at, updated_at, deleted_at)
 
-**PK:** `{id}`
+**PK:** `{id}`  
 **FK:** `owner_id → USER(id)`; `parent_note_id → NOTE(id)`; `icon_file_id → FILE(id)`
 
 **ФЗ**
@@ -63,23 +75,24 @@
 
 ---
 
-## BLOCK(id, note\_id, type, position, created\_at, updated\_at)
+## BLOCK(id, note_id, type, position, created_at, updated_at)
 
-**PK:** `{id}`
+**PK:** `{id}`  
 **FK:** `note_id → NOTE(id)`
 
 **ФЗ**
 
 * `id → note_id, type, position, created_at, updated_at`
+* `(note_id, position) → id, type, created_at, updated_at` 
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ---
 
-## BLOCK\_TEXT\_SPAN(block\_id, position, text, bold, italic, underline, strikethrough, font, size, created\_at, updated\_at)
+## BLOCK_TEXT_SPAN(block_id, position, text, bold, italic, underline, strikethrough, font, size, created_at, updated_at)
 
-**PK:** `{block_id, position}`
-**FK:** `block_id → BLOCK(id)` *(логически — только к текстовым блокам; проверим на DDL‑этапе)*
+**PK:** `{block_id, position}`  
+**FK:** `block_id → BLOCK(id)`
 
 **ФЗ**
 
@@ -94,9 +107,9 @@
 
 ---
 
-## BLOCK\_CODE(block\_id, language, code\_text, created\_at, updated\_at)
+## BLOCK_CODE(block_id, language, code_text, created_at, updated_at)
 
-**PK:** `{block_id}`
+**PK:** `{block_id}`  
 **FK:** `block_id → BLOCK(id)`
 
 **ФЗ**
@@ -107,9 +120,9 @@
 
 ---
 
-## ATTACHMENT(id, block\_id, file\_id, caption, created\_at)
+## ATTACHMENT(id, block_id, file_id, caption, created_at)
 
-**PK:** `{id}`
+**PK:** `{id}`  
 **FK:** `block_id → BLOCK(id)`; `file_id → FILE(id)`
 
 **ФЗ**
@@ -123,30 +136,29 @@
 * **3НФ:** да (нет транзитивных зависимостей от `id`).
 * **НФБК:** да (детерминант — только ключ `id`).
 
-
 ---
 
-## NOTE\_PERMISSION(note\_id, granted\_by, granted\_to, role, can\_share, granted\_at, updated\_at)
+## NOTE_PERMISSION(note_permission_id, note_id, granted_by, granted_to, role, can_share, granted_at, updated_at)
 
-**PK:** `{note_id, granted_by, granted_to}`
+**PK:** `{note_permission_id}`  
 **FK:** `note_id → NOTE(id)`; `granted_by → USER(id)`; `granted_to → USER(id)`
 
 **ФЗ**
 
-* `(note_id, granted_by, granted_to) → role, can_share, granted_at, updated_at`
+* `note_permission_id → note_id, granted_by, granted_to, role, can_share, granted_at, updated_at`
 
 **Нормальные формы**
 
 * **1НФ:** да.
-* **2НФ:** да (все неключевые зависят от всего составного ключа).
+* **2НФ:** да (все неключевые зависят от всего ключа).
 * **3НФ:** да.
 * **НФБК:** да.
 
 ---
 
-## FAVORITE(user\_id, note\_id, created\_at)
+## FAVORITE(user_id, note_id, created_at)
 
-**PK:** `{user_id, note_id}`
+**PK:** `{user_id, note_id}`  
 **FK:** `user_id → USER(id)`; `note_id → NOTE(id)`
 
 **ФЗ**
@@ -157,9 +169,9 @@
 
 ---
 
-## TAG(id, name, created\_by, updated\_at, created\_at)
+## TAG(id, name, created_by, updated_at, created_at)
 
-**PK:** `{id}`
+**PK:** `{id}`  
 **FK:** `created_by → USER(id)`
 
 **ФЗ**
@@ -171,9 +183,9 @@
 
 ---
 
-## NOTE\_TAG(note\_id, tag\_id, created\_at)
+## NOTE_TAG(note_id, tag_id, created_at)
 
-**PK:** `{note_id, tag_id}`
+**PK:** `{note_id, tag_id}`  
 **FK:** `note_id → NOTE(id)`; `tag_id → TAG(id)`
 
 **ФЗ**
@@ -181,3 +193,5 @@
 * `(note_id, tag_id) → created_at`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
+
+---

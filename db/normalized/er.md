@@ -72,6 +72,7 @@ erDiagram
   }
 
   NOTE_PERMISSION {
+    UUID note_permission_id
     UUID note_id
     UUID granted_by
     UUID granted_to
