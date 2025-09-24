@@ -18,7 +18,7 @@
 
 ---
 
-## USER(id, email, password, username, avatar_file_id, created_at, updated_at)
+## USER
 
 **PK:** `{id}`  
 **FK:** `avatar_file_id → FILE(id)`
@@ -50,7 +50,7 @@ erDiagram
 
 ---
 
-## FILE(id, url, mime_type, size_bytes, width, height, created_at)
+## FILE
 
 **PK:** `{id}`
 
@@ -60,9 +60,22 @@ erDiagram
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
+```mermaid
+erDiagram
+  FILES {
+    UUID id PK
+    TEXT url
+    TEXT mime_type
+    INTEGER size_bytes
+    INTEGER width
+    INTEGER height
+    TIMESTAMPTZ created_at
+  }
+```
+
 ---
 
-## NOTE(id, owner_id, parent_note_id, title, icon_file_id, is_archived, created_at, updated_at, deleted_at)
+## NOTE
 
 **PK:** `{id}`  
 **FK:** `owner_id → USER(id)`; `parent_note_id → NOTE(id)`; `icon_file_id → FILE(id)`
@@ -73,9 +86,24 @@ erDiagram
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
+```mermaid
+erDiagram
+  NOTES {
+    UUID id PK
+    UUID owner_id FK 
+    UUID parent_note_id FK
+    TEXT title
+    UUID icon_file_id FK
+    BOOLEAN is_archived 
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+    TIMESTAMPTZ deleted_at
+  }
+```
+
 ---
 
-## BLOCK(id, note_id, type, position, created_at, updated_at)
+## BLOCK
 
 **PK:** `{id}`  
 **FK:** `note_id → NOTE(id)`
@@ -87,9 +115,21 @@ erDiagram
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
+```mermaid
+erDiagram
+  BLOCKS {
+    UUID id PK
+    UUID note_id FK 
+    TEXT type
+    NUMERIC position
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+  }
+```
+
 ---
 
-## BLOCK_TEXT_SPAN(block_id, position, text, bold, italic, underline, strikethrough, font, size, created_at, updated_at)
+## BLOCK_TEXT_SPAN
 
 **PK:** `{block_id, position}`  
 **FK:** `block_id → BLOCK(id)`
@@ -105,9 +145,26 @@ erDiagram
 * **3НФ:** да (нет транзитивных зависимостей).
 * **НФБК:** да (единственный детерминант — составной ключ).
 
+```mermaid
+erDiagram
+  BLOCK_TEXT_SPANS {
+    UUID block_id FK 
+    NUMERIC position 
+    TEXT text 
+    BOOLEAN bold 
+    BOOLEAN italic 
+    BOOLEAN underline 
+    BOOLEAN strikethrough 
+    TEXT font 
+    INTEGER size 
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+  }
+```
+
 ---
 
-## BLOCK_CODE(block_id, language, code_text, created_at, updated_at)
+## BLOCK_CODE
 
 **PK:** `{block_id}`  
 **FK:** `block_id → BLOCK(id)`
@@ -118,9 +175,20 @@ erDiagram
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
+```mermaid
+erDiagram
+  BLOCK_CODE {
+    UUID block_id FK 
+    TEXT language
+    TEXT code_text 
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+  }
+```
+
 ---
 
-## ATTACHMENT(id, block_id, file_id, caption, created_at)
+## ATTACHMENT
 
 **PK:** `{id}`  
 **FK:** `block_id → BLOCK(id)`; `file_id → FILE(id)`
@@ -136,10 +204,20 @@ erDiagram
 * **3НФ:** да (нет транзитивных зависимостей от `id`).
 * **НФБК:** да (детерминант — только ключ `id`).
 
+```mermaid
+erDiagram
+  ATTACHMENTS {
+    UUID id PK
+    UUID block_id FK
+    UUID file_id FK 
+    TEXT caption
+    TIMESTAMPTZ created_at
+  }
+```
+
 ---
 
-## NOTE_PERMISSION(note_permission_id, note_id, granted_by, granted_to, role, can_share, granted_at, updated_at)
-
+## NOTE_PERMISSION
 **PK:** `{note_permission_id}`  
 **FK:** `note_id → NOTE(id)`; `granted_by → USER(id)`; `granted_to → USER(id)`
 
@@ -154,9 +232,23 @@ erDiagram
 * **3НФ:** да.
 * **НФБК:** да.
 
+```mermaid
+erDiagram
+  NOTE_PERMISSIONS {
+    UUID note_permission_id PK
+    UUID note_id FK 
+    UUID granted_by FK 
+    UUID granted_to FK 
+    TEXT role 
+    BOOLEAN can_share 
+    TIMESTAMPTZ granted_at
+    TIMESTAMPTZ updated_at
+  }
+```
+
 ---
 
-## FAVORITE(user_id, note_id, created_at)
+## FAVORITE
 
 **PK:** `{user_id, note_id}`  
 **FK:** `user_id → USER(id)`; `note_id → NOTE(id)`
@@ -167,9 +259,18 @@ erDiagram
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
+```mermaid
+erDiagram
+  FAVORITES {
+    UUID user_id FK
+    UUID note_id FK
+    TIMESTAMPTZ created_at
+  }
+```
+
 ---
 
-## TAG(id, name, created_by, updated_at, created_at)
+## TAG
 
 **PK:** `{id}`  
 **FK:** `created_by → USER(id)`
@@ -181,9 +282,20 @@ erDiagram
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да (детерминанты — ключи `id`/`name`).
 
+```mermaid
+erDiagram
+  TAGS {
+    UUID id PK
+    TEXT name 
+    UUID created_by FK
+    TIMESTAMPTZ updated_at
+    TIMESTAMPTZ created_at
+  }
+```
+
 ---
 
-## NOTE_TAG(note_id, tag_id, created_at)
+## NOTE_TAG
 
 **PK:** `{note_id, tag_id}`  
 **FK:** `note_id → NOTE(id)`; `tag_id → TAG(id)`
@@ -193,5 +305,14 @@ erDiagram
 * `(note_id, tag_id) → created_at`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
+
+```mermaid
+erDiagram
+  NOTE_TAGS {
+    UUID note_id FK
+    UUID tag_id FK 
+    TIMESTAMPTZ created_at
+  }
+```
 
 ---
