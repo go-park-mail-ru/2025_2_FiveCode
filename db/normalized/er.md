@@ -1,95 +1,106 @@
 ```mermaid
 erDiagram
   USER {
-    id
-    email
-    password
-    username
-    avatar_file_id
-    created_at
-    updated_at
+    UUID id
+    TEXT email
+    TEXT password
+    TEXT username
+    UUID avatar_file_id
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
+
   FILE {
-    id
-    url
-    mime_type
-    size_bytes
-    width
-    height
-    created_at
+    UUID id
+    TEXT url
+    TEXT mime_type
+    INTEGER size_bytes
+    INTEGER width
+    INTEGER height
+    TIMESTAMPTZ created_at
   }
+
   NOTE {
-    id
-    owner_id
-    parent_note_id
-    title
-    icon_file_id
-    is_archived
-    created_at
-    updated_at
-    deleted_at
+    UUID id
+    UUID owner_id
+    UUID parent_note_id
+    TEXT title
+    UUID icon_file_id
+    BOOLEAN is_archived
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+    TIMESTAMPTZ deleted_at
   }
+
   BLOCK {
-    id
-    note_id
-    type
-    position
-    created_at
-    updated_at
+    UUID id
+    UUID note_id
+    TEXT type
+    NUMERIC position
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
+
   BLOCK_TEXT_SPAN {
-    block_id
-    position
-    text
-    bold
-    italic
-    underline
-    strikethrough
-    font
-    size
-    created_at
-    updated_at
+    UUID block_id
+    NUMERIC position
+    TEXT text
+    BOOLEAN bold
+    BOOLEAN italic
+    BOOLEAN underline
+    BOOLEAN strikethrough
+    TEXT font
+    INTEGER size
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
+
   BLOCK_CODE {
-    block_id
-    language
-    code_text
-    created_at
-    updated_at
+    UUID block_id
+    TEXT language
+    TEXT code_text
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
+
   ATTACHMENT {
-    id
-    block_id
-    file_id
-    caption
-    created_at
+    UUID id
+    UUID block_id
+    UUID file_id
+    TEXT caption
+    TIMESTAMPTZ created_at
   }
+
   NOTE_PERMISSION {
-    note_id
-    granted_by
-    granted_to
-    role
-    can_share
-    granted_at
-    updated_at
+    UUID note_id
+    UUID granted_by
+    UUID granted_to
+    TEXT role
+    BOOLEAN can_share
+    TIMESTAMPTZ granted_at
+    TIMESTAMPTZ updated_at
   }
+
   FAVORITE {
-    user_id
-    note_id
-    created_at
+    UUID user_id
+    UUID note_id
+    TIMESTAMPTZ created_at
   }
+
   TAG {
-    id
-    name
-    created_by
-    updated_at
-    created_at
+    UUID id
+    TEXT name
+    UUID created_by
+    TIMESTAMPTZ updated_at
+    TIMESTAMPTZ created_at
   }
+
   NOTE_TAG {
-    note_id
-    tag_id
-    created_at
+    UUID note_id
+    UUID tag_id
+    TIMESTAMPTZ created_at
   }
+
   USER ||--o{ NOTE : owns
   NOTE |o--o{ NOTE : parent_of
   NOTE ||--o{ BLOCK : contains
