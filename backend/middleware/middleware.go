@@ -32,7 +32,7 @@ func MakeAuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 			session, err := r.Cookie("session_id")
 			if errors.Is(err, http.ErrNoCookie) {
 				log.Info().Msg("no session cookie found in auth middleware")
-				handler.WriteJSON(w, http.StatusNotFound, map[string]string{"error": "no session found"})
+				handler.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 				return
 			}
 			if err != nil {

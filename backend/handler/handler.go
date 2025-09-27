@@ -136,7 +136,7 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	session, err := r.Cookie("session_id")
 	if errors.Is(err, http.ErrNoCookie) {
 		log.Info().Msg("no session cookie found")
-		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "no session found"})
+		WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 	if err != nil {
