@@ -6,11 +6,31 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"github.com/gorilla/handlers"
-	"github.com/gorilla/mux"
 	"net/http"
+	"strconv"
 	"time"
+
+	"github.com/gorilla/mux"
+	"github.com/rs/zerolog/log"
 )
+
+type ctxKey string
+
+const UserIDKey ctxKey = "userID"
+const sessionDuration = 30 * 24 * time.Hour
+
+func WithUserID(ctx context.Context, id uint64) context.Context {
+	return context.WithValue(ctx, UserIDKey, id)
+}
+
+func GetUserID(ctx context.Context) (uint64, bool) {
+	value := ctx.Value(UserIDKey)
+	if value == nil {
+		return 0, false
+	}
+	id, ok := value.(uint64)
+	return id, ok
+}
 
 type Handler struct {
 	Store *store.Store
@@ -23,12 +43,16 @@ func NewHandler(s *store.Store) *Handler {
 func WriteJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	_ = json.NewEncoder(w).Encode(v)
+	
+	if err := json.NewEncoder(w).Encode(v); err != nil {
+		log.Error().Err(err).Msg("json encode error")
+	}
 }
 
 type registerRequest struct {
-	Email    string `json:"email"`
-	Password string `json:"password"`
+	Email           string `json:"email"`
+	Password        string `json:"password"`
+	ConfirmPassword string `json:"confirm_password"`
 }
 
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
@@ -44,6 +68,14 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	}
 	if request.Password == "" {
 		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no password provided"})
+		return
+	}
+	if request.ConfirmPassword == "" {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no confirm password provided"})
+		return
+	}
+	if request.Password != request.ConfirmPassword {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "passwords do not match"})
 		return
 	}
 
@@ -88,7 +120,7 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sessionID := h.Store.CreateSession(user.ID)
-	expiration := time.Now().Add(10 * time.Hour)
+	expiration := time.Now().Add(sessionDuration)
 	session := &http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
@@ -102,87 +134,49 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	session, err := r.Cookie("session_id")
-	if err == nil {
-		h.Store.DeleteSession(session.Value)
-		session.Expires = time.Now().Add(-1 * time.Hour)
-		http.SetCookie(w, session)
+	if errors.Is(err, http.ErrNoCookie) {
+		log.Info().Msg("no session cookie found")
+		WriteJSON(w, http.StatusNotFound, map[string]string{"error": "no session found"})
+		return
 	}
+	if err != nil {
+		log.Error().Err(err).Msg("error getting session cookie")
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+
+	h.Store.DeleteSession(session.Value)
+	session.Expires = time.Now().Add(-1 * time.Hour)
+	http.SetCookie(w, session)
 
 	WriteJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
 
 func (h *Handler) ListNotes(w http.ResponseWriter, r *http.Request) {
-	userID, ok := GetUserID(r.Context())
+	currentUserID, ok := GetUserID(r.Context())
 	if !ok {
 		WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
 		return
 	}
 
-	notes := h.Store.ListNotes(userID)
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	if idStr == "" {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing user id"})
+		return
+	}
 
+	requestedUserID, err := strconv.ParseUint(idStr, 10, 64)
+	if err != nil {
+		WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+		return
+	}
+
+	if currentUserID != requestedUserID {
+		WriteJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+		return
+	}
+
+	notes := h.Store.ListNotes(requestedUserID)
 	WriteJSON(w, http.StatusOK, notes)
-}
-
-const frontendHost = "localhost"
-const frontendPort = "3000"
-
-func NewRouter(s *store.Store) http.Handler {
-	h := NewHandler(s)
-
-	r := mux.NewRouter()
-
-	api := r.PathPrefix("/api").Subrouter()
-	api.HandleFunc("/register", h.Register).Methods("POST")
-	api.HandleFunc("/login", h.Login).Methods("POST")
-	api.HandleFunc("/logout", h.Logout).Methods("POST")
-
-	protected := api.PathPrefix("/notes").Subrouter()
-	protected.Use(MakeAuthMiddleware(s))
-	protected.HandleFunc("", h.ListNotes).Methods("GET")
-
-	corsOpts := handlers.AllowedOrigins([]string{fmt.Sprintf("http://%s:%s", frontendHost, frontendPort)})
-	corsMethods := handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE", "OPTIONS"})
-	corsHeaders := handlers.AllowedHeaders([]string{"Content-Type", "Authorization"})
-
-	return handlers.CORS(corsOpts, corsMethods, corsHeaders)(r)
-}
-
-func MakeAuthMiddleware(s *store.Store) mux.MiddlewareFunc {
-	return func(next http.Handler) http.Handler {
-
-		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := r.Cookie("session_id")
-			if err != nil {
-				WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-				return
-			}
-
-			user, ok := s.GetUserBySession(session.Value)
-			if !ok {
-				WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
-				return
-			}
-
-			ctx := WithUserID(r.Context(), user.ID)
-			next.ServeHTTP(w, r.WithContext(ctx))
-		})
-
-	}
-}
-
-type ctxKey string
-
-const UserIDKey ctxKey = "userID"
-
-func WithUserID(ctx context.Context, id uint64) context.Context {
-	return context.WithValue(ctx, UserIDKey, id)
-}
-
-func GetUserID(ctx context.Context) (uint64, bool) {
-	value := ctx.Value(UserIDKey)
-	if value == nil {
-		return 0, false
-	}
-	id, ok := value.(uint64)
-	return id, ok
 }

@@ -31,18 +31,21 @@ type Note struct {
 
 type Store struct {
 	mu           sync.RWMutex
-	users        map[uint64]User
+	users        map[uint64]*User
 	usersByEmail map[string]uint64
-	notes        map[uint64]Note
+	notes        map[uint64]*Note
 	sessions     map[string]uint64
 
 	nextUserID uint64
 }
 
-func (s *Store) InitFillStore() {
-	_, _ = s.CreateUser("user@example.com", "password")
+func (s *Store) InitFillStore() error {
+	_, err := s.CreateUser("user@example.com", "password")
+	if err != nil {
+		return fmt.Errorf("init fill store: %w", err)
+	}
 
-	notes := []Note{
+	notes := []*Note{
 		{
 			ID:      1,
 			OwnerID: 1,
@@ -59,32 +62,33 @@ func (s *Store) InitFillStore() {
 	for _, note := range notes {
 		s.notes[note.ID] = note
 	}
+	return nil
 }
 
 func NewStore() *Store {
 	return &Store{
-		users:        make(map[uint64]User),
+		users:        make(map[uint64]*User),
 		usersByEmail: make(map[string]uint64),
-		notes:        make(map[uint64]Note),
+		notes:        make(map[uint64]*Note),
 		sessions:     make(map[string]uint64),
 		nextUserID:   1,
 	}
 }
 
-func (s *Store) CreateUser(email, password string) (User, error) {
+func (s *Store) CreateUser(email, password string) (*User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	if _, ok := s.usersByEmail[email]; ok {
-		return User{}, ErrUserExists
+		return nil, ErrUserExists
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return User{}, fmt.Errorf("cannot hash password: %w", err)
+		return nil, fmt.Errorf("cannot hash password: %w", err)
 	}
 
-	user := User{
+	user := &User{
 		ID:        s.nextUserID,
 		Email:     email,
 		Password:  string(hashedPassword),
@@ -97,18 +101,18 @@ func (s *Store) CreateUser(email, password string) (User, error) {
 	return user, nil
 }
 
-func (s *Store) AuthenticateUser(email, password string) (User, error) {
+func (s *Store) AuthenticateUser(email, password string) (*User, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	userID, ok := s.usersByEmail[email]
 	if !ok {
-		return User{}, ErrInvalidEmailOrPassword
+		return nil, ErrInvalidEmailOrPassword
 	}
 	user := s.users[userID]
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return User{}, ErrInvalidEmailOrPassword
+		return nil, ErrInvalidEmailOrPassword
 	}
 
 	return user, nil
@@ -131,13 +135,13 @@ func (s *Store) DeleteSession(sessionID string) {
 	delete(s.sessions, sessionID)
 }
 
-func (s *Store) GetUserBySession(sessionID string) (User, bool) {
+func (s *Store) GetUserBySession(sessionID string) (*User, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
 	userID, ok := s.sessions[sessionID]
 	if !ok {
-		return User{}, false
+		return nil, false
 	}
 	user, ok := s.users[userID]
 
@@ -151,7 +155,7 @@ func (s *Store) ListNotes(ownerID uint64) []Note {
 	result := make([]Note, 0)
 	for _, note := range s.notes {
 		if note.OwnerID == ownerID {
-			result = append(result, note)
+			result = append(result, *note)
 		}
 	}
 

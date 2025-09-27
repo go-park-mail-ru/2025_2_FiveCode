@@ -1,11 +1,12 @@
 package main
 
 import (
-	"backend/handler"
+	"backend/router"
 	"backend/store"
 	"errors"
-	"log"
 	"net/http"
+
+	"github.com/rs/zerolog/log"
 )
 
 const host = "localhost"
@@ -14,18 +15,20 @@ const port = "8080"
 func main() {
 	s := store.NewStore()
 
-	s.InitFillStore()
+	if err := s.InitFillStore(); err != nil {
+		log.Fatal().Err(err).Msg("failed to init store")
+	}
 
-	router := handler.NewRouter(s)
+	r := router.NewRouter(s)
 
 	server := &http.Server{
 		Addr:    host + ":" + port,
-		Handler: router,
+		Handler: r,
 	}
 
-	log.Printf("listening on %s\n", server.Addr)
+	log.Info().Str("addr", server.Addr).Msg("listening")
 	err := server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		log.Fatalf("server error: %v", err)
+		log.Fatal().Err(err).Msg("server error")
 	}
 }
