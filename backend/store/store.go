@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -163,6 +164,7 @@ func (s *Store) GetUserBySession(sessionID string) (*User, bool) {
 
 	userID, ok := s.sessions[sessionID]
 	if !ok {
+		log.Info().Str("session_id", sessionID).Msg("session not found")
 		return nil, false
 	}
 	user, ok := s.users[userID]

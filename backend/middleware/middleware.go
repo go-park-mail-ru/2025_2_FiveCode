@@ -1,14 +1,33 @@
 package middleware
 
 import (
-	"backend/handler"
+	"backend/apiutils"
 	"backend/store"
+	"context"
 	"errors"
 	"net/http"
+	"strconv"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog/log"
 )
+
+type ctxKey string
+
+const UserIDKey ctxKey = "userID"
+
+func WithUserID(ctx context.Context, id uint64) context.Context {
+	return context.WithValue(ctx, UserIDKey, id)
+}
+
+func GetUserID(ctx context.Context) (uint64, bool) {
+	value := ctx.Value(UserIDKey)
+	if value == nil {
+		return 0, false
+	}
+	id, ok := value.(uint64)
+	return id, ok
+}
 
 func CORS(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -32,23 +51,65 @@ func MakeAuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 			session, err := r.Cookie("session_id")
 			if errors.Is(err, http.ErrNoCookie) {
 				log.Info().Msg("no session cookie found in auth middleware")
-				handler.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no session cookie"})
 				return
 			}
 			if err != nil {
 				log.Error().Err(err).Msg("error getting session cookie in auth middleware")
-				handler.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+				apiutils.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
 				return
 			}
 
 			user, ok := s.GetUserBySession(session.Value)
 			if !ok {
-				handler.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid session"})
 				return
 			}
 
-			ctx := handler.WithUserID(r.Context(), user.ID)
+			ctx := WithUserID(r.Context(), user.ID)
 			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
+
+func ValidateUserAccess(s *store.Store) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			session, err := r.Cookie("session_id")
+			if errors.Is(err, http.ErrNoCookie) {
+				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no session cookie"})
+				return
+			}
+			if err != nil {
+				apiutils.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+				return
+			}
+
+			user, ok := s.GetUserBySession(session.Value)
+			if !ok {
+				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid session"})
+				return
+			}
+
+			vars := mux.Vars(r)
+			idStr := vars["id"]
+			if idStr == "" {
+				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing user id"})
+				return
+			}
+
+			requestedUserID, err := strconv.ParseUint(idStr, 10, 64)
+			if err != nil {
+				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+				return
+			}
+
+			if user.ID != requestedUserID {
+				apiutils.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+				return
+			}
+
+			next.ServeHTTP(w, r)
 		})
 	}
 }

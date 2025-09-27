@@ -39,7 +39,7 @@ func TestNewRouter(t *testing.T) {
 			name:     "notes endpoint requires auth",
 			method:   "GET",
 			path:     "/api/user/1/notes",
-			wantCode: http.StatusUnauthorized,
+			wantCode: http.StatusBadRequest,
 		},
 		{
 			name:     "non-existent endpoint returns 404",
