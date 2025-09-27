@@ -23,10 +23,12 @@ type User struct {
 }
 
 type Note struct {
-	ID      uint64 `json:"id"`
-	OwnerID uint64 `json:"owner_id"`
-	Title   string `json:"title"`
-	Content string `json:"content"`
+	ID        uint64 `json:"id"`
+	OwnerID   uint64 `json:"owner_id"`
+	Title     string `json:"title"`
+	Text      string `json:"text"`
+	Favourite bool   `json:"favorite"`
+	Folder    string `json:"folder"`
 }
 
 type Store struct {
@@ -47,16 +49,36 @@ func (s *Store) InitFillStore() error {
 
 	notes := []*Note{
 		{
-			ID:      1,
-			OwnerID: 1,
-			Title:   "Заметка 1",
-			Content: "Очень важная информация",
+			ID:        1,
+			OwnerID:   1,
+			Title:     "University note",
+			Text:      "Lecture notes for math and history",
+			Favourite: true,
+			Folder:    "University",
 		},
 		{
-			ID:      2,
-			OwnerID: 1,
-			Title:   "Заметка 2",
-			Content: "Не менее важная информация",
+			ID:        2,
+			OwnerID:   1,
+			Title:     "Project idea",
+			Text:      "Brainstorming app features and sketches",
+			Favourite: false,
+			Folder:    "University",
+		},
+		{
+			ID:        3,
+			OwnerID:   1,
+			Title:     "Shopping list",
+			Text:      "Milk, bread, eggs, and vegetables",
+			Favourite: false,
+			Folder:    "Personal",
+		},
+		{
+			ID:        4,
+			OwnerID:   1,
+			Title:     "Note №4",
+			Text:      "Random text of the note",
+			Favourite: false,
+			Folder:    "Personal",
 		},
 	}
 	for _, note := range notes {

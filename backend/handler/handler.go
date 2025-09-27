@@ -43,7 +43,7 @@ func NewHandler(s *store.Store) *Handler {
 func WriteJSON(w http.ResponseWriter, code int, v interface{}) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(code)
-	
+
 	if err := json.NewEncoder(w).Encode(v); err != nil {
 		log.Error().Err(err).Msg("json encode error")
 	}
@@ -179,4 +179,28 @@ func (h *Handler) ListNotes(w http.ResponseWriter, r *http.Request) {
 
 	notes := h.Store.ListNotes(requestedUserID)
 	WriteJSON(w, http.StatusOK, notes)
+}
+
+func (h *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
+	cookie, err := r.Cookie("session_id")
+	if errors.Is(err, http.ErrNoCookie) {
+		WriteJSON(w, http.StatusOK, nil)
+		return
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("error reading session cookie")
+		WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+		return
+	}
+
+	sessionID := cookie.Value
+
+	user, ok := h.Store.GetUserBySession(sessionID)
+	if !ok {
+		log.Error().Err(err).Msg("error loading user for session")
+		WriteJSON(w, http.StatusOK, nil)
+		return
+	}
+
+	WriteJSON(w, http.StatusOK, user)
 }

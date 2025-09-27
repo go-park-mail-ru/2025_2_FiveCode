@@ -18,6 +18,7 @@ func NewRouter(s *store.Store) http.Handler {
 	api.HandleFunc("/register", h.Register).Methods("POST")
 	api.HandleFunc("/login", h.Login).Methods("POST")
 	api.HandleFunc("/logout", h.Logout).Methods("POST")
+	api.HandleFunc("/session", h.CheckSession).Methods("GET")
 
 	protected := api.PathPrefix("").Subrouter()
 	protected.Use(mw.MakeAuthMiddleware(s))
