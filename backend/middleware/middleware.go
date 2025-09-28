@@ -30,9 +30,9 @@ func GetUserID(ctx context.Context) (uint64, bool) {
 }
 
 var allowed = map[string]bool{
-	"http://localhost:3000":      true,
-	"http://127.0.0.1:3000":      true,
-	"http://89.208.210.115:3000": true,
+	"http://localhost:8030":      true,
+	"http://127.0.0.1:8030":      true,
+	"http://89.208.210.115:8030": true,
 }
 
 func CORS(next http.Handler) http.Handler {
