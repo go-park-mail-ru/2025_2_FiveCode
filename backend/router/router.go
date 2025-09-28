@@ -23,7 +23,7 @@ func NewRouter(s *store.Store) http.Handler {
 	protected := api.PathPrefix("").Subrouter()
 	protected.Use(mw.MakeAuthMiddleware(s))
 	protected.Use(mw.ValidateUserAccess(s))
-	protected.HandleFunc("/user/{id}/notes", h.ListNotes).Methods("GET")
+	protected.HandleFunc("/user/{user_id}/notes", h.ListNotes).Methods("GET")
 
 	return mw.CORS(r)
 }

@@ -129,7 +129,11 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 
 func (h *Handler) ListNotes(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	userID, _ := strconv.ParseUint(vars["id"], 10, 64)
+	userID, err := strconv.ParseUint(vars["user_id"], 10, 64)
+	if err != nil {
+		apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user ID"})
+		return
+	}
 	
 	notes := h.Store.ListNotes(userID)
 	apiutils.WriteJSON(w, http.StatusOK, notes)
