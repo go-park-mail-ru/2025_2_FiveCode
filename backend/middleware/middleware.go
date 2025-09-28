@@ -101,7 +101,7 @@ func ValidateUserAccess(s *store.Store) mux.MiddlewareFunc {
 			}
 
 			vars := mux.Vars(r)
-			idStr := vars["id"]
+			idStr := vars["user_id"]
 			if idStr == "" {
 				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing user id"})
 				return
