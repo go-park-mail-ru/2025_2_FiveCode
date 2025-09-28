@@ -9,7 +9,7 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-const host = "localhost"
+const host = "0.0.0.0"
 const port = "8080"
 
 func main() {
