@@ -12,6 +12,7 @@ func TestStore(t *testing.T) {
 		preSetup func(t *testing.T, s *Store)
 		email    string
 		password string
+		username string
 		wantErr  bool
 	}{
 		{
@@ -23,11 +24,12 @@ func TestStore(t *testing.T) {
 		{
 			name: "duplicate email",
 			preSetup: func(t *testing.T, s *Store) {
-				_, err := s.CreateUser("dup@example.com", "pass1234")
+				_, err := s.CreateUser("dup@example.com", "pass1234", "user")
 				require.NoError(t, err, "failed to create user")
 			},
 			email:    "dup@example.com",
 			password: "pass1234",
+			username: "user",
 			wantErr:  true,
 		},
 	}
@@ -38,7 +40,7 @@ func TestStore(t *testing.T) {
 			if test.preSetup != nil {
 				test.preSetup(t, s)
 			}
-			user, err := s.CreateUser(test.email, test.password)
+			user, err := s.CreateUser(test.email, test.password, test.username)
 
 			if test.wantErr {
 				require.Error(t, err, "expected error for CreateUser(%s)", test.email)
@@ -58,7 +60,7 @@ func TestStore(t *testing.T) {
 
 	t.Run("Sessions Create/Get/Delete", func(t *testing.T) {
 		s := NewStore()
-		user, err := s.CreateUser("sess@example.com", "pw123")
+		user, err := s.CreateUser("sess@example.com", "pw123", "user")
 		require.NoError(t, err, "CreateUser failed")
 
 		sessionID := s.CreateSession(user.ID)
@@ -76,7 +78,7 @@ func TestStore(t *testing.T) {
 
 func TestInitFillStore(t *testing.T) {
 	s := NewStore()
-	
+
 	err := s.InitFillStore()
 	require.NoError(t, err)
 
@@ -87,7 +89,7 @@ func TestInitFillStore(t *testing.T) {
 	for _, note := range notes {
 		noteTitles[note.Title] = true
 	}
-	
+
 	require.True(t, noteTitles["University note"])
 	require.True(t, noteTitles["Project idea"])
 	require.True(t, noteTitles["Shopping list"])
@@ -97,10 +99,10 @@ func TestInitFillStore(t *testing.T) {
 func TestListNotes(t *testing.T) {
 	s := NewStore()
 
-	user1, err := s.CreateUser("user1@example.com", "password")
+	user1, err := s.CreateUser("user1@example.com", "password", "user")
 	require.NoError(t, err)
-	
-	user2, err := s.CreateUser("user2@example.com", "password")
+
+	user2, err := s.CreateUser("user2@example.com", "password", "user")
 	require.NoError(t, err)
 
 	note1 := &Note{ID: 1, OwnerID: user1.ID, Title: "User1 Note 1", Text: "Text 1", Favourite: false, Folder: "Work"}

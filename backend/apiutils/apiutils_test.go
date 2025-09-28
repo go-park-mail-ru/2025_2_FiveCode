@@ -39,12 +39,12 @@ func TestWriteJSON(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			w := httptest.NewRecorder()
-			
+
 			WriteJSON(w, test.code, test.data)
-			
+
 			require.Equal(t, test.wantCode, w.Code)
 			require.Equal(t, "application/json", w.Header().Get("Content-Type"))
-			
+
 			var result map[string]interface{}
 			err := json.Unmarshal(w.Body.Bytes(), &result)
 			require.NoError(t, err)
