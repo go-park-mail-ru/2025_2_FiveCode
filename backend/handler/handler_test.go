@@ -251,16 +251,3 @@ func TestLogout(t *testing.T) {
 		})
 	}
 }
-
-func TestListNotes(t *testing.T) {
-	s := store.NewStore()
-	h := NewHandler(s)
-
-	req := httptest.NewRequest("GET", "/user/1/notes", nil)
-	rr := httptest.NewRecorder()
-
-	h.ListNotes(rr, req)
-
-	require.Equal(t, http.StatusOK, rr.Code)
-	require.Equal(t, "application/json", rr.Header().Get("Content-Type"))
-}

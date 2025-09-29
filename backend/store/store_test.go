@@ -83,7 +83,7 @@ func TestInitFillStore(t *testing.T) {
 	require.NoError(t, err)
 
 	notes := s.ListNotes(1)
-	require.Len(t, notes, 4)
+	require.Len(t, notes, 8)
 
 	noteTitles := make(map[string]bool)
 	for _, note := range notes {
@@ -94,6 +94,10 @@ func TestInitFillStore(t *testing.T) {
 	require.True(t, noteTitles["Project idea"])
 	require.True(t, noteTitles["Shopping list"])
 	require.True(t, noteTitles["Note №4"])
+	require.True(t, noteTitles["Books to read"])
+	require.True(t, noteTitles["Homework"])
+	require.True(t, noteTitles["My wishes"])
+	require.True(t, noteTitles["Films to watch"])
 }
 
 func TestListNotes(t *testing.T) {
@@ -102,25 +106,41 @@ func TestListNotes(t *testing.T) {
 	user1, err := s.CreateUser("user1@example.com", "password", "user")
 	require.NoError(t, err)
 
+	user1DefaultNotes := s.ListNotes(user1.ID)
+	require.Len(t, user1DefaultNotes, 4, "User1 should have 4 default notes")
+
 	user2, err := s.CreateUser("user2@example.com", "password", "user")
 	require.NoError(t, err)
 
-	note1 := &Note{ID: 1, OwnerID: user1.ID, Title: "User1 Note 1", Text: "Text 1", Favourite: false, Folder: "Work"}
-	note2 := &Note{ID: 2, OwnerID: user1.ID, Title: "User1 Note 2", Text: "Text 2", Favourite: true, Folder: "Personal"}
+	user2DefaultNotes := s.ListNotes(user2.ID)
+	require.Len(t, user2DefaultNotes, 4, "User2 should have 4 default notes")
+
+	note1 := &Note{ID: 200, OwnerID: user1.ID, Title: "User1 Note 1", Text: "Text 1", Favourite: false, Folder: "Work"}
+	note2 := &Note{ID: 201, OwnerID: user1.ID, Title: "User1 Note 2", Text: "Text 2", Favourite: true, Folder: "Personal"}
 	s.notes[note1.ID] = note1
 	s.notes[note2.ID] = note2
 
-	note3 := &Note{ID: 3, OwnerID: user2.ID, Title: "User2 Note 1", Text: "Text 3", Favourite: false, Folder: "Work"}
+	note3 := &Note{ID: 202, OwnerID: user2.ID, Title: "User2 Note 1", Text: "Text 3", Favourite: false, Folder: "Work"}
 	s.notes[note3.ID] = note3
 
 	user1Notes := s.ListNotes(user1.ID)
-	require.Len(t, user1Notes, 2)
-	require.Equal(t, "User1 Note 1", user1Notes[0].Title)
-	require.Equal(t, "User1 Note 2", user1Notes[1].Title)
+	require.Len(t, user1Notes, 6)
+
+	noteTitles := make(map[string]bool)
+	for _, note := range user1Notes {
+		noteTitles[note.Title] = true
+	}
+	require.True(t, noteTitles["User1 Note 1"])
+	require.True(t, noteTitles["User1 Note 2"])
 
 	user2Notes := s.ListNotes(user2.ID)
-	require.Len(t, user2Notes, 1)
-	require.Equal(t, "User2 Note 1", user2Notes[0].Title)
+	require.Len(t, user2Notes, 5)
+
+	noteTitles = make(map[string]bool)
+	for _, note := range user2Notes {
+		noteTitles[note.Title] = true
+	}
+	require.True(t, noteTitles["User2 Note 1"])
 
 	noNotes := s.ListNotes(999)
 	require.Len(t, noNotes, 0)
