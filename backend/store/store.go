@@ -16,6 +16,7 @@ var (
 	ErrInvalidEmailOrPassword = errors.New("invalid email or password")
 )
 
+// User представляет пользователя — используется в ответах API (пароль скрыт).
 type User struct {
 	ID        uint64    `json:"id"`
 	Username  string    `json:"username"`
@@ -24,6 +25,7 @@ type User struct {
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Note представляет заметку пользователя
 type Note struct {
 	ID        uint64 `json:"id"`
 	OwnerID   uint64 `json:"owner_id"`

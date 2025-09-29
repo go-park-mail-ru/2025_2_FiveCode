@@ -12,6 +12,13 @@ import (
 const host = "0.0.0.0"
 const port = "8080"
 
+// @title Goose API
+// @version 1.0
+// @description API for web-site Goose
+// @BasePath /api
+// @securityDefinitions.apikey CookieAuth
+// @in header
+// @name Cookie
 func main() {
 	s := store.NewStore()
 

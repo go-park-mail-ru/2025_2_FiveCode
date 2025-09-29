@@ -24,6 +24,14 @@ func NewHandler(s *store.Store) *Handler {
 	return &Handler{Store: s}
 }
 
+// registerRequest - тело запроса регистрации пользователя
+// Пример:
+// {
+// "email": "user@example.com",
+// "username": "johndoe",
+// "password": "secret",
+// "confirm_password": "secret"
+// }
 type registerRequest struct {
 	Email           string `json:"email"`
 	Username        string `json:"username"`
@@ -31,6 +39,17 @@ type registerRequest struct {
 	ConfirmPassword string `json:"confirm_password"`
 }
 
+// Register создает нового пользователя
+// @Summary Register new user
+// @Description Create a new user (email, username, password). Returns created user on success.
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param register body registerRequest true "Register request"
+// @Success 201 {object} store.User
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /register [post]
 func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	var request registerRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
@@ -72,11 +91,29 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusCreated, user)
 }
 
+// LoginRequest - тело запроса для входа
+// Пример:
+// {
+// "email": "user@example.com",
+// "password": "secret"
+// }
 type loginRequest struct {
 	Email    string `json:"email"`
 	Password string `json:"password"`
 }
 
+// Login аутентифицирует пользователя и устанавливает cookie-сессию
+// @Summary Login user
+// @Description Authenticate user and set a session cookie
+// @Tags auth
+// @Accept json
+// @Produce json
+// @Param login body loginRequest true "Login request"
+// @Success 200 {object} store.User
+// @Failure 400 {object} map[string]string
+// @Failure 401 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /login [post]
 func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	var request loginRequest
 	err := json.NewDecoder(r.Body).Decode(&request)
@@ -112,6 +149,15 @@ func (h *Handler) Login(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, user)
 }
 
+// Logout удаляет сессию (cookie) пользователя
+// @Summary Logout user
+// @Description Delete user's session and invalidate cookie
+// @Tags auth
+// @Produce json
+// @Success 200 {object} map[string]string
+// @Failure 400 {object} map[string]string
+// @Failure 500 {object} map[string]string
+// @Router /logout [post]
 func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	session, err := r.Cookie("session_id")
 	if errors.Is(err, http.ErrNoCookie) {
@@ -132,6 +178,17 @@ func (h *Handler) Logout(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
 }
 
+// ListNotes возвращает список заметок указанного пользователя
+// @Summary List user notes
+// @Description Return list of notes owned by the specified user
+// @Tags notes
+// @Accept json
+// @Produce json
+// @Param user_id path int true "User ID"
+// @Success 200 {array} store.Note
+// @Failure 400 {object} map[string]string
+// @Security CookieAuth
+// @Router /user/{user_id}/notes [get]
 func (h *Handler) ListNotes(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	userID, err := strconv.ParseUint(vars["user_id"], 10, 64)
@@ -144,6 +201,14 @@ func (h *Handler) ListNotes(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, notes)
 }
 
+// CheckSession проверяет валидность сессии и возвращает пользователя
+// @Summary Check current session
+// @Description Return user for current session cookie or null if not authenticated
+// @Tags auth
+// @Produce json
+// @Success 200 {object} store.User
+// @Failure 500 {object} map[string]string
+// @Router /session [get]
 func (h *Handler) CheckSession(w http.ResponseWriter, r *http.Request) {
 	cookie, err := r.Cookie("session_id")
 	if errors.Is(err, http.ErrNoCookie) {
