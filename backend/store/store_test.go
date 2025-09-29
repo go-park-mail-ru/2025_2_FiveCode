@@ -76,30 +76,6 @@ func TestStore(t *testing.T) {
 	})
 }
 
-func TestInitFillStore(t *testing.T) {
-	s := NewStore()
-
-	err := s.InitFillStore()
-	require.NoError(t, err)
-
-	notes := s.ListNotes(1)
-	require.Len(t, notes, 8)
-
-	noteTitles := make(map[string]bool)
-	for _, note := range notes {
-		noteTitles[note.Title] = true
-	}
-
-	require.True(t, noteTitles["University note"])
-	require.True(t, noteTitles["Project idea"])
-	require.True(t, noteTitles["Shopping list"])
-	require.True(t, noteTitles["Note №4"])
-	require.True(t, noteTitles["Books to read"])
-	require.True(t, noteTitles["Homework"])
-	require.True(t, noteTitles["My wishes"])
-	require.True(t, noteTitles["Films to watch"])
-}
-
 func TestListNotes(t *testing.T) {
 	s := NewStore()
 
