@@ -99,6 +99,46 @@ func NewStore() *Store {
 	}
 }
 
+func (s *Store) CreateDefaultNotes(userID uint64) {
+	notes := []*Note{
+		{
+			ID:        100,
+			OwnerID:   userID,
+			Title:     "Books to read",
+			Text:      "The Three Musketeers, Animal Farm, Angels and Demons",
+			Favourite: false,
+			Folder:    "Personal",
+		},
+		{
+			ID:        101,
+			OwnerID:   userID,
+			Title:     "Homework",
+			Text:      "Write an essay",
+			Favourite: false,
+			Folder:    "University",
+		},
+		{
+			ID:        102,
+			OwnerID:   userID,
+			Title:     "My wishes",
+			Text:      "I want to be a millionaire",
+			Favourite: true,
+			Folder:    "Personal",
+		},
+		{
+			ID:        103,
+			OwnerID:   userID,
+			Title:     "Films to watch",
+			Text:      "Harry Potter, The Lord of the Rings, Avatar",
+			Favourite: false,
+			Folder:    "Personal",
+		},
+	}
+	for _, note := range notes {
+		s.notes[note.ID] = note
+	}
+}
+
 func (s *Store) CreateUser(email, password, username string) (*User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -121,6 +161,7 @@ func (s *Store) CreateUser(email, password, username string) (*User, error) {
 	}
 	s.users[user.ID] = user
 	s.usersByEmail[email] = user.ID
+	s.CreateDefaultNotes(user.ID)
 	s.nextUserID++
 
 	return user, nil
