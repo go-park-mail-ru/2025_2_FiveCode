@@ -63,7 +63,7 @@ erDiagram
     TIMESTAMPTZ updated_at
   }
 
-  ATTACHMENT {
+  BLOCK_BLOCK_ATTACHMENT {
     UUID id
     UUID block_id
     UUID file_id
@@ -107,8 +107,8 @@ erDiagram
   NOTE ||--o{ BLOCK : contains
   BLOCK ||--o{ BLOCK_TEXT_SPAN : has
   BLOCK ||--o| BLOCK_CODE : opts
-  FILE |o--|| ATTACHMENT : used_by
-  BLOCK ||--o| ATTACHMENT : embeds
+  FILE |o--|| BLOCK_ATTACHMENT : used_by
+  BLOCK ||--o| BLOCK_ATTACHMENT : embeds
   USER ||--o{ NOTE_PERMISSION : granted_to
   USER ||--o{ NOTE_PERMISSION : granted_by
   NOTE ||--o{ NOTE_PERMISSION : shared_note

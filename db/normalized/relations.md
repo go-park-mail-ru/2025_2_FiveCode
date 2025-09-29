@@ -8,7 +8,7 @@
 * **BLOCK** — атомарные блоки контента внутри заметок (тип, порядок).
 * **BLOCK_TEXT_SPAN** — фрагменты форматируемого текста внутри текстового блока (позиции, стиль).
 * **BLOCK_CODE** — содержимое кода для код‑блоков (язык, текст кода).
-* **ATTACHMENT** — файловые вложения блоков (файл и подпись).
+* **BLOCK_ATTACHMENT** — файловые вложения блоков (файл и подпись).
 * **NOTE_PERMISSION** — выданные права на заметки (кому, кем, какая роль, шаринг).
 * **FAVORITE** — отметки «в избранном» (кто какую заметку добавил).
 * **TAG** — теги и автор их создания.
@@ -188,7 +188,7 @@ erDiagram
 
 ---
 
-## ATTACHMENT
+## BLOCK_ATTACHMENT
 
 **PK:** `{id}`  
 **FK:** `block_id → BLOCK(id)`; `file_id → FILE(id)`
@@ -206,7 +206,7 @@ erDiagram
 
 ```mermaid
 erDiagram
-  ATTACHMENTS {
+  BLOCK_ATTACHMENTS {
     UUID id PK
     UUID block_id FK
     UUID file_id FK 
