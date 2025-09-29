@@ -9,4 +9,3 @@ test-coverage:
 
 run:
 	go run main.go
-	
