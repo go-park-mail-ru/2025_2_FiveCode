@@ -92,7 +92,7 @@ erDiagram
     UUID id PK
     UUID owner_id FK 
     UUID parent_note_id FK
-    TEXT title
+    TEXT title 
     UUID icon_file_id FK
     BOOLEAN is_archived 
     TIMESTAMPTZ created_at

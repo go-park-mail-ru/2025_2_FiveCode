@@ -63,7 +63,7 @@ erDiagram
     TIMESTAMPTZ updated_at
   }
 
-  BLOCK_BLOCK_ATTACHMENT {
+  BLOCK_ATTACHMENT {
     UUID id
     UUID block_id
     UUID file_id
