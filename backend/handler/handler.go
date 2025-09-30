@@ -34,7 +34,6 @@ func NewHandler(s *store.Store) *Handler {
 // }
 type registerRequest struct {
 	Email           string `json:"email"`
-	Username        string `json:"username"`
 	Password        string `json:"password"`
 	ConfirmPassword string `json:"confirm_password"`
 }
@@ -61,10 +60,6 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no email provided"})
 		return
 	}
-	if request.Username == "" {
-		apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no username provided"})
-		return
-	}
 	if request.Password == "" {
 		apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no password provided"})
 		return
@@ -78,7 +73,7 @@ func (h *Handler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := h.Store.CreateUser(request.Email, request.Password, request.Username)
+	user, err := h.Store.CreateUser(request.Email, request.Password)
 	if errors.Is(err, store.ErrUserExists) {
 		apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "user already exists"})
 		return
@@ -196,7 +191,7 @@ func (h *Handler) ListNotes(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user ID"})
 		return
 	}
-	
+
 	notes := h.Store.ListNotes(userID)
 	apiutils.WriteJSON(w, http.StatusOK, notes)
 }

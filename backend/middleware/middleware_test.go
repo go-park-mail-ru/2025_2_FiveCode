@@ -11,7 +11,7 @@ import (
 
 func TestMakeAuthMiddleware(t *testing.T) {
 	s := store.NewStore()
-	user, err := s.CreateUser("test@example.com", "password", "user")
+	user, err := s.CreateUser("test@example.com", "password")
 	require.NoError(t, err)
 
 	sessionID := s.CreateSession(user.ID)
