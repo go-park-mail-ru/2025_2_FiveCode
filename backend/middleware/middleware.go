@@ -54,7 +54,7 @@ func CORS(next http.Handler) http.Handler {
 	})
 }
 
-func MakeAuthMiddleware(s *store.Store) mux.MiddlewareFunc {
+func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, err := r.Cookie("session_id")
@@ -81,22 +81,12 @@ func MakeAuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 	}
 }
 
-func ValidateUserAccess(s *store.Store) mux.MiddlewareFunc {
+func UserAccessMiddleware() mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			session, err := r.Cookie("session_id")
-			if errors.Is(err, http.ErrNoCookie) {
-				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no session cookie"})
-				return
-			}
-			if err != nil {
-				apiutils.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
-				return
-			}
-
-			user, ok := s.GetUserBySession(session.Value)
+			userID, ok := GetUserID(r.Context())
 			if !ok {
-				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid session"})
+				apiutils.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "user not authenticated"})
 				return
 			}
 
@@ -113,7 +103,7 @@ func ValidateUserAccess(s *store.Store) mux.MiddlewareFunc {
 				return
 			}
 
-			if user.ID != requestedUserID {
+			if userID != requestedUserID {
 				apiutils.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
 				return
 			}

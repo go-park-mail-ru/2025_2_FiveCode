@@ -24,7 +24,8 @@ func NewRouter(s *store.Store) http.Handler {
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	protected := api.PathPrefix("").Subrouter()
-	protected.Use(mw.ValidateUserAccess(s))
+	protected.Use(mw.AuthMiddleware(s))
+	protected.Use(mw.UserAccessMiddleware())
 	protected.HandleFunc("/user/{user_id}/notes", h.ListNotes).Methods("GET")
 
 	return mw.CORS(r)
