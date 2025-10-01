@@ -1,17 +1,17 @@
 ```mermaid
 erDiagram
   USER {
-    UUID id
+    INTEGER id
     TEXT email
-    TEXT password
+    TEXT password_hash
     TEXT username
-    UUID avatar_file_id
+    INTEGER avatar_file_id
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
   }
 
   FILE {
-    UUID id
+    INTEGER id
     TEXT url
     TEXT mime_type
     INTEGER size_bytes
@@ -21,11 +21,11 @@ erDiagram
   }
 
   NOTE {
-    UUID id
-    UUID owner_id
-    UUID parent_note_id
+    INTEGER id
+    INTEGER owner_id
+    INTEGER parent_note_id
     TEXT title
-    UUID icon_file_id
+    INTEGER icon_file_id
     BOOLEAN is_archived
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
@@ -33,16 +33,17 @@ erDiagram
   }
 
   BLOCK {
-    UUID id
-    UUID note_id
+    INTEGER id
+    INTEGER note_id
     TEXT type
     NUMERIC position
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
+    INTEGER last_edited_by
   }
 
   BLOCK_TEXT_SPAN {
-    UUID block_id
+    INTEGER block_id
     NUMERIC position
     TEXT text
     BOOLEAN bold
@@ -56,7 +57,7 @@ erDiagram
   }
 
   BLOCK_CODE {
-    UUID block_id
+    INTEGER block_id
     TEXT language
     TEXT code_text
     TIMESTAMPTZ created_at
@@ -64,18 +65,18 @@ erDiagram
   }
 
   BLOCK_ATTACHMENT {
-    UUID id
-    UUID block_id
-    UUID file_id
+    INTEGER id
+    INTEGER block_id
+    INTEGER file_id
     TEXT caption
     TIMESTAMPTZ created_at
   }
 
   NOTE_PERMISSION {
-    UUID note_permission_id
-    UUID note_id
-    UUID granted_by
-    UUID granted_to
+    INTEGER note_permission_id
+    INTEGER note_id
+    INTEGER granted_by
+    INTEGER granted_to
     TEXT role
     BOOLEAN can_share
     TIMESTAMPTZ granted_at
@@ -83,22 +84,22 @@ erDiagram
   }
 
   FAVORITE {
-    UUID user_id
-    UUID note_id
+    INTEGER user_id
+    INTEGER note_id
     TIMESTAMPTZ created_at
   }
 
   TAG {
-    UUID id
+    INTEGER id
     TEXT name
-    UUID created_by
+    INTEGER created_by
     TIMESTAMPTZ updated_at
     TIMESTAMPTZ created_at
   }
 
   NOTE_TAG {
-    UUID note_id
-    UUID tag_id
+    INTEGER note_id
+    INTEGER tag_id
     TIMESTAMPTZ created_at
   }
 
@@ -118,3 +119,4 @@ erDiagram
   NOTE ||--o{ NOTE_TAG : link
   FILE |o--o| USER : avatar
   FILE |o--o| NOTE : icon
+  USER ||--o{ BLOCK : last_edited_by
