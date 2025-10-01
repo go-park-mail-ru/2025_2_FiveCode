@@ -146,3 +146,31 @@ CREATE TABLE IF NOT EXISTS note_tag
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (note_id, tag_id)
 );
+
+CREATE OR REPLACE FUNCTION set_timestamps()
+    RETURNS TRIGGER AS $$
+BEGIN
+    IF (TG_OP = 'INSERT') THEN
+        NEW.created_at := CURRENT_TIMESTAMP;
+        NEW.updated_at := CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END IF;
+
+    IF (TG_OP = 'UPDATE') THEN
+        NEW.updated_at := CURRENT_TIMESTAMP;
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER trigger_created_and_updated_at
+    BEFORE INSERT ON "user"
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+CREATE TRIGGER trigger_updated_at
+    BEFORE UPDATE ON "user"
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- такие же триггеры можно добавим для каждой таблицы где есть поля update_at и create_at
