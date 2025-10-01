@@ -16,14 +16,15 @@ var (
 	ErrInvalidEmailOrPassword = errors.New("invalid email or password")
 )
 
+// User представляет пользователя — используется в ответах API (пароль скрыт).
 type User struct {
 	ID        uint64    `json:"id"`
-	Username  string    `json:"username"`
 	Email     string    `json:"email"`
 	Password  string    `json:"-"`
 	CreatedAt time.Time `json:"created_at"`
 }
 
+// Note представляет заметку пользователя
 type Note struct {
 	ID        uint64 `json:"id"`
 	OwnerID   uint64 `json:"owner_id"`
@@ -44,7 +45,7 @@ type Store struct {
 }
 
 func (s *Store) InitFillStore() error {
-	_, err := s.CreateUser("user@example.com", "password", "Superuser")
+	_, err := s.CreateUser("user@example.com", "password")
 	if err != nil {
 		return fmt.Errorf("init fill store: %w", err)
 	}
@@ -139,7 +140,7 @@ func (s *Store) CreateDefaultNotes(userID uint64) {
 	}
 }
 
-func (s *Store) CreateUser(email, password, username string) (*User, error) {
+func (s *Store) CreateUser(email, password string) (*User, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -155,7 +156,6 @@ func (s *Store) CreateUser(email, password, username string) (*User, error) {
 	user := &User{
 		ID:        s.nextUserID,
 		Email:     email,
-		Username:  username,
 		Password:  string(hashedPassword),
 		CreatedAt: time.Now().UTC(),
 	}

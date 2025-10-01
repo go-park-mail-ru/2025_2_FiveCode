@@ -34,16 +34,16 @@ func TestRegister(t *testing.T) {
 	}{
 		{
 			name:     "valid registration",
-			content:  map[string]string{"email": "u1@example.com", "password": "secret123", "confirm_password": "secret123", "username": "user"},
+			content:  map[string]string{"email": "u1@example.com", "password": "secret123", "confirm_password": "secret123"},
 			wantHTTP: http.StatusCreated,
 		},
 		{
 			name: "duplicate email",
 			preSetup: func(s *store.Store) {
-				_, err := s.CreateUser("dup@example.com", "pass1234", "user")
+				_, err := s.CreateUser("dup@example.com", "pass1234")
 				require.NoError(t, err, "failed to create user")
 			},
-			content:  map[string]string{"email": "dup@example.com", "password": "pass1234", "username": "user", "confirm_password": "pass1234"},
+			content:  map[string]string{"email": "dup@example.com", "password": "pass1234", "confirm_password": "pass1234"},
 			wantHTTP: http.StatusBadRequest,
 		},
 		{
@@ -53,21 +53,16 @@ func TestRegister(t *testing.T) {
 		},
 		{
 			name:     "missing email",
-			content:  map[string]string{"password": "secret123", "username": "user"},
+			content:  map[string]string{"password": "secret123"},
 			wantHTTP: http.StatusBadRequest,
 		},
 		{
 			name:     "missing password",
-			content:  map[string]string{"email": "u1@example.com", "username": "user"},
+			content:  map[string]string{"email": "u1@example.com"},
 			wantHTTP: http.StatusBadRequest,
 		},
 		{
 			name:     "missing confirm password",
-			content:  map[string]string{"email": "u1@example.com", "password": "secret123"},
-			wantHTTP: http.StatusBadRequest,
-		},
-		{
-			name:     "missing username",
 			content:  map[string]string{"email": "u1@example.com", "password": "secret123"},
 			wantHTTP: http.StatusBadRequest,
 		},
@@ -121,7 +116,7 @@ func TestLogin(t *testing.T) {
 		{
 			name: "login success",
 			preSetup: func(s *store.Store) {
-				_, err := s.CreateUser("login1@example.com", "mypassword", "user")
+				_, err := s.CreateUser("login1@example.com", "mypassword")
 				require.NoError(t, err, "failed to create user")
 			},
 			content:       map[string]string{"email": "login1@example.com", "password": "mypassword"},
@@ -131,20 +126,20 @@ func TestLogin(t *testing.T) {
 		{
 			name: "wrong password",
 			preSetup: func(s *store.Store) {
-				_, err := s.CreateUser("login2@example.com", "rightpass", "user")
+				_, err := s.CreateUser("login2@example.com", "rightpass")
 				require.NoError(t, err, "failed to create user")
 			},
-			content:       map[string]string{"email": "login2@example.com", "password": "wrong", "username": "user"},
+			content:       map[string]string{"email": "login2@example.com", "password": "wrong"},
 			wantHTTP:      http.StatusUnauthorized,
 			wantSetCookie: false,
 		},
 		{
 			name: "user not found",
 			preSetup: func(s *store.Store) {
-				_, err := s.CreateUser("login1@example.com", "mypassword", "user")
+				_, err := s.CreateUser("login1@example.com", "mypassword")
 				require.NoError(t, err, "failed to create user")
 			},
-			content:  map[string]string{"email": "noexist@example.com", "password": "mypassword", "username": "user"},
+			content:  map[string]string{"email": "noexist@example.com", "password": "mypassword"},
 			wantHTTP: http.StatusUnauthorized,
 		},
 		{
@@ -207,7 +202,7 @@ func TestLogout(t *testing.T) {
 		{
 			name: "logout with valid session",
 			setupCookie: func(s *store.Store) *http.Cookie {
-				u, err := s.CreateUser("lgout@example.com", "pw12345", "user")
+				u, err := s.CreateUser("lgout@example.com", "pw12345")
 				require.NoError(t, err, "failed to create user")
 				sid := s.CreateSession(u.ID)
 				return &http.Cookie{Name: "session_id", Value: sid, Path: "/"}

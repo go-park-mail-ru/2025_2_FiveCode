@@ -12,7 +12,6 @@ func TestStore(t *testing.T) {
 		preSetup func(t *testing.T, s *Store)
 		email    string
 		password string
-		username string
 		wantErr  bool
 	}{
 		{
@@ -24,12 +23,11 @@ func TestStore(t *testing.T) {
 		{
 			name: "duplicate email",
 			preSetup: func(t *testing.T, s *Store) {
-				_, err := s.CreateUser("dup@example.com", "pass1234", "user")
+				_, err := s.CreateUser("dup@example.com", "pass1234")
 				require.NoError(t, err, "failed to create user")
 			},
 			email:    "dup@example.com",
 			password: "pass1234",
-			username: "user",
 			wantErr:  true,
 		},
 	}
@@ -40,7 +38,7 @@ func TestStore(t *testing.T) {
 			if test.preSetup != nil {
 				test.preSetup(t, s)
 			}
-			user, err := s.CreateUser(test.email, test.password, test.username)
+			user, err := s.CreateUser(test.email, test.password)
 
 			if test.wantErr {
 				require.Error(t, err, "expected error for CreateUser(%s)", test.email)
@@ -60,7 +58,7 @@ func TestStore(t *testing.T) {
 
 	t.Run("Sessions Create/Get/Delete", func(t *testing.T) {
 		s := NewStore()
-		user, err := s.CreateUser("sess@example.com", "pw123", "user")
+		user, err := s.CreateUser("sess@example.com", "pw123")
 		require.NoError(t, err, "CreateUser failed")
 
 		sessionID := s.CreateSession(user.ID)
@@ -76,40 +74,16 @@ func TestStore(t *testing.T) {
 	})
 }
 
-func TestInitFillStore(t *testing.T) {
-	s := NewStore()
-
-	err := s.InitFillStore()
-	require.NoError(t, err)
-
-	notes := s.ListNotes(1)
-	require.Len(t, notes, 8)
-
-	noteTitles := make(map[string]bool)
-	for _, note := range notes {
-		noteTitles[note.Title] = true
-	}
-
-	require.True(t, noteTitles["University note"])
-	require.True(t, noteTitles["Project idea"])
-	require.True(t, noteTitles["Shopping list"])
-	require.True(t, noteTitles["Note №4"])
-	require.True(t, noteTitles["Books to read"])
-	require.True(t, noteTitles["Homework"])
-	require.True(t, noteTitles["My wishes"])
-	require.True(t, noteTitles["Films to watch"])
-}
-
 func TestListNotes(t *testing.T) {
 	s := NewStore()
 
-	user1, err := s.CreateUser("user1@example.com", "password", "user")
+	user1, err := s.CreateUser("user1@example.com", "password")
 	require.NoError(t, err)
 
 	user1DefaultNotes := s.ListNotes(user1.ID)
 	require.Len(t, user1DefaultNotes, 4, "User1 should have 4 default notes")
 
-	user2, err := s.CreateUser("user2@example.com", "password", "user")
+	user2, err := s.CreateUser("user2@example.com", "password")
 	require.NoError(t, err)
 
 	user2DefaultNotes := s.ListNotes(user2.ID)
