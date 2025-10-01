@@ -24,8 +24,8 @@ CREATE TABLE IF NOT EXISTS user
 (
     id             SERIAL PRIMARY KEY,
     email          TEXT        NOT NULL UNIQUE CHECK (LENGTH(email) <= 40),
-    password       TEXT        NOT NULL CHECK (LENGTH(password) >= 6 AND LENGTH(password) <= 40),
-    username       TEXT        NOT NULL CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 40),
+    password_hash  TEXT        NOT NULL,
+    username       TEXT        NOT NULL UNIQUE CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 40),
     avatar_file_id INTEGER     REFERENCES file (id) ON DELETE SET NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -55,7 +55,8 @@ CREATE TABLE IF NOT EXISTS block
     type       block_type,
     position   NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
     created_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_edited_by TEXT REFERENCES user (id) ON DELETE SET NULL
 );
 
 
@@ -127,7 +128,7 @@ CREATE TABLE IF NOT EXISTS tag
 (
     id         SERIAL PRIMARY KEY,
     name       TEXT        NOT NULL UNIQUE CHECK (LENGTH(name) <= 50),
-    created_by INTEGER REFERENCES user (id) ON DELETE SET NULL,
+    created_by INTEGER REFERENCES user (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
