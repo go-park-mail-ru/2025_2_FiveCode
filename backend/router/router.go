@@ -6,9 +6,9 @@ import (
 	"backend/store"
 	"net/http"
 
+	_ "backend/docs"
 	"github.com/gorilla/mux"
 	httpSwagger "github.com/swaggo/http-swagger"
-	_ "backend/docs"
 )
 
 func NewRouter(s *store.Store) http.Handler {
@@ -24,7 +24,6 @@ func NewRouter(s *store.Store) http.Handler {
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	protected := api.PathPrefix("").Subrouter()
-	protected.Use(mw.MakeAuthMiddleware(s))
 	protected.Use(mw.ValidateUserAccess(s))
 	protected.HandleFunc("/user/{user_id}/notes", h.ListNotes).Methods("GET")
 
