@@ -4,6 +4,7 @@
 -- ENUM TYPES
 CREATE TYPE block_type AS ENUM ('text', 'code', 'attachment');
 CREATE TYPE note_role AS ENUM ('editor', 'commenter', 'viewer');
+CREATE TYPE text_font AS ENUM ('Inter', 'Roboto', 'Montserrat', 'Manrope');
 
 
 -- FILE
@@ -70,7 +71,7 @@ CREATE TABLE IF NOT EXISTS block_text_span
     italic        BOOLEAN                 DEFAULT false,
     underline     BOOLEAN                 DEFAULT false,
     strikethrough BOOLEAN                 DEFAULT false,
-    font          TEXT                    DEFAULT 'Times New Roman' CHECK (LENGTH(font) <= 50),
+    font          TEXT                    DEFAULT 'Inter' CHECK (LENGTH(font) <= 50),
     size          INTEGER                 DEFAULT 12 CHECK (size > 0 AND size <= 72),
     created_at    TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
