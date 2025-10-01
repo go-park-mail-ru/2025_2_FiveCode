@@ -10,10 +10,11 @@ CREATE TYPE text_font AS ENUM ('Inter', 'Roboto', 'Montserrat', 'Manrope');
 -- FILE
 CREATE TABLE IF NOT EXISTS file
 (
-    id         SERIAL PRIMARY KEY,
-    url        TEXT        NOT NULL UNIQUE CHECK (LENGTH(url) <= 255),
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    url        TEXT        NOT NULL UNIQUE CHECK (LENGTH(url) <= 255 AND
+                                                  url ~ '^https?:\/\/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\S*)$'),
     mime_type  TEXT        NOT NULL CHECK (LENGTH(mime_type) <= 50),
-    size_bytes INTEGER     NOT NULL CHECK (size_bytes >= 0),
+    size_bytes INTEGER     NOT NULL CHECK (size_bytes >= 0 AND size_bytes <= 1024 * 1024 * 1024), -- 1 гб
     width      INTEGER CHECK (width >= 0),
     height     INTEGER CHECK (height >= 0),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -23,10 +24,12 @@ CREATE TABLE IF NOT EXISTS file
 -- USER
 CREATE TABLE IF NOT EXISTS user
 (
-    id             SERIAL PRIMARY KEY,
-    email          TEXT        NOT NULL UNIQUE CHECK (LENGTH(email) <= 40),
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email          TEXT        NOT NULL UNIQUE CHECK (LENGTH(email) <= 40 AND
+                                                      email ~ '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'),
     password_hash  TEXT        NOT NULL,
-    username       TEXT        NOT NULL UNIQUE CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 40),
+    username       TEXT        NOT NULL UNIQUE CHECK (LENGTH(username) >= 3 AND LENGTH(username) <= 40 AND
+                                                      username ~ '^[a-zA-Z0-9_]+$'),
     avatar_file_id INTEGER     REFERENCES file (id) ON DELETE SET NULL,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -36,7 +39,7 @@ CREATE TABLE IF NOT EXISTS user
 -- NOTE
 CREATE TABLE IF NOT EXISTS note
 (
-    id             SERIAL PRIMARY KEY,
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     owner_id       INTEGER     NOT NULL REFERENCES user (id) ON DELETE SET NULL,
     parent_note_id INTEGER REFERENCES note (id) ON DELETE CASCADE,
     title          TEXT        NOT NULL CHECK (LENGTH(title) >= 1 AND LENGTH(title) <= 200),
@@ -51,13 +54,13 @@ CREATE TABLE IF NOT EXISTS note
 -- BLOCK
 CREATE TABLE IF NOT EXISTS block
 (
-    id         SERIAL PRIMARY KEY,
-    note_id    INTEGER        NOT NULL REFERENCES note (id) ON DELETE CASCADE,
-    type       block_type,
-    position   NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
-    created_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_edited_by TEXT REFERENCES user (id) ON DELETE SET NULL
+    id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    note_id        INTEGER        NOT NULL REFERENCES note (id) ON DELETE CASCADE,
+    type           block_type,
+    position       NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
+    created_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    last_edited_by TEXT           REFERENCES user (id) ON DELETE SET NULL
 );
 
 
@@ -71,7 +74,7 @@ CREATE TABLE IF NOT EXISTS block_text_span
     italic        BOOLEAN                 DEFAULT false,
     underline     BOOLEAN                 DEFAULT false,
     strikethrough BOOLEAN                 DEFAULT false,
-    font          TEXT                    DEFAULT 'Inter' CHECK (LENGTH(font) <= 50),
+    font          text_font               DEFAULT 'Inter' CHECK (LENGTH(font) <= 50),
     size          INTEGER                 DEFAULT 12 CHECK (size > 0 AND size <= 72),
     created_at    TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at    TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -92,7 +95,7 @@ CREATE TABLE IF NOT EXISTS block_code
 -- BLOCK_ATTACHMENT
 CREATE TABLE IF NOT EXISTS block_attachment
 (
-    id         SERIAL PRIMARY KEY,
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     block_id   INTEGER REFERENCES block (id) ON DELETE CASCADE,
     file_id    INTEGER     NOT NULL REFERENCES file (id) ON DELETE CASCADE,
     caption    TEXT        NOT NULL CHECK (LENGTH(caption) <= 255),
@@ -103,7 +106,7 @@ CREATE TABLE IF NOT EXISTS block_attachment
 -- NOTE_PERMISSION
 CREATE TABLE IF NOT EXISTS note_permission
 (
-    note_permission_id SERIAL PRIMARY KEY,
+    note_permission_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     note_id            INTEGER REFERENCES note (id) ON DELETE CASCADE,
     granted_by         INTEGER REFERENCES user (id),
     granted_to         INTEGER REFERENCES user (id),
@@ -127,7 +130,7 @@ CREATE TABLE IF NOT EXISTS favorite
 -- TAG
 CREATE TABLE IF NOT EXISTS tag
 (
-    id         SERIAL PRIMARY KEY,
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name       TEXT        NOT NULL UNIQUE CHECK (LENGTH(name) <= 50),
     created_by INTEGER REFERENCES user (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
