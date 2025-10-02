@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS file
     size_bytes INTEGER     NOT NULL CHECK (size_bytes >= 0 AND size_bytes <= 1024 * 1024 * 1024), -- 1 гб
     width      INTEGER CHECK (width >= 0),
     height     INTEGER CHECK (height >= 0),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -99,7 +100,8 @@ CREATE TABLE IF NOT EXISTS block_attachment
     block_id   INTEGER REFERENCES block (id) ON DELETE CASCADE,
     file_id    INTEGER     NOT NULL REFERENCES file (id) ON DELETE CASCADE,
     caption    TEXT        NOT NULL CHECK (LENGTH(caption) <= 255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 
@@ -112,7 +114,7 @@ CREATE TABLE IF NOT EXISTS note_permission
     granted_to         INTEGER REFERENCES user (id),
     role               note_role,
     can_share          BOOLEAN     NOT NULL DEFAULT false,
-    granted_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -123,7 +125,8 @@ CREATE TABLE IF NOT EXISTS favorite
     user_id    INTEGER     NOT NULL REFERENCES user (id) ON DELETE CASCADE,
     note_id    INTEGER     NOT NULL REFERENCES note (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (user_id, note_id)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (user_id, note_id)
 );
 
 
@@ -144,11 +147,15 @@ CREATE TABLE IF NOT EXISTS note_tag
     note_id    INTEGER     NOT NULL REFERENCES note (id) ON DELETE CASCADE,
     tag_id     INTEGER     NOT NULL REFERENCES tag (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    PRIMARY KEY (note_id, tag_id)
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+        PRIMARY KEY (note_id, tag_id)
 );
 
+
+-- функция установки текущего времени на поля created_at и updated_at
 CREATE OR REPLACE FUNCTION set_timestamps()
-    RETURNS TRIGGER AS $$
+    RETURNS TRIGGER AS
+$$
 BEGIN
     IF (TG_OP = 'INSERT') THEN
         NEW.created_at := CURRENT_TIMESTAMP;
@@ -163,14 +170,81 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-CREATE TRIGGER trigger_created_and_updated_at
-    BEFORE INSERT ON "user"
+
+
+-- триггеры таблицы user
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON user
     FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 
-CREATE TRIGGER trigger_updated_at
-    BEFORE UPDATE ON "user"
+-- триггеры таблицы file
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON file
     FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 
--- такие же триггеры можно добавим для каждой таблицы где есть поля update_at и create_at
+-- триггеры таблицы note
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON note
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы block
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON block
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы block_text_span
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON block_text_span
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы block_code
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON block_code
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы block_attachment
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON block_attachment
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы note_permission
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON note_permission
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы favorite
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON favorite
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы tag
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON tag
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы note_tag
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON note_tag
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();

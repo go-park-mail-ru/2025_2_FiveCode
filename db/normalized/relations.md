@@ -25,8 +25,8 @@
 
 **ФЗ (минимальные)**
 
-* `id → email, password, username, avatar_file_id, created_at, updated_at`
-* `email → id` *(следовательно, `email → password, username, avatar_file_id, created_at, updated_at`)*
+* `id → email, password_hash, username, avatar_file_id, created_at, updated_at`
+* `email → id` *(следовательно, `email → password_hash, username, avatar_file_id, created_at, updated_at`)*
 
 **Нормальные формы**
 
@@ -38,11 +38,11 @@
 ```mermaid
 erDiagram
   USERS {
-    UUID id PK
+    INTEGER id PK
     TEXT email 
-    TEXT password 
+    TEXT password_hash 
     TEXT username
-    UUID avatar_file_id FK
+    INTEGER avatar_file_id FK
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
   }
@@ -63,7 +63,7 @@ erDiagram
 ```mermaid
 erDiagram
   FILES {
-    UUID id PK
+    INTEGER id PK
     TEXT url
     TEXT mime_type
     INTEGER size_bytes
@@ -89,11 +89,11 @@ erDiagram
 ```mermaid
 erDiagram
   NOTES {
-    UUID id PK
-    UUID owner_id FK 
-    UUID parent_note_id FK
+    INTEGER id PK
+    INTEGER owner_id FK 
+    INTEGER parent_note_id FK
     TEXT title 
-    UUID icon_file_id FK
+    INTEGER icon_file_id FK
     BOOLEAN is_archived 
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
@@ -110,20 +110,21 @@ erDiagram
 
 **ФЗ**
 
-* `id → note_id, type, position, created_at, updated_at`
-* `(note_id, position) → id, type, created_at, updated_at` 
+* `id → note_id, type, position, created_at, updated_at, last_edited_by`
+* `(note_id, position) → id, type, created_at, updated_at, last_edited_by` 
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ```mermaid
 erDiagram
   BLOCKS {
-    UUID id PK
-    UUID note_id FK 
+    INTEGER id PK
+    INTEGER note_id FK 
     TEXT type
     NUMERIC position
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
+    TEXT last_edited_by
   }
 ```
 
@@ -148,7 +149,7 @@ erDiagram
 ```mermaid
 erDiagram
   BLOCK_TEXT_SPANS {
-    UUID block_id FK 
+    INTEGER block_id FK 
     NUMERIC position 
     TEXT text 
     BOOLEAN bold 
@@ -178,7 +179,7 @@ erDiagram
 ```mermaid
 erDiagram
   BLOCK_CODE {
-    UUID block_id FK 
+    INTEGER block_id FK 
     TEXT language
     TEXT code_text 
     TIMESTAMPTZ created_at
@@ -207,9 +208,9 @@ erDiagram
 ```mermaid
 erDiagram
   BLOCK_ATTACHMENTS {
-    UUID id PK
-    UUID block_id FK
-    UUID file_id FK 
+    INTEGER id PK
+    INTEGER block_id FK
+    INTEGER file_id FK 
     TEXT caption
     TIMESTAMPTZ created_at
   }
@@ -235,10 +236,10 @@ erDiagram
 ```mermaid
 erDiagram
   NOTE_PERMISSIONS {
-    UUID note_permission_id PK
-    UUID note_id FK 
-    UUID granted_by FK 
-    UUID granted_to FK 
+    INTEGER note_permission_id PK
+    INTEGER note_id FK 
+    INTEGER granted_by FK 
+    INTEGER granted_to FK 
     TEXT role 
     BOOLEAN can_share 
     TIMESTAMPTZ granted_at
@@ -262,8 +263,8 @@ erDiagram
 ```mermaid
 erDiagram
   FAVORITES {
-    UUID user_id FK
-    UUID note_id FK
+    INTEGER user_id FK
+    INTEGER note_id FK
     TIMESTAMPTZ created_at
   }
 ```
@@ -285,9 +286,9 @@ erDiagram
 ```mermaid
 erDiagram
   TAGS {
-    UUID id PK
+    INTEGER id PK
     TEXT name 
-    UUID created_by FK
+    INTEGER created_by FK
     TIMESTAMPTZ updated_at
     TIMESTAMPTZ created_at
   }
@@ -309,8 +310,8 @@ erDiagram
 ```mermaid
 erDiagram
   NOTE_TAGS {
-    UUID note_id FK
-    UUID tag_id FK 
+    INTEGER note_id FK
+    INTEGER tag_id FK 
     TIMESTAMPTZ created_at
   }
 ```

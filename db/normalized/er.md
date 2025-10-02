@@ -18,6 +18,7 @@ erDiagram
     INTEGER width
     INTEGER height
     TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
 
   NOTE {
@@ -70,6 +71,7 @@ erDiagram
     INTEGER file_id
     TEXT caption
     TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
 
   NOTE_PERMISSION {
@@ -79,7 +81,7 @@ erDiagram
     INTEGER granted_to
     TEXT role
     BOOLEAN can_share
-    TIMESTAMPTZ granted_at
+    TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
   }
 
@@ -87,6 +89,7 @@ erDiagram
     INTEGER user_id
     INTEGER note_id
     TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
 
   TAG {
@@ -101,6 +104,8 @@ erDiagram
     INTEGER note_id
     INTEGER tag_id
     TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+
   }
 
   USER ||--o{ NOTE : owns
