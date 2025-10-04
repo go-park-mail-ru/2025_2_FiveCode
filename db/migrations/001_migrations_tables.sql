@@ -46,6 +46,7 @@ CREATE TABLE IF NOT EXISTS note
     title          TEXT        NOT NULL CHECK (LENGTH(title) >= 1 AND LENGTH(title) <= 200),
     icon_file_id   INTEGER     REFERENCES file (id) ON DELETE SET NULL,
     is_archived    BOOLEAN     NOT NULL DEFAULT false,
+    id_shared BOOLEAN NOT NULL DEFAULT false,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
@@ -126,7 +127,7 @@ CREATE TABLE IF NOT EXISTS favorite
     note_id    INTEGER     NOT NULL REFERENCES note (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (user_id, note_id)
+    PRIMARY KEY (user_id, note_id)
 );
 
 
@@ -148,7 +149,7 @@ CREATE TABLE IF NOT EXISTS note_tag
     tag_id     INTEGER     NOT NULL REFERENCES tag (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-        PRIMARY KEY (note_id, tag_id)
+    PRIMARY KEY (note_id, tag_id)
 );
 
 
