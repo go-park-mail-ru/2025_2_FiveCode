@@ -1,16 +1,21 @@
 package config
 
 import (
-	"fmt"
+	"github.com/pkg/errors"
 	"github.com/spf13/viper"
 )
 
 type CorsConfig struct {
-	AllowedOrigins []string `yaml:"allowed_origins"`
+	AllowedOrigins []string `mapstructure:"allowed_origins"`
+}
+
+type CookieConfig struct {
+	SessionDuration int `mapstructure:"session_duration"`
 }
 
 type Config struct {
-	Cors CorsConfig `yaml:"cors"`
+	Cors   CorsConfig   `mapstructure:"cors"`
+	Cookie CookieConfig `mapstructure:"cookie"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -20,13 +25,13 @@ func LoadConfig(path string) (*Config, error) {
 
 	err := viper.ReadInConfig()
 	if err != nil {
-		return nil, fmt.Errorf("error reading config file, %s", err)
+		return nil, errors.Wrap(err, "read config failed")
 	}
 
 	var config Config
 	err = viper.Unmarshal(&config)
 	if err != nil {
-		return nil, fmt.Errorf("unable to decode config, %v", err)
+		return nil, errors.Wrap(err, "unmarshal config failed")
 	}
 
 	return &config, nil
