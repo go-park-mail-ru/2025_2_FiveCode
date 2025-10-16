@@ -5,12 +5,13 @@ import (
 	"backend/router"
 	"backend/store"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 func init() {
@@ -25,24 +26,26 @@ func RunApp() error {
 	s := store.NewStore()
 
 	if err := s.InitFillStore(); err != nil {
-		return errors.Wrap(err, "failed to initially fill store")
+		return fmt.Errorf("failed to fill store: %w", err)
 	}
 
 	configPath, err := config.ReadConfigPath()
 	if err != nil {
-		return errors.Wrap(err, "failed to read config path")
+		return fmt.Errorf("failed to read config path: %w", err)
 	}
 
 	conf, err := config.LoadConfig(configPath)
 	if err != nil {
-		return errors.Wrap(err, "failed to load config file")
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	r := router.NewRouter(s, conf)
+	deliveries := router.InitDeliveries(s, conf)
+
+	r := router.NewRouter(s, deliveries)
 
 	serverAddr, err := config.ReadServerAddress()
 	if err != nil {
-		return errors.Wrap(err, "failed to read server address")
+		return fmt.Errorf("failed to read server address: %w", err)
 	}
 
 	server := &http.Server{

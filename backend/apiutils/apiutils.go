@@ -2,10 +2,11 @@ package apiutils
 
 import (
 	"encoding/json"
-	"errors"
-	"github.com/go-playground/validator/v10"
-	"github.com/rs/zerolog/log"
 	"net/http"
+	"strings"
+
+	"github.com/asaskevich/govalidator"
+	"github.com/rs/zerolog/log"
 )
 
 type ErrorResponse struct {
@@ -30,35 +31,28 @@ func WriteValidationErrors(w http.ResponseWriter, code int, errs []FieldError) {
 }
 
 func WriteValidationError(w http.ResponseWriter, code int, err error) {
-	var ves validator.ValidationErrors
-	ok := errors.As(err, &ves)
-	if !ok {
-		WriteError(w, code, err.Error())
+	if ge, ok := err.(govalidator.Errors); ok {
+		out := make([]FieldError, 0, len(ge))
+		for _, e := range ge.Errors() {
+			field, msg := parseGovalidatorError(e.Error())
+			out = append(out, FieldError{
+				Field:   field,
+				Message: msg,
+			})
+		}
+		WriteValidationErrors(w, code, out)
+		return
 	}
 
-	out := make([]FieldError, 0, len(ves))
-	for _, e := range ves {
-		msg := humanizeError(e)
-		out = append(out, FieldError{
-			Field:   e.Field(),
-			Message: msg,
-		})
-	}
-
-	WriteValidationErrors(w, code, out)
+	WriteError(w, code, err.Error())
 }
 
-func humanizeError(e validator.FieldError) string {
-	switch e.Tag() {
-	case "required":
-		return "field is required"
-	case "email":
-		return "must be a valid email"
-	case "min":
-		return "minimum length is " + e.Param()
-	default:
-		return e.Error()
+func parseGovalidatorError(s string) (field, message string) {
+	parts := strings.SplitN(s, ":", 2)
+	if len(parts) == 2 {
+		return strings.TrimSpace(parts[0]), strings.TrimSpace(parts[1])
 	}
+	return "", strings.TrimSpace(s)
 }
 
 func WriteJSON(w http.ResponseWriter, code int, v interface{}) {

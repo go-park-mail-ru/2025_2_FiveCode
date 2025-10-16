@@ -2,7 +2,8 @@ package authUsecase
 
 import (
 	"backend/models"
-	"github.com/pkg/errors"
+	"fmt"
+
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -23,17 +24,17 @@ func NewAuthUsecase(repository AuthRepository) *AuthUsecase {
 func (uc *AuthUsecase) Login(email string, password string) (*models.User, string, error) {
 	user, err := uc.Repository.GetUserByEmail(email)
 	if err != nil {
-		return nil, "", errors.Wrap(err, "could not get user by email")
+		return nil, "", fmt.Errorf("failed to get user by email: %w", err)
 	}
 
 	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
 	if err != nil {
-		return nil, "", errors.New("wrong password")
+		return nil, "", fmt.Errorf("wrong password: %w", err)
 	}
 
 	sessionID, err := uc.Repository.CreateSession(user.ID)
 	if err != nil {
-		return nil, "", errors.Wrap(err, "could not create session")
+		return nil, "", fmt.Errorf("failed to create session: %w", err)
 	}
 
 	return user, sessionID, nil
@@ -42,7 +43,7 @@ func (uc *AuthUsecase) Login(email string, password string) (*models.User, strin
 func (uc *AuthUsecase) Logout(sessionID string) error {
 	err := uc.Repository.DeleteSession(sessionID)
 	if err != nil {
-		return errors.Wrap(err, "could not delete session")
+		return fmt.Errorf("failed to delete session: %w", err)
 	}
 	return nil
 }

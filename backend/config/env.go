@@ -2,35 +2,53 @@ package config
 
 import (
 	"errors"
-	"github.com/joho/godotenv"
+	"fmt"
+
+	"github.com/spf13/viper"
 
 	"github.com/rs/zerolog/log"
-	"os"
 )
 
-func ReadServerAddress() (string, error) {
-	err := godotenv.Load(".env")
+func loadEnvFile() error{
+	viper.SetConfigName(".env")
+	viper.SetConfigType("env")
+	viper.AddConfigPath(".")
+
+	viper.AutomaticEnv()
+
+	err := viper.ReadInConfig()
+
 	if err != nil {
-		log.Info().Msgf("Can not load .env file %v", err)
+		log.Error().Err(err).Msg("error reading env file")
+		return err
 	}
 
-	serverHost := os.Getenv("SERVER_HOST")
-	serverPort := os.Getenv("SERVER_PORT")
+	return nil
+}
+
+func ReadServerAddress() (string, error) {
+	err := loadEnvFile()
+	if err != nil {
+		return "", fmt.Errorf("failed to load env file: %w", err)
+	}
+
+	serverHost := viper.GetString("SERVER_HOST")
+	serverPort := viper.GetString("SERVER_PORT")
 
 	if serverHost == "" || serverPort == "" {
-		return "", errors.New("SERVER_HOST and SERVER_PORT environment variables not set")
+		return "", errors.New("SERVER_HOST or SERVER_PORT environment variables not set")
 	}
 
 	return serverHost + ":" + serverPort, nil
 }
 
 func ReadConfigPath() (string, error) {
-	err := godotenv.Load(".env")
+	err := loadEnvFile()
 	if err != nil {
-		log.Info().Msgf("Can not load .env file %v", err)
+		return "", fmt.Errorf("failed to load env file: %w", err)
 	}
 
-	configPath := os.Getenv("CONFIG_PATH")
+	configPath := viper.GetString("CONFIG_PATH")
 	if configPath == "" {
 		return "", errors.New("CONFIG_PATH environment variable not set")
 	}

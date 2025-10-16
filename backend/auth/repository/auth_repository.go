@@ -2,8 +2,8 @@ package authRepository
 
 import (
 	"backend/models"
+	namederrors "backend/named_errors"
 	"backend/store"
-	"github.com/pkg/errors"
 )
 
 type AuthRepository struct {
@@ -22,12 +22,12 @@ func (r *AuthRepository) CreateSession(userID uint64) (string, error) {
 func (r *AuthRepository) GetUserByEmail(email string) (*models.User, error) {
 	userID, ok := r.Store.UsersByEmail[email]
 	if !ok {
-		return nil, errors.New("user not found")
+		return nil, namederrors.ErrNotFound
 	}
 
 	user, ok := r.Store.Users[userID]
 	if !ok {
-		return nil, errors.New("user not found")
+		return nil, namederrors.ErrNotFound
 	}
 
 	return user, nil

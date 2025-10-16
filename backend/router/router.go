@@ -17,38 +17,50 @@ import (
 	"time"
 
 	_ "backend/docs"
+
 	"github.com/gorilla/mux"
 	httpSwagger "github.com/swaggo/http-swagger"
 )
 
-func NewRouter(s *store.Store, conf *config.Config) http.Handler {
-
+func NewRouter(s *store.Store, deliveries *Deliveries) http.Handler {
 	r := mux.NewRouter()
-
-	authR := authRepository.NewAuthRepository(s)
-	userR := userRepository.NewUserRepository(s)
-	notesR := notesRepository.NewNotesRepository(s)
-
-	authUC := authUsecase.NewAuthUsecase(authR)
-	userUC := userUsecase.NewUserUsecase(userR)
-	notesUC := notesUsecase.NewNotesUsecase(notesR)
-
-	authD := authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Cookie.SessionDuration)*24*time.Hour)
-	userD := userDelivery.NewUserDelivery(userUC)
-	notesD := notesDelivery.NewNotesDelivery(notesUC)
 
 	api := r.PathPrefix("/api").Subrouter()
 
-	api.HandleFunc("/login", authD.Login).Methods("POST")
-	api.HandleFunc("/register", userD.Register).Methods("POST")
-	api.HandleFunc("/logout", authD.Logout).Methods("POST")
-	api.HandleFunc("/session", userD.GetProfile).Methods("GET")
+	api.HandleFunc("/login", deliveries.AuthDelivery.Login).Methods("POST")
+	api.HandleFunc("/register", deliveries.UserDelivery.Register).Methods("POST")
+	api.HandleFunc("/logout", deliveries.AuthDelivery.Logout).Methods("POST")
+	api.HandleFunc("/session", deliveries.UserDelivery.GetProfile).Methods("GET")
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	protected := api.PathPrefix("").Subrouter()
 	protected.Use(mw.AuthMiddleware(s))
 	protected.Use(mw.UserAccessMiddleware())
-	protected.HandleFunc("/user/{user_id}/notes", notesD.GetAllNotes).Methods("GET")
+	protected.HandleFunc("/user/{user_id}/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
 
 	return mw.CORS(r)
+}
+
+type Deliveries struct {
+	AuthDelivery  *authDelivery.AuthDelivery
+	UserDelivery  *userDelivery.UserDelivery
+	NotesDelivery *notesDelivery.NotesDelivery
+}
+
+func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
+	layers := &Deliveries{}
+
+	authR := authRepository.NewAuthRepository(s)
+	authUC := authUsecase.NewAuthUsecase(authR)
+	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Cookie.SessionDuration)*24*time.Hour)
+
+	userR := userRepository.NewUserRepository(s)
+	userUC := userUsecase.NewUserUsecase(userR)
+	layers.UserDelivery = userDelivery.NewUserDelivery(userUC)
+
+	notesR := notesRepository.NewNotesRepository(s)
+	notesUC := notesUsecase.NewNotesUsecase(notesR)
+	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
+
+	return layers
 }

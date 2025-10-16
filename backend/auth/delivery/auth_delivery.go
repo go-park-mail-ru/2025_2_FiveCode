@@ -3,13 +3,15 @@ package authDelivery
 import (
 	"backend/apiutils"
 	"backend/models"
+	namederrors "backend/named_errors"
 	"backend/validation"
 	"encoding/json"
 	"fmt"
-	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
+
+	"github.com/pkg/errors"
+	"github.com/rs/zerolog/log"
 )
 
 type AuthDelivery struct {
@@ -30,8 +32,8 @@ func NewAuthDelivery(uc AuthUsecase, sessionDuration time.Duration) *AuthDeliver
 }
 
 type loginRequest struct {
-	Email    string `json:"email" validate:"required,email"`
-	Password string `json:"password" validate:"required,min=8"`
+	Email    string `json:"email" valid:"required,email"`
+	Password string `json:"password" valid:"required,password"`
 }
 
 func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
@@ -42,7 +44,7 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := validation.Validate().Struct(req); err != nil {
+	if err := validation.ValidateStruct(req); err != nil {
 		apiutils.WriteValidationError(w, http.StatusBadRequest, err)
 		return
 	}
@@ -74,13 +76,17 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("error getting session cookie")
-		apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get session cookie")
 		return
 	}
 
 	err = d.Usecase.Logout(session.Value)
+	if errors.Is(err, namederrors.ErrInvalidSession) {
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
+		return
+	}
 	if err != nil {
-		apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to logout")
 		return
 	}
 

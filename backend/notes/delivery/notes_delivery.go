@@ -31,6 +31,10 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	notes, err := d.Usecase.GetAllNotes(userID)
+	if err != nil {
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get notes")
+		return
+	}
 
 	apiutils.WriteJSON(w, http.StatusOK, notes)
 }

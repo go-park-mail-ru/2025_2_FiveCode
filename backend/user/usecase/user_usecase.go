@@ -2,7 +2,7 @@ package userUsecase
 
 import (
 	"backend/models"
-	"github.com/pkg/errors"
+	"fmt"
 )
 
 type UserRepository interface {
@@ -21,7 +21,7 @@ func NewUserUsecase(UserRepository UserRepository) *UserUsecase {
 func (uc *UserUsecase) RegisterUser(email string, password string) (*models.User, error) {
 	user, err := uc.Repository.CreateUser(email, password)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to create user")
+		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
 	return user, nil
@@ -30,7 +30,7 @@ func (uc *UserUsecase) RegisterUser(email string, password string) (*models.User
 func (uc *UserUsecase) GetUserBySession(sessionID string) (*models.User, error) {
 	user, err := uc.Repository.GetUserBySession(sessionID)
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to get user by session")
+		return nil, fmt.Errorf("failed to get user by session: %w", err)
 	}
 	return user, nil
 }

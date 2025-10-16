@@ -2,7 +2,7 @@ package store
 
 import (
 	"backend/models"
-	"errors"
+	namederrors "backend/named_errors"
 	"fmt"
 	"sync"
 	"time"
@@ -10,11 +10,6 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
-)
-
-var (
-	ErrUserExists             = errors.New("user already exists")
-	ErrInvalidEmailOrPassword = errors.New("invalid email or password")
 )
 
 type Store struct {
@@ -128,7 +123,7 @@ func (s *Store) CreateUser(email, password string) (*models.User, error) {
 	defer s.Mu.Unlock()
 
 	if _, ok := s.UsersByEmail[email]; ok {
-		return nil, ErrUserExists
+		return nil, namederrors.ErrUserExists
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -156,12 +151,12 @@ func (s *Store) AuthenticateUser(email, password string) (*models.User, error) {
 
 	userID, ok := s.UsersByEmail[email]
 	if !ok {
-		return nil, ErrInvalidEmailOrPassword
+		return nil, namederrors.ErrInvalidEmailOrPassword
 	}
 	user := s.Users[userID]
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return nil, ErrInvalidEmailOrPassword
+		return nil, namederrors.ErrInvalidEmailOrPassword
 	}
 
 	return user, nil
