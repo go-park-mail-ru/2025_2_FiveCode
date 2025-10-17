@@ -60,18 +60,18 @@ func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 			session, err := r.Cookie("session_id")
 			if errors.Is(err, http.ErrNoCookie) {
 				log.Info().Msg("no session cookie found in auth middleware")
-				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "no session cookie"})
+				apiutils.WriteError(w, http.StatusBadRequest, "no session cookie")
 				return
 			}
 			if err != nil {
 				log.Error().Err(err).Msg("error getting session cookie in auth middleware")
-				apiutils.WriteJSON(w, http.StatusInternalServerError, map[string]string{"error": "internal server error"})
+				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
 				return
 			}
 
 			user, ok := s.GetUserBySession(session.Value)
 			if !ok {
-				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid session"})
+				apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
 				return
 			}
 
@@ -86,25 +86,25 @@ func UserAccessMiddleware() mux.MiddlewareFunc {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			userID, ok := GetUserID(r.Context())
 			if !ok {
-				apiutils.WriteJSON(w, http.StatusUnauthorized, map[string]string{"error": "user not authenticated"})
+				apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 				return
 			}
 
 			vars := mux.Vars(r)
 			idStr := vars["user_id"]
 			if idStr == "" {
-				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "missing user id"})
+				apiutils.WriteError(w, http.StatusBadRequest, "missing user id")
 				return
 			}
 
 			requestedUserID, err := strconv.ParseUint(idStr, 10, 64)
 			if err != nil {
-				apiutils.WriteJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid user id"})
+				apiutils.WriteError(w, http.StatusBadRequest, "invalid user id")
 				return
 			}
 
 			if userID != requestedUserID {
-				apiutils.WriteJSON(w, http.StatusForbidden, map[string]string{"error": "access denied"})
+				apiutils.WriteError(w, http.StatusForbidden, "access denied")
 				return
 			}
 

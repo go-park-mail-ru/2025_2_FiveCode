@@ -1,7 +1,8 @@
 package store
 
 import (
-	"errors"
+	"backend/models"
+	namederrors "backend/named_errors"
 	"fmt"
 	"sync"
 	"time"
@@ -11,34 +12,11 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-var (
-	ErrUserExists             = errors.New("user already exists")
-	ErrInvalidEmailOrPassword = errors.New("invalid email or password")
-)
-
-// User представляет пользователя — используется в ответах API (пароль скрыт).
-type User struct {
-	ID        uint64    `json:"id"`
-	Email     string    `json:"email"`
-	Password  string    `json:"-"`
-	CreatedAt time.Time `json:"created_at"`
-}
-
-// Note представляет заметку пользователя
-type Note struct {
-	ID        uint64 `json:"id"`
-	OwnerID   uint64 `json:"owner_id"`
-	Title     string `json:"title"`
-	Text      string `json:"text"`
-	Favourite bool   `json:"favorite"`
-	Folder    string `json:"folder"`
-}
-
 type Store struct {
-	mu           sync.RWMutex
-	users        map[uint64]*User
-	usersByEmail map[string]uint64
-	notes        map[uint64]*Note
+	Mu           sync.RWMutex
+	Users        map[uint64]*models.User
+	UsersByEmail map[string]uint64
+	Notes        map[uint64]*models.Note
 	sessions     map[string]uint64
 
 	nextUserID uint64
@@ -50,7 +28,7 @@ func (s *Store) InitFillStore() error {
 		return fmt.Errorf("init fill store: %w", err)
 	}
 
-	notes := []*Note{
+	notes := []*models.Note{
 		{
 			ID:        1,
 			OwnerID:   1,
@@ -85,23 +63,23 @@ func (s *Store) InitFillStore() error {
 		},
 	}
 	for _, note := range notes {
-		s.notes[note.ID] = note
+		s.Notes[note.ID] = note
 	}
 	return nil
 }
 
 func NewStore() *Store {
 	return &Store{
-		users:        make(map[uint64]*User),
-		usersByEmail: make(map[string]uint64),
-		notes:        make(map[uint64]*Note),
+		Users:        make(map[uint64]*models.User),
+		UsersByEmail: make(map[string]uint64),
+		Notes:        make(map[uint64]*models.Note),
 		sessions:     make(map[string]uint64),
 		nextUserID:   1,
 	}
 }
 
 func (s *Store) CreateDefaultNotes(userID uint64) {
-	notes := []*Note{
+	notes := []*models.Note{
 		{
 			ID:        userID*1000 + 1,
 			OwnerID:   userID,
@@ -136,16 +114,16 @@ func (s *Store) CreateDefaultNotes(userID uint64) {
 		},
 	}
 	for _, note := range notes {
-		s.notes[note.ID] = note
+		s.Notes[note.ID] = note
 	}
 }
 
-func (s *Store) CreateUser(email, password string) (*User, error) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+func (s *Store) CreateUser(email, password string) (*models.User, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
-	if _, ok := s.usersByEmail[email]; ok {
-		return nil, ErrUserExists
+	if _, ok := s.UsersByEmail[email]; ok {
+		return nil, namederrors.ErrUserExists
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -153,40 +131,40 @@ func (s *Store) CreateUser(email, password string) (*User, error) {
 		return nil, fmt.Errorf("cannot hash password: %w", err)
 	}
 
-	user := &User{
+	user := &models.User{
 		ID:        s.nextUserID,
 		Email:     email,
 		Password:  string(hashedPassword),
 		CreatedAt: time.Now().UTC(),
 	}
-	s.users[user.ID] = user
-	s.usersByEmail[email] = user.ID
+	s.Users[user.ID] = user
+	s.UsersByEmail[email] = user.ID
 	s.CreateDefaultNotes(user.ID)
 	s.nextUserID++
 
 	return user, nil
 }
 
-func (s *Store) AuthenticateUser(email, password string) (*User, error) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Store) AuthenticateUser(email, password string) (*models.User, error) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 
-	userID, ok := s.usersByEmail[email]
+	userID, ok := s.UsersByEmail[email]
 	if !ok {
-		return nil, ErrInvalidEmailOrPassword
+		return nil, namederrors.ErrInvalidEmailOrPassword
 	}
-	user := s.users[userID]
+	user := s.Users[userID]
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return nil, ErrInvalidEmailOrPassword
+		return nil, namederrors.ErrInvalidEmailOrPassword
 	}
 
 	return user, nil
 }
 
 func (s *Store) CreateSession(userID uint64) string {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
 	sessionID := uuid.NewString()
 	s.sessions[sessionID] = userID
@@ -195,32 +173,32 @@ func (s *Store) CreateSession(userID uint64) string {
 }
 
 func (s *Store) DeleteSession(sessionID string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
 	delete(s.sessions, sessionID)
 }
 
-func (s *Store) GetUserBySession(sessionID string) (*User, bool) {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Store) GetUserBySession(sessionID string) (*models.User, bool) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 
 	userID, ok := s.sessions[sessionID]
 	if !ok {
 		log.Info().Str("session_id", sessionID).Msg("session not found")
 		return nil, false
 	}
-	user, ok := s.users[userID]
+	user, ok := s.Users[userID]
 
 	return user, ok
 }
 
-func (s *Store) ListNotes(ownerID uint64) []Note {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+func (s *Store) ListNotes(ownerID uint64) []models.Note {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
 
-	result := make([]Note, 0)
-	for _, note := range s.notes {
+	result := make([]models.Note, 0)
+	for _, note := range s.Notes {
 		if note.OwnerID == ownerID {
 			result = append(result, *note)
 		}

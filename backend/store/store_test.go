@@ -1,6 +1,7 @@
 package store
 
 import (
+	"backend/models"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -89,13 +90,13 @@ func TestListNotes(t *testing.T) {
 	user2DefaultNotes := s.ListNotes(user2.ID)
 	require.Len(t, user2DefaultNotes, 4, "User2 should have 4 default notes")
 
-	note1 := &Note{ID: 200, OwnerID: user1.ID, Title: "User1 Note 1", Text: "Text 1", Favourite: false, Folder: "Work"}
-	note2 := &Note{ID: 201, OwnerID: user1.ID, Title: "User1 Note 2", Text: "Text 2", Favourite: true, Folder: "Personal"}
-	s.notes[note1.ID] = note1
-	s.notes[note2.ID] = note2
+	note1 := &models.Note{ID: 200, OwnerID: user1.ID, Title: "User1 Note 1", Text: "Text 1", Favourite: false, Folder: "Work"}
+	note2 := &models.Note{ID: 201, OwnerID: user1.ID, Title: "User1 Note 2", Text: "Text 2", Favourite: true, Folder: "Personal"}
+	s.Notes[note1.ID] = note1
+	s.Notes[note2.ID] = note2
 
-	note3 := &Note{ID: 202, OwnerID: user2.ID, Title: "User2 Note 1", Text: "Text 3", Favourite: false, Folder: "Work"}
-	s.notes[note3.ID] = note3
+	note3 := &models.Note{ID: 202, OwnerID: user2.ID, Title: "User2 Note 1", Text: "Text 3", Favourite: false, Folder: "Work"}
+	s.Notes[note3.ID] = note3
 
 	user1Notes := s.ListNotes(user1.ID)
 	require.Len(t, user1Notes, 6)

@@ -1,0 +1,39 @@
+package authRepository
+
+import (
+	"backend/models"
+	namederrors "backend/named_errors"
+	"backend/store"
+)
+
+type AuthRepository struct {
+	Store *store.Store
+}
+
+func NewAuthRepository(store *store.Store) *AuthRepository {
+	return &AuthRepository{Store: store}
+}
+
+func (r *AuthRepository) CreateSession(userID uint64) (string, error) {
+	sessionID := r.Store.CreateSession(userID)
+	return sessionID, nil
+}
+
+func (r *AuthRepository) GetUserByEmail(email string) (*models.User, error) {
+	userID, ok := r.Store.UsersByEmail[email]
+	if !ok {
+		return nil, namederrors.ErrNotFound
+	}
+
+	user, ok := r.Store.Users[userID]
+	if !ok {
+		return nil, namederrors.ErrNotFound
+	}
+
+	return user, nil
+}
+
+func (r *AuthRepository) DeleteSession(sessionID string) error {
+	r.Store.DeleteSession(sessionID)
+	return nil
+}
