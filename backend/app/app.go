@@ -2,6 +2,7 @@ package app
 
 import (
 	"backend/config"
+	"backend/initialize"
 	"backend/router"
 	"backend/store"
 	"fmt"
@@ -39,7 +40,7 @@ func RunApp() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	deliveries := router.InitDeliveries(s, conf)
+	deliveries := initialize.InitDeliveries(s, conf)
 
 	r := router.NewRouter(s, deliveries)
 
