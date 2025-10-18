@@ -28,6 +28,7 @@ erDiagram
     TEXT title
     INTEGER icon_file_id
     BOOLEAN is_archived
+    BOOLEAN is_shared
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
     TIMESTAMPTZ deleted_at
@@ -43,14 +44,24 @@ erDiagram
     INTEGER last_edited_by
   }
 
-  BLOCK_TEXT_SPAN {
+  BLOCK_TEXT {
+    INTEGER id
     INTEGER block_id
-    NUMERIC position
     TEXT text
+    TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
+  }
+
+  BLOCK_TEXT_FORMAT {
+    INTEGER id
+    INTEGER block_text_id
+    INTEGER start_offset
+    INTEGER end_offset
     BOOLEAN bold
     BOOLEAN italic
     BOOLEAN underline
     BOOLEAN strikethrough
+    TEXT link
     TEXT font
     INTEGER size
     TIMESTAMPTZ created_at
@@ -96,8 +107,8 @@ erDiagram
     INTEGER id
     TEXT name
     INTEGER created_by
-    TIMESTAMPTZ updated_at
     TIMESTAMPTZ created_at
+    TIMESTAMPTZ updated_at
   }
 
   NOTE_TAG {
@@ -105,16 +116,16 @@ erDiagram
     INTEGER tag_id
     TIMESTAMPTZ created_at
     TIMESTAMPTZ updated_at
-
   }
 
   USER ||--o{ NOTE : owns
   NOTE |o--o{ NOTE : parent_of
   NOTE ||--o{ BLOCK : contains
-  BLOCK ||--o{ BLOCK_TEXT_SPAN : has
-  BLOCK ||--o| BLOCK_CODE : opts
+  BLOCK ||--o| BLOCK_TEXT : has
+  BLOCK_TEXT ||--o{ BLOCK_TEXT_FORMAT : formatted_by
+  BLOCK ||--o| BLOCK_CODE : has
   FILE |o--|| BLOCK_ATTACHMENT : used_by
-  BLOCK ||--o| BLOCK_ATTACHMENT : embeds
+  BLOCK ||--o{ BLOCK_ATTACHMENT : embeds
   USER ||--o{ NOTE_PERMISSION : granted_to
   USER ||--o{ NOTE_PERMISSION : granted_by
   NOTE ||--o{ NOTE_PERMISSION : shared_note
@@ -125,3 +136,4 @@ erDiagram
   FILE |o--o| USER : avatar
   FILE |o--o| NOTE : icon
   USER ||--o{ BLOCK : last_edited_by
+  USER ||--o{ TAG : creates

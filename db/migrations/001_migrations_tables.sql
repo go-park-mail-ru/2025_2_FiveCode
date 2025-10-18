@@ -41,15 +41,15 @@ CREATE TABLE IF NOT EXISTS user
 CREATE TABLE IF NOT EXISTS note
 (
     id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    owner_id       INTEGER     NOT NULL REFERENCES user (id) ON DELETE SET NULL,
+    owner_id       INTEGER     REFERENCES user (id) ON DELETE SET NULL,
     parent_note_id INTEGER REFERENCES note (id) ON DELETE CASCADE,
     title          TEXT        NOT NULL CHECK (LENGTH(title) >= 1 AND LENGTH(title) <= 200),
     icon_file_id   INTEGER     REFERENCES file (id) ON DELETE SET NULL,
     is_archived    BOOLEAN     NOT NULL DEFAULT false,
-    id_shared BOOLEAN NOT NULL DEFAULT false,
+    id_shared      BOOLEAN     NOT NULL DEFAULT false,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    deleted_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    deleted_at     TIMESTAMPTZ
 );
 
 
@@ -62,26 +62,35 @@ CREATE TABLE IF NOT EXISTS block
     position       NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
     created_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_edited_by TEXT           REFERENCES user (id) ON DELETE SET NULL
+    last_edited_by INTEGER        REFERENCES user (id) ON DELETE SET NULL
 );
 
+CREATE TABLE block_text
+(
+    id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    block_id   INTEGER UNIQUE NOT NULL REFERENCES block (id) ON DELETE CASCADE,
+    text       TEXT           NOT NULL,
+    created_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- BLOCK_TEXT_SPAN
-CREATE TABLE IF NOT EXISTS block_text_span
+CREATE TABLE block_text_format
 (
-    block_id      INTEGER PRIMARY KEY REFERENCES block (id) ON DELETE CASCADE,
-    position      NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
-    text          TEXT           NOT NULL,
-    bold          BOOLEAN                 DEFAULT false,
-    italic        BOOLEAN                 DEFAULT false,
-    underline     BOOLEAN                 DEFAULT false,
-    strikethrough BOOLEAN                 DEFAULT false,
-    font          text_font               DEFAULT 'Inter' CHECK (LENGTH(font) <= 50),
-    size          INTEGER                 DEFAULT 12 CHECK (size > 0 AND size <= 72),
-    created_at    TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    id            INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    block_text_id INTEGER     NOT NULL REFERENCES block_text (id) ON DELETE CASCADE,
+    start_offset  INTEGER     NOT NULL CHECK (start_offset >= 0),
+    end_offset    INTEGER     NOT NULL CHECK (end_offset > start_offset),
+    bold          BOOLEAN              DEFAULT false,
+    italic        BOOLEAN              DEFAULT false,
+    underline     BOOLEAN              DEFAULT false,
+    strikethrough BOOLEAN              DEFAULT false,
+    link          TEXT CHECK (link IS NULL OR link ~ '^https?:\/\/.+'),
+    font          text_font            DEFAULT 'Inter',
+    size          INTEGER              DEFAULT 12 CHECK (size > 0 AND size <= 72),
+    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
-
 
 -- BLOCK_CODE
 CREATE TABLE IF NOT EXISTS block_code
@@ -116,7 +125,9 @@ CREATE TABLE IF NOT EXISTS note_permission
     role               note_role,
     can_share          BOOLEAN     NOT NULL DEFAULT false,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT unique_note_granted_to UNIQUE (note_id, granted_to)
 );
 
 
@@ -201,10 +212,17 @@ CREATE TRIGGER trigger_set_timestamps
     FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 
--- триггеры таблицы block_text_span
+-- триггеры таблицы block_text
 CREATE TRIGGER trigger_set_timestamps
     BEFORE INSERT OR UPDATE
-    ON block_text_span
+    ON block_text
+    FOR EACH ROW
+EXECUTE FUNCTION set_timestamps();
+
+-- триггеры таблицы block_text_format
+CREATE TRIGGER trigger_set_timestamps
+    BEFORE INSERT OR UPDATE
+    ON block_text_format
     FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 

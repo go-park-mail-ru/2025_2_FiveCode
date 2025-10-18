@@ -6,7 +6,8 @@
 * **FILE** — загруженные файлы с метаданными (тип, размеры, вес, URL).
 * **NOTE** — заметки (дерево родитель→дети), владельцы, заголовки, статус архива, иконки.
 * **BLOCK** — атомарные блоки контента внутри заметок (тип, порядок).
-* **BLOCK_TEXT_SPAN** — фрагменты форматируемого текста внутри текстового блока (позиции, стиль).
+* **BLOCK_TEXT** — текстовое содержимое текстовых блоков.
+* **BLOCK_TEXT_FORMAT** — диапазоны форматирования текста (жирный, курсив, ссылки, шрифты).
 * **BLOCK_CODE** — содержимое кода для код‑блоков (язык, текст кода).
 * **BLOCK_ATTACHMENT** — файловые вложения блоков (файл и подпись).
 * **NOTE_PERMISSION** — выданные права на заметки (кому, кем, какая роль, шаринг).
@@ -37,15 +38,15 @@
 
 ```mermaid
 erDiagram
-  USERS {
-    INTEGER id PK
-    TEXT email 
-    TEXT password_hash 
-    TEXT username
-    INTEGER avatar_file_id FK
-    TIMESTAMPTZ created_at
-    TIMESTAMPTZ updated_at
-  }
+    USERS {
+        INTEGER id PK
+        TEXT email
+        TEXT password_hash
+        TEXT username
+        INTEGER avatar_file_id FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -56,21 +57,22 @@ erDiagram
 
 **ФЗ**
 
-* `id → url, mime_type, size_bytes, width, height, created_at`
+* `id → url, mime_type, size_bytes, width, height, created_at, updated_at`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ```mermaid
 erDiagram
-  FILES {
-    INTEGER id PK
-    TEXT url
-    TEXT mime_type
-    INTEGER size_bytes
-    INTEGER width
-    INTEGER height
-    TIMESTAMPTZ created_at
-  }
+    FILES {
+        INTEGER id PK
+        TEXT url
+        TEXT mime_type
+        INTEGER size_bytes
+        INTEGER width
+        INTEGER height
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -82,23 +84,24 @@ erDiagram
 
 **ФЗ**
 
-* `id → owner_id, parent_note_id, title, icon_file_id, is_archived, created_at, updated_at, deleted_at`
+* `id → owner_id, parent_note_id, title, icon_file_id, is_archived, is_shared, created_at, updated_at, deleted_at`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ```mermaid
 erDiagram
-  NOTES {
-    INTEGER id PK
-    INTEGER owner_id FK 
-    INTEGER parent_note_id FK
-    TEXT title 
-    INTEGER icon_file_id FK
-    BOOLEAN is_archived 
-    TIMESTAMPTZ created_at
-    TIMESTAMPTZ updated_at
-    TIMESTAMPTZ deleted_at
-  }
+    NOTES {
+        INTEGER id PK
+        INTEGER owner_id FK
+        INTEGER parent_note_id FK
+        TEXT title
+        INTEGER icon_file_id FK
+        BOOLEAN is_archived
+        BOOLEAN is_shared
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        TIMESTAMPTZ deleted_at
+    }
 ```
 
 ---
@@ -106,61 +109,97 @@ erDiagram
 ## BLOCK
 
 **PK:** `{id}`  
-**FK:** `note_id → NOTE(id)`
+**FK:** `note_id → NOTE(id)`; `last_edited_by → USER(id)`
 
 **ФЗ**
 
 * `id → note_id, type, position, created_at, updated_at, last_edited_by`
-* `(note_id, position) → id, type, created_at, updated_at, last_edited_by` 
+* `(note_id, position) → id, type, created_at, updated_at, last_edited_by`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ```mermaid
 erDiagram
-  BLOCKS {
-    INTEGER id PK
-    INTEGER note_id FK 
-    TEXT type
-    NUMERIC position
-    TIMESTAMPTZ created_at
-    TIMESTAMPTZ updated_at
-    TEXT last_edited_by
-  }
+    BLOCKS {
+        INTEGER id PK
+        INTEGER note_id FK
+        TEXT type
+        NUMERIC position
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+        INTEGER last_edited_by FK
+    }
 ```
 
 ---
 
-## BLOCK_TEXT_SPAN
+## BLOCK_TEXT
 
-**PK:** `{block_id, position}`  
+**PK:** `{id}`  
 **FK:** `block_id → BLOCK(id)`
 
 **ФЗ**
 
-* `(block_id, position) → text, bold, italic, underline, strikethrough, font, size, created_at, updated_at`
+* `id → block_id, text, created_at, updated_at`
+* `block_id → id, text, created_at, updated_at` *(уникальность `block_id`)*
 
 **Нормальные формы**
 
-* **1НФ:** да.
-* **2НФ:** да (все неключевые зависят от **всего** составного ключа).
+* **1НФ:** да (атомарность).
+* **2НФ:** да (PK не составной).
 * **3НФ:** да (нет транзитивных зависимостей).
-* **НФБК:** да (единственный детерминант — составной ключ).
+* **НФБК:** да (детерминанты — суперклавиши `id`, `block_id`).
 
 ```mermaid
 erDiagram
-  BLOCK_TEXT_SPANS {
-    INTEGER block_id FK 
-    NUMERIC position 
-    TEXT text 
-    BOOLEAN bold 
-    BOOLEAN italic 
-    BOOLEAN underline 
-    BOOLEAN strikethrough 
-    TEXT font 
-    INTEGER size 
-    TIMESTAMPTZ created_at
-    TIMESTAMPTZ updated_at
-  }
+    BLOCK_TEXT {
+        INTEGER id PK
+        INTEGER block_id FK
+        TEXT text
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
+```
+
+---
+
+## BLOCK_TEXT_FORMAT
+
+**PK:** `{id}`  
+**FK:** `block_text_id → BLOCK_TEXT(id)`
+
+**ФЗ**
+
+*
+`id → block_text_id, start_offset, end_offset, bold, italic, underline, strikethrough, link, font, size, created_at, updated_at`
+
+**Нормальные формы**
+
+* **1НФ:** да (атомарность).
+* **2НФ:** да (PK не составной).
+* **3НФ:** да (нет транзитивных зависимостей от ключа).
+* **НФБК:** да (единственный детерминант — ключ `id`).
+
+**Примечание:** Диапазоны форматирования могут накладываться друг на друга, что позволяет применять множественное
+форматирование к одному участку текста.
+
+```mermaid
+erDiagram
+    BLOCK_TEXT_FORMAT {
+        INTEGER id PK
+        INTEGER block_text_id FK
+        INTEGER start_offset
+        INTEGER end_offset
+        BOOLEAN bold
+        BOOLEAN italic
+        BOOLEAN underline
+        BOOLEAN strikethrough
+        TEXT link
+        TEXT font
+        INTEGER size
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -178,13 +217,13 @@ erDiagram
 
 ```mermaid
 erDiagram
-  BLOCK_CODE {
-    INTEGER block_id FK 
-    TEXT language
-    TEXT code_text 
-    TIMESTAMPTZ created_at
-    TIMESTAMPTZ updated_at
-  }
+    BLOCK_CODE {
+        INTEGER block_id PK, FK
+        TEXT language
+        TEXT code_text
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -196,7 +235,7 @@ erDiagram
 
 **ФЗ**
 
-* `id → block_id, file_id, caption, created_at`
+* `id → block_id, file_id, caption, created_at, updated_at`
 
 **Нормальные формы**
 
@@ -207,24 +246,26 @@ erDiagram
 
 ```mermaid
 erDiagram
-  BLOCK_ATTACHMENTS {
-    INTEGER id PK
-    INTEGER block_id FK
-    INTEGER file_id FK 
-    TEXT caption
-    TIMESTAMPTZ created_at
-  }
+    BLOCK_ATTACHMENTS {
+        INTEGER id PK
+        INTEGER block_id FK
+        INTEGER file_id FK
+        TEXT caption
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
 
 ## NOTE_PERMISSION
+
 **PK:** `{note_permission_id}`  
 **FK:** `note_id → NOTE(id)`; `granted_by → USER(id)`; `granted_to → USER(id)`
 
 **ФЗ**
 
-* `note_permission_id → note_id, granted_by, granted_to, role, can_share, granted_at, updated_at`
+* `note_permission_id → note_id, granted_by, granted_to, role, can_share, created_at, updated_at`
 
 **Нормальные формы**
 
@@ -235,16 +276,16 @@ erDiagram
 
 ```mermaid
 erDiagram
-  NOTE_PERMISSIONS {
-    INTEGER note_permission_id PK
-    INTEGER note_id FK 
-    INTEGER granted_by FK 
-    INTEGER granted_to FK 
-    TEXT role 
-    BOOLEAN can_share 
-    TIMESTAMPTZ granted_at
-    TIMESTAMPTZ updated_at
-  }
+    NOTE_PERMISSIONS {
+        INTEGER note_permission_id PK
+        INTEGER note_id FK
+        INTEGER granted_by FK
+        INTEGER granted_to FK
+        TEXT role
+        BOOLEAN can_share
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -256,17 +297,18 @@ erDiagram
 
 **ФЗ**
 
-* `(user_id, note_id) → created_at`
+* `(user_id, note_id) → created_at, updated_at`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ```mermaid
 erDiagram
-  FAVORITES {
-    INTEGER user_id FK
-    INTEGER note_id FK
-    TIMESTAMPTZ created_at
-  }
+    FAVORITES {
+        INTEGER user_id PK, FK
+        INTEGER note_id PK, FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -278,20 +320,20 @@ erDiagram
 
 **ФЗ**
 
-* `id → name, created_by, updated_at, created_at`
-* `name → id` *(следовательно, `name → created_by, updated_at, created_at`)*
+* `id → name, created_by, created_at, updated_at`
+* `name → id` *(следовательно, `name → created_by, created_at, updated_at`)*
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да (детерминанты — ключи `id`/`name`).
 
 ```mermaid
 erDiagram
-  TAGS {
-    INTEGER id PK
-    TEXT name 
-    INTEGER created_by FK
-    TIMESTAMPTZ updated_at
-    TIMESTAMPTZ created_at
-  }
+    TAGS {
+        INTEGER id PK
+        TEXT name
+        INTEGER created_by FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
@@ -303,17 +345,18 @@ erDiagram
 
 **ФЗ**
 
-* `(note_id, tag_id) → created_at`
+* `(note_id, tag_id) → created_at, updated_at`
 
 **Нормальные формы:** 1НФ, 2НФ, 3НФ, **НФБК** — да.
 
 ```mermaid
 erDiagram
-  NOTE_TAGS {
-    INTEGER note_id FK
-    INTEGER tag_id FK 
-    TIMESTAMPTZ created_at
-  }
+    NOTE_TAGS {
+        INTEGER note_id PK, FK
+        INTEGER tag_id PK, FK
+        TIMESTAMPTZ created_at
+        TIMESTAMPTZ updated_at
+    }
 ```
 
 ---
