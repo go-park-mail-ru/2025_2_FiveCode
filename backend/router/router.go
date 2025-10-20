@@ -28,5 +28,10 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	protected.Use(mw.UserAccessMiddleware())
 	protected.HandleFunc("/user/{user_id}/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
 
+	profile := api.PathPrefix("").Subrouter()
+	profile.Use(mw.AuthMiddleware(s))
+	profile.HandleFunc("/profile", deliveries.ProfileDelivery.GetProfile).Methods("GET")
+	profile.HandleFunc("/profile", deliveries.ProfileDelivery.UpdateProfile).Methods("PUT")
+
 	return mw.CORS(r)
 }

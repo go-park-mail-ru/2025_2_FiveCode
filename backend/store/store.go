@@ -17,9 +17,11 @@ type Store struct {
 	Users        map[uint64]*models.User
 	UsersByEmail map[string]uint64
 	Notes        map[uint64]*models.Note
+	Files        map[uint64]*models.File
 	sessions     map[string]uint64
 
 	nextUserID uint64
+	nextFileID uint64
 }
 
 func (s *Store) InitFillStore() error {
@@ -73,8 +75,10 @@ func NewStore() *Store {
 		Users:        make(map[uint64]*models.User),
 		UsersByEmail: make(map[string]uint64),
 		Notes:        make(map[uint64]*models.Note),
+		Files:        make(map[uint64]*models.File),
 		sessions:     make(map[string]uint64),
 		nextUserID:   1,
+		nextFileID:   1,
 	}
 }
 
@@ -134,6 +138,7 @@ func (s *Store) CreateUser(email, password string) (*models.User, error) {
 	user := &models.User{
 		ID:        s.nextUserID,
 		Email:     email,
+		Username:  fmt.Sprintf("user_%d", s.nextUserID),
 		Password:  string(hashedPassword),
 		CreatedAt: time.Now().UTC(),
 	}
@@ -205,4 +210,87 @@ func (s *Store) ListNotes(ownerID uint64) []models.Note {
 	}
 
 	return result
+}
+
+func (s *Store) UpdateUserProfile(userID uint64, username *string, avatarFileID *uint64) (*models.User, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	user, ok := s.Users[userID]
+	if !ok {
+		return nil, namederrors.ErrNotFound
+	}
+
+	if username != nil {
+		user.Username = *username
+	}
+	if avatarFileID != nil {
+		user.AvatarFileID = avatarFileID
+	}
+
+	now := time.Now().UTC()
+	user.UpdatedAt = &now
+
+	return user, nil
+}
+
+func (s *Store) GetUserByID(userID uint64) (*models.User, error) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	user, ok := s.Users[userID]
+	if !ok {
+		return nil, namederrors.ErrNotFound
+	}
+
+	return user, nil
+}
+
+func (s *Store) SaveFile(file *models.File) (*models.File, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	file.ID = s.nextFileID
+	s.Files[file.ID] = file
+	s.nextFileID++
+
+	return file, nil
+}
+
+func (s *Store) GetFileByID(fileID uint64) (*models.File, error) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	file, ok := s.Files[fileID]
+	if !ok {
+		return nil, namederrors.ErrNotFound
+	}
+
+	return file, nil
+}
+
+func (s *Store) UpdateFile(file *models.File) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	_, ok := s.Files[file.ID]
+	if !ok {
+		return namederrors.ErrNotFound
+	}
+
+	s.Files[file.ID] = file
+	return nil
+}
+
+func (s *Store) DeleteFile(fileID uint64) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	_, ok := s.Files[fileID]
+	if !ok {
+		return namederrors.ErrNotFound
+	}
+
+	delete(s.Files, fileID)
+	return nil
 }
