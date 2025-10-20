@@ -1,11 +1,17 @@
 package models
 
+import "time"
+
 // Note представляет заметку пользователя
 type Note struct {
-	ID        uint64 `json:"id"`
-	OwnerID   uint64 `json:"owner_id"`
-	Title     string `json:"title"`
-	Text      string `json:"text"`
-	Favourite bool   `json:"favorite"`
-	Folder    string `json:"folder"`
+	ID           int64      `json:"id"`
+	OwnerID      int64      `json:"owner_id"`
+	ParentNoteID *int64     `json:"parent_note_id,omitempty"`
+	Title        string     `json:"title"`
+	IconFileID   *int64     `json:"icon_file_id,omitempty"`
+	IsArchived   bool       `json:"is_archived"`
+	IsShared     bool       `json:"is_shared"`
+	CreatedAt    time.Time  `json:"created_at"`
+	UpdatedAt    time.Time  `json:"updated_at"`
+	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 }

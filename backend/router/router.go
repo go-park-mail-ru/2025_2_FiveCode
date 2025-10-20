@@ -26,7 +26,28 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	protected := api.PathPrefix("").Subrouter()
 	protected.Use(mw.AuthMiddleware(s))
 	protected.Use(mw.UserAccessMiddleware())
-	protected.HandleFunc("/user/{user_id}/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
+
+	// заметки
+	protected.HandleFunc("/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
+	protected.HandleFunc("/notes", deliveries.NotesDelivery.CreateNote).Methods("POST")
+	protected.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.GetNote).Methods("GET")
+	protected.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.UpdateNote).Methods("PUT")
+	protected.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.DeleteNote).Methods("DELETE")
+
+	// блоки
+	protected.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.CreateBlock).Methods("POST")
+	protected.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.GetBlocks).Methods("GET")
+	protected.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.DeleteBlock).Methods("DELETE")
+	protected.HandleFunc("/blocks/{block_id}/position", deliveries.BlocksDelivery.UpdateBlockPosition).Methods("PUT")
+
+	// текст
+	protected.HandleFunc("/blocks/{block_id}/text", deliveries.BlocksDelivery.UpdateBlockText).Methods("PUT")
+	protected.HandleFunc("/blocks/{block_id}/text", deliveries.BlocksDelivery.GetBlockText).Methods("GET")
+
+	// форматы
+	protected.HandleFunc("/blocks/{block_id}/text/formats/apply", deliveries.BlocksDelivery.ApplyFormatToRange).Methods("POST")
+	protected.HandleFunc("/blocks/{block_id}/text/formats/remove", deliveries.BlocksDelivery.RemoveFormatFromRange).Methods("POST")
+	protected.HandleFunc("/blocks/{block_id}/text/formats", deliveries.BlocksDelivery.GetTextFormats).Methods("GET")
 
 	return mw.CORS(r)
 }

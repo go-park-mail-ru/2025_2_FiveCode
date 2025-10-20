@@ -4,6 +4,9 @@ import (
 	authDelivery "backend/auth/delivery"
 	authRepository "backend/auth/repository"
 	authUsecase "backend/auth/usecase"
+	blocksDelivery "backend/blocks/delivery"
+	blocksRepository "backend/blocks/repository"
+	blocksUsecase "backend/blocks/usecase"
 	"backend/config"
 	notesDelivery "backend/notes/delivery"
 	notesRepository "backend/notes/repository"
@@ -16,9 +19,10 @@ import (
 )
 
 type Deliveries struct {
-	AuthDelivery  *authDelivery.AuthDelivery
-	UserDelivery  *userDelivery.UserDelivery
-	NotesDelivery *notesDelivery.NotesDelivery
+	AuthDelivery   *authDelivery.AuthDelivery
+	UserDelivery   *userDelivery.UserDelivery
+	NotesDelivery  *notesDelivery.NotesDelivery
+	BlocksDelivery *blocksDelivery.BlocksDelivery
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
@@ -35,6 +39,10 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	notesR := notesRepository.NewNotesRepository(s)
 	notesUC := notesUsecase.NewNotesUsecase(notesR)
 	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
+
+	blocksR := blocksRepository.NewBlocksRepository(s)
+	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR)
+	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
 
 	return layers
 }
