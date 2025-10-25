@@ -27,27 +27,35 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	protected.Use(mw.AuthMiddleware(s))
 	protected.Use(mw.UserAccessMiddleware())
 
-	// заметки
-	protected.HandleFunc("/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
-	protected.HandleFunc("/notes", deliveries.NotesDelivery.CreateNote).Methods("POST")
-	protected.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.GetNote).Methods("GET")
-	protected.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.UpdateNote).Methods("PUT")
-	protected.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.DeleteNote).Methods("DELETE")
+	notes := api.PathPrefix("").Subrouter()
+	notes.Use(mw.AuthMiddleware(s))
+	// ============ ЗАМЕТКИ ============
+	// Получить список всех заметок (только метаданные)
+	notes.HandleFunc("/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
+	// Создать новую заметку
+	notes.HandleFunc("/notes", deliveries.NotesDelivery.CreateNote).Methods("POST")
+	// Получить заметку целиком (метаданные + все блоки)
+	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.GetNoteById).Methods("GET")
+	// Обновить метаданные заметки
+	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.UpdateNote).Methods("PUT")
+	// Удалить заметку
+	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.DeleteNote).Methods("DELETE")
 
-	// блоки
-	protected.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.CreateBlock).Methods("POST")
-	protected.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.GetBlocks).Methods("GET")
-	protected.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.DeleteBlock).Methods("DELETE")
-	protected.HandleFunc("/blocks/{block_id}/position", deliveries.BlocksDelivery.UpdateBlockPosition).Methods("PUT")
-
-	// текст
-	protected.HandleFunc("/blocks/{block_id}/text", deliveries.BlocksDelivery.UpdateBlockText).Methods("PUT")
-	protected.HandleFunc("/blocks/{block_id}/text", deliveries.BlocksDelivery.GetBlockText).Methods("GET")
-
-	// форматы
-	protected.HandleFunc("/blocks/{block_id}/text/formats/apply", deliveries.BlocksDelivery.ApplyFormatToRange).Methods("POST")
-	protected.HandleFunc("/blocks/{block_id}/text/formats/remove", deliveries.BlocksDelivery.RemoveFormatFromRange).Methods("POST")
-	protected.HandleFunc("/blocks/{block_id}/text/formats", deliveries.BlocksDelivery.GetTextFormats).Methods("GET")
+	blocks := api.PathPrefix("").Subrouter()
+	blocks.Use(mw.AuthMiddleware(s))
+	// ============ БЛОКИ ============
+	// Создать пустой блок (after_block_id в body)
+	blocks.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.CreateBlock).Methods("POST")
+	// Получить все блоки заметки
+	blocks.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.GetBlocks).Methods("GET")
+	// Получить один блок
+	blocks.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.GetBlock).Methods("GET")
+	// Обновить блок (текст + форматы)
+	blocks.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.UpdateBlock).Methods("PATCH")
+	// Удалить блок
+	blocks.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.DeleteBlock).Methods("DELETE")
+	// Изменить позицию блока (after_block_id в body)
+	blocks.HandleFunc("/blocks/{block_id}/position", deliveries.BlocksDelivery.UpdateBlockPosition).Methods("PUT")
 
 	return mw.CORS(r)
 }

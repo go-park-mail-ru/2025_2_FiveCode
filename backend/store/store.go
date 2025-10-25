@@ -206,3 +206,31 @@ func (s *Store) ListNotes(ownerID uint64) []models.Note {
 
 	return result
 }
+
+func (s *Store) CreateNote(userID uint64) (*models.Note, error) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	result := &models.Note{
+		ID:        uint64(len(s.Notes) + 1),
+		OwnerID:   userID,
+		Title:     "",
+		CreatedAt: time.Now().UTC(),
+		UpdatedAt: time.Now().UTC(),
+	}
+
+	s.Notes[result.ID] = result
+	return result, nil
+}
+
+func (s *Store) GetNoteById(noteID uint64) (*models.Note, error) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	result := s.Notes[noteID]
+	if result == nil {
+		return nil, namederrors.ErrNotFound
+	}
+
+	return result, nil
+}

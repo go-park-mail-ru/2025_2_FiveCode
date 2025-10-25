@@ -11,19 +11,19 @@ const (
 )
 
 type Block struct {
-	ID           int64     `json:"id"`
-	NoteID       int64     `json:"note_id"`
+	ID           uint64    `json:"id"`
+	NoteID       uint64    `json:"note_id"`
 	Type         BlockType `json:"type"`
 	Position     float64   `json:"position"`
-	LastEditedBy *int64    `json:"last_edited_by,omitempty"`
+	LastEditedBy *uint64   `json:"last_edited_by,omitempty"`
 	CreatedAt    time.Time `json:"created_at"`
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
 // BlockText - текстовое содержимое блока
 type BlockText struct {
-	ID        int64     `json:"id"`
-	BlockID   int64     `json:"block_id"`
+	ID        uint64    `json:"id"`
+	BlockID   uint64    `json:"block_id"`
 	Text      string    `json:"text"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
@@ -41,7 +41,7 @@ const (
 // BlockTextFormat - форматирование диапазона текста (range)
 type BlockTextFormat struct {
 	ID            uint64    `json:"id"`
-	BlockTextID   int64     `json:"block_text_id"`
+	BlockTextID   uint64    `json:"block_text_id"`
 	StartOffset   int       `json:"start_offset"`
 	EndOffset     int       `json:"end_offset"`
 	Bold          bool      `json:"bold"`
@@ -50,7 +50,7 @@ type BlockTextFormat struct {
 	Strikethrough bool      `json:"strikethrough"`
 	Link          *string   `json:"link,omitempty"`
 	Font          TextFont  `json:"font"`
-	Size          int       `json:"size"`
+	Size          uint64    `json:"size"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
 }
