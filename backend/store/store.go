@@ -1,6 +1,7 @@
 package store
 
 import (
+	"backend/config"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"fmt"
@@ -13,6 +14,7 @@ import (
 )
 
 type Store struct {
+	Minio        *MinioStorage
 	Mu           sync.RWMutex
 	Users        map[uint64]*models.User
 	UsersByEmail map[string]uint64
@@ -20,6 +22,22 @@ type Store struct {
 	sessions     map[string]uint64
 
 	nextUserID uint64
+	nextNoteID uint64
+}
+
+func (s *Store) InitMinioStorage(conf *config.Config) error {
+	minioStorage, err := NewMinioStorage(
+		conf.Minio.Endpoint,
+		conf.Minio.AccessKey,
+		conf.Minio.SecretKey,
+		conf.Minio.Secure,
+	)
+	if err != nil {
+		return err
+	}
+
+	s.Minio = minioStorage
+	return nil
 }
 
 func (s *Store) InitFillStore() error {
@@ -30,36 +48,52 @@ func (s *Store) InitFillStore() error {
 
 	notes := []*models.Note{
 		{
-			ID:        1,
-			OwnerID:   1,
-			Title:     "University note",
-			Text:      "Lecture notes for math and history",
-			Favourite: true,
-			Folder:    "University",
+			ID:           1,
+			OwnerID:      1,
+			ParentNoteID: nil,
+			Title:        "University Lectures",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     false,
+			CreatedAt:    time.Now().Add(-30 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-5 * 24 * time.Hour),
+			DeletedAt:    nil,
 		},
 		{
-			ID:        2,
-			OwnerID:   1,
-			Title:     "Project idea",
-			Text:      "Brainstorming app features and sketches",
-			Favourite: false,
-			Folder:    "University",
+			ID:           2,
+			OwnerID:      1,
+			ParentNoteID: nil,
+			Title:        "Project Ideas",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     true,
+			CreatedAt:    time.Now().Add(-20 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-2 * 24 * time.Hour),
+			DeletedAt:    nil,
 		},
 		{
-			ID:        3,
-			OwnerID:   1,
-			Title:     "Shopping list",
-			Text:      "Milk, bread, eggs, and vegetables",
-			Favourite: false,
-			Folder:    "Personal",
+			ID:           3,
+			OwnerID:      1,
+			ParentNoteID: nil,
+			Title:        "Shopping List",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     false,
+			CreatedAt:    time.Now().Add(-7 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-6 * time.Hour),
+			DeletedAt:    nil,
 		},
 		{
-			ID:        4,
-			OwnerID:   1,
-			Title:     "Note №4",
-			Text:      "Random text of the note",
-			Favourite: false,
-			Folder:    "Personal",
+			ID:           4,
+			OwnerID:      1,
+			ParentNoteID: nil,
+			Title:        "Random Note",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     false,
+			CreatedAt:    time.Now().Add(-10 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-8 * 24 * time.Hour),
+			DeletedAt:    nil,
 		},
 	}
 	for _, note := range notes {
@@ -75,42 +109,59 @@ func NewStore() *Store {
 		Notes:        make(map[uint64]*models.Note),
 		sessions:     make(map[string]uint64),
 		nextUserID:   1,
+		nextNoteID:   1,
 	}
 }
 
 func (s *Store) CreateDefaultNotes(userID uint64) {
 	notes := []*models.Note{
 		{
-			ID:        userID*1000 + 1,
-			OwnerID:   userID,
-			Title:     "Books to read",
-			Text:      "The Three Musketeers, Animal Farm, Angels and Demons",
-			Favourite: false,
-			Folder:    "Personal",
+			ID:           1,
+			OwnerID:      userID*1000 + 1,
+			ParentNoteID: nil,
+			Title:        "University Lectures",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     false,
+			CreatedAt:    time.Now().Add(-30 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-5 * 24 * time.Hour),
+			DeletedAt:    nil,
 		},
 		{
-			ID:        userID*1000 + 2,
-			OwnerID:   userID,
-			Title:     "Homework",
-			Text:      "Write an essay",
-			Favourite: false,
-			Folder:    "University",
+			ID:           2,
+			OwnerID:      userID*1000 + 2,
+			ParentNoteID: nil,
+			Title:        "Project Ideas",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     true,
+			CreatedAt:    time.Now().Add(-20 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-2 * 24 * time.Hour),
+			DeletedAt:    nil,
 		},
 		{
-			ID:        userID*1000 + 3,
-			OwnerID:   userID,
-			Title:     "My wishes",
-			Text:      "I want to be a millionaire",
-			Favourite: true,
-			Folder:    "Personal",
+			ID:           3,
+			OwnerID:      userID*1000 + 3,
+			ParentNoteID: nil,
+			Title:        "Shopping List",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     false,
+			CreatedAt:    time.Now().Add(-7 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-6 * time.Hour),
+			DeletedAt:    nil,
 		},
 		{
-			ID:        userID*1000 + 4,
-			OwnerID:   userID,
-			Title:     "Films to watch",
-			Text:      "Harry Potter, The Lord of the Rings, Avatar",
-			Favourite: false,
-			Folder:    "Personal",
+			ID:           4,
+			OwnerID:      userID*1000 + 4,
+			ParentNoteID: nil,
+			Title:        "Random Note",
+			IconFileID:   nil,
+			IsArchived:   false,
+			IsShared:     false,
+			CreatedAt:    time.Now().Add(-10 * 24 * time.Hour),
+			UpdatedAt:    time.Now().Add(-8 * 24 * time.Hour),
+			DeletedAt:    nil,
 		},
 	}
 	for _, note := range notes {
@@ -199,7 +250,7 @@ func (s *Store) ListNotes(ownerID uint64) []models.Note {
 
 	result := make([]models.Note, 0)
 	for _, note := range s.Notes {
-		if note.OwnerID == ownerID {
+		if note.OwnerID == ownerID && note.DeletedAt != nil {
 			result = append(result, *note)
 		}
 	}
@@ -208,11 +259,11 @@ func (s *Store) ListNotes(ownerID uint64) []models.Note {
 }
 
 func (s *Store) CreateNote(userID uint64) (*models.Note, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
 
 	result := &models.Note{
-		ID:        uint64(len(s.Notes) + 1),
+		ID:        s.nextNoteID,
 		OwnerID:   userID,
 		Title:     "",
 		CreatedAt: time.Now().UTC(),
@@ -220,6 +271,7 @@ func (s *Store) CreateNote(userID uint64) (*models.Note, error) {
 	}
 
 	s.Notes[result.ID] = result
+	s.nextNoteID++
 	return result, nil
 }
 
@@ -233,4 +285,33 @@ func (s *Store) GetNoteById(noteID uint64) (*models.Note, error) {
 	}
 
 	return result, nil
+}
+
+func (s *Store) DeleteNote(noteID uint64) error {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	delete(s.Notes, noteID)
+
+	return nil
+}
+
+func (s *Store) UpdateNote(noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
+	s.Mu.Lock()
+	defer s.Mu.Unlock()
+
+	if s.Notes[noteID] == nil {
+		return nil, namederrors.ErrNotFound
+	}
+
+	if title != nil {
+		s.Notes[noteID].Title = *title
+	}
+
+	if isArchived != nil {
+		s.Notes[noteID].IsArchived = *isArchived
+	}
+	s.Notes[noteID].UpdatedAt = time.Now().UTC()
+
+	return s.Notes[noteID], nil
 }

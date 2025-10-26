@@ -23,27 +23,23 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	api.HandleFunc("/session", deliveries.UserDelivery.GetProfile).Methods("GET")
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
-	protected := api.PathPrefix("").Subrouter()
-	protected.Use(mw.AuthMiddleware(s))
-	protected.Use(mw.UserAccessMiddleware())
-
+	// ЗАМЕТКИ
 	notes := api.PathPrefix("").Subrouter()
 	notes.Use(mw.AuthMiddleware(s))
-	// ============ ЗАМЕТКИ ============
-	// Получить список всех заметок (только метаданные)
+	// Получить список всех заметок
 	notes.HandleFunc("/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
 	// Создать новую заметку
 	notes.HandleFunc("/notes", deliveries.NotesDelivery.CreateNote).Methods("POST")
-	// Получить заметку целиком (метаданные + все блоки)
+	// Получить заметку целиком
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.GetNoteById).Methods("GET")
 	// Обновить метаданные заметки
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.UpdateNote).Methods("PUT")
 	// Удалить заметку
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.DeleteNote).Methods("DELETE")
 
+	// БЛОКИ
 	blocks := api.PathPrefix("").Subrouter()
 	blocks.Use(mw.AuthMiddleware(s))
-	// ============ БЛОКИ ============
 	// Создать пустой блок (after_block_id в body)
 	blocks.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.CreateBlock).Methods("POST")
 	// Получить все блоки заметки

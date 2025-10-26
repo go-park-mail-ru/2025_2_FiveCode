@@ -38,3 +38,21 @@ func (r *NotesRepository) GetNoteById(noteID uint64) (*models.Note, error) {
 
 	return note, nil
 }
+
+func (r *NotesRepository) UpdateNote(noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
+	note, err := r.Store.UpdateNote(noteID, title, isArchived)
+	if err != nil {
+		return nil, fmt.Errorf("failed to update note: %w", err)
+	}
+
+	return note, nil
+}
+
+func (r *NotesRepository) DeleteNote(noteID uint64) error {
+	err := r.Store.DeleteNote(noteID)
+	if err != nil {
+		return fmt.Errorf("failed to delete note: %w", err)
+	}
+
+	return nil
+}

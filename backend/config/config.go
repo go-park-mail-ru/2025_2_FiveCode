@@ -14,9 +14,17 @@ type CookieConfig struct {
 	SessionDuration int `mapstructure:"session_duration"`
 }
 
+type MinioConfig struct {
+	Endpoint  string `yaml:"endpoint"`
+	AccessKey string `yaml:"access_key"`
+	SecretKey string `yaml:"secret_key"`
+	Secure    bool   `yaml:"secure"`
+}
+
 type Config struct {
 	Cors   CorsConfig   `mapstructure:"cors"`
 	Cookie CookieConfig `mapstructure:"cookie"`
+	Minio  MinioConfig  `mapstructure:"minio"`
 }
 
 func LoadConfig(path string) (*Config, error) {

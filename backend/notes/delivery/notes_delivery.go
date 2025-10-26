@@ -4,6 +4,7 @@ import (
 	"backend/apiutils"
 	"backend/middleware"
 	"backend/models"
+	"encoding/json"
 	"github.com/gorilla/mux"
 	"net/http"
 	"strconv"
@@ -13,7 +14,8 @@ type NotesUsecase interface {
 	GetAllNotes(userID uint64) ([]models.Note, error)
 	CreateNote(userID uint64) (*models.Note, error)
 	GetNoteById(userID uint64, noteID uint64) (*models.Note, error)
-	UpdateNote(userID uint64, noteID uint64) (*models.Note, error)
+	UpdateNote(userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
+	DeleteNote(userID uint64, noteID uint64) error
 }
 
 type NotesDelivery struct {
@@ -40,6 +42,7 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutils.WriteJSON(w, http.StatusOK, notes)
+	return
 }
 
 func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
@@ -52,9 +55,11 @@ func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 	note, err := d.Usecase.CreateNote(userID)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to create note")
+		return
 	}
 
 	apiutils.WriteJSON(w, http.StatusCreated, note)
+	return
 }
 
 func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
@@ -62,6 +67,7 @@ func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
 	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
+		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
@@ -73,9 +79,16 @@ func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
 	note, err := d.Usecase.GetNoteById(userID, noteID)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get note")
+		return
 	}
 
 	apiutils.WriteJSON(w, http.StatusOK, note)
+	return
+}
+
+type UpdateNoteRequest struct {
+	Title      *string `json:"title"`
+	IsArchived *bool   `json:"is_archived"`
 }
 
 func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
@@ -83,6 +96,7 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
+		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
@@ -91,4 +105,47 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var req UpdateNoteRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	if req.Title == nil && req.IsArchived == nil {
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	note, err := d.Usecase.UpdateNote(userID, noteID, req.Title, req.IsArchived)
+	if err != nil {
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to update note")
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, note)
+	return
+}
+
+func (d *NotesDelivery) DeleteNote(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
+	if err != nil {
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
+		return
+	}
+
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+
+	err = d.Usecase.DeleteNote(userID, noteID)
+	if err != nil {
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to delete note")
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, "note was successfully deleted")
+	return
 }
