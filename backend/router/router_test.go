@@ -9,9 +9,6 @@ import (
 	notesDelivery "backend/notes/delivery"
 	notesRepository "backend/notes/repository"
 	notesUsecase "backend/notes/usecase"
-	profileDelivery "backend/profile/delivery"
-	profileRepository "backend/profile/repository"
-	profileUsecase "backend/profile/usecase"
 	"backend/store"
 	userDelivery "backend/user/delivery"
 	userRepository "backend/user/repository"
@@ -30,6 +27,13 @@ func TestNewRouter(t *testing.T) {
 		Cookie: config.CookieConfig{
 			SessionDuration: 7,
 		},
+		MinIO: config.MinIOConfig{
+			Endpoint:        "localhost:9000",
+			AccessKeyID:     "minioadmin",
+			SecretAccessKey: "minioadmin",
+			UseSSL:          false,
+			BucketName:      "test-bucket",
+		},
 	}
 
 	deliveries := &initialize.Deliveries{}
@@ -38,17 +42,16 @@ func TestNewRouter(t *testing.T) {
 	authUC := authUsecase.NewAuthUsecase(authR)
 	deliveries.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Cookie.SessionDuration)*24*time.Hour)
 
-	userR := userRepository.NewUserRepository(s)
+	userR, err := userRepository.NewUserRepository(s, &conf.MinIO)
+	if err != nil {
+		t.Skip("Skipping test: MinIO server not available")
+	}
 	userUC := userUsecase.NewUserUsecase(userR)
 	deliveries.UserDelivery = userDelivery.NewUserDelivery(userUC)
 
 	notesR := notesRepository.NewNotesRepository(s)
 	notesUC := notesUsecase.NewNotesUsecase(notesR)
 	deliveries.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
-
-	profileR := profileRepository.NewProfileRepository(s)
-	profileUC := profileUsecase.NewProfileUsecase(profileR)
-	deliveries.ProfileDelivery = profileDelivery.NewProfileDelivery(profileUC)
 
 	router := NewRouter(s, deliveries)
 	require.NotNil(t, router, "router should not be nil")

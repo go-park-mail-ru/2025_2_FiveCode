@@ -40,7 +40,10 @@ func RunApp() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	deliveries := initialize.InitDeliveries(s, conf)
+	deliveries, err := initialize.InitDeliveries(s, conf)
+	if err != nil {
+		return fmt.Errorf("failed to initialize deliveries: %w", err)
+	}
 
 	r := router.NewRouter(s, deliveries)
 

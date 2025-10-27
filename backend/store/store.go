@@ -212,7 +212,7 @@ func (s *Store) ListNotes(ownerID uint64) []models.Note {
 	return result
 }
 
-func (s *Store) UpdateUserProfile(userID uint64, username *string, avatarFileID *uint64) (*models.User, error) {
+func (s *Store) UpdateUserProfile(userID uint64, username *string, password *string) (*models.User, error) {
 	s.Mu.Lock()
 	defer s.Mu.Unlock()
 
@@ -224,8 +224,8 @@ func (s *Store) UpdateUserProfile(userID uint64, username *string, avatarFileID 
 	if username != nil {
 		user.Username = *username
 	}
-	if avatarFileID != nil {
-		user.AvatarFileID = avatarFileID
+	if password != nil {
+		user.Password = *password
 	}
 
 	now := time.Now().UTC()

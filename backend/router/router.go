@@ -20,7 +20,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	api.HandleFunc("/login", deliveries.AuthDelivery.Login).Methods("POST")
 	api.HandleFunc("/register", deliveries.UserDelivery.Register).Methods("POST")
 	api.HandleFunc("/logout", deliveries.AuthDelivery.Logout).Methods("POST")
-	api.HandleFunc("/session", deliveries.UserDelivery.GetProfile).Methods("GET")
+	api.HandleFunc("/session", deliveries.UserDelivery.GetProfileBySession).Methods("GET")
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	protected := api.PathPrefix("").Subrouter()
@@ -30,8 +30,8 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 
 	profile := api.PathPrefix("").Subrouter()
 	profile.Use(mw.AuthMiddleware(s))
-	profile.HandleFunc("/profile", deliveries.ProfileDelivery.GetProfile).Methods("GET")
-	profile.HandleFunc("/profile", deliveries.ProfileDelivery.UpdateProfile).Methods("PUT")
+	profile.HandleFunc("/profile", deliveries.UserDelivery.GetProfile).Methods("GET")
+	profile.HandleFunc("/profile", deliveries.UserDelivery.UpdateProfile).Methods("PUT")
 
 	return mw.CORS(r)
 }
