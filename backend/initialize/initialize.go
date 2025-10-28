@@ -41,7 +41,7 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
 
 	blocksR := blocksRepository.NewBlocksRepository(s)
-	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR)
+	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR, notesR)
 	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
 
 	return layers

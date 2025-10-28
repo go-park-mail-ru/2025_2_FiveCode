@@ -1,3 +1,4 @@
+// models/block.go
 package models
 
 import "time"
@@ -20,7 +21,6 @@ type Block struct {
 	UpdatedAt    time.Time `json:"updated_at"`
 }
 
-// BlockText - текстовое содержимое блока
 type BlockText struct {
 	ID        uint64    `json:"id"`
 	BlockID   uint64    `json:"block_id"`
@@ -38,7 +38,6 @@ const (
 	FontManrope    TextFont = "Manrope"
 )
 
-// BlockTextFormat - форматирование диапазона текста (range)
 type BlockTextFormat struct {
 	ID            uint64    `json:"id"`
 	BlockTextID   uint64    `json:"block_text_id"`
@@ -50,7 +49,14 @@ type BlockTextFormat struct {
 	Strikethrough bool      `json:"strikethrough"`
 	Link          *string   `json:"link,omitempty"`
 	Font          TextFont  `json:"font"`
-	Size          uint64    `json:"size"`
+	Size          int       `json:"size"`
 	CreatedAt     time.Time `json:"created_at"`
 	UpdatedAt     time.Time `json:"updated_at"`
+}
+
+// Для удобства работы - полный блок с текстом и форматами
+type BlockWithContent struct {
+	Block
+	Text    string            `json:"text,omitempty"`
+	Formats []BlockTextFormat `json:"formats,omitempty"`
 }

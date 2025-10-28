@@ -40,11 +40,6 @@ func RunApp() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	if err := s.InitMinioStorage(conf); err != nil {
-		return fmt.Errorf("failed to initialize minio storage: %w", err)
-	}
-	log.Info().Msg("MinIO storage initialized successfully")
-
 	deliveries := initialize.InitDeliveries(s, conf)
 
 	r := router.NewRouter(s, deliveries)

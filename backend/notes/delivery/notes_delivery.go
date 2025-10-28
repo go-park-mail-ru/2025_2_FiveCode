@@ -4,6 +4,7 @@ import (
 	"backend/apiutils"
 	"backend/middleware"
 	"backend/models"
+	"context"
 	"encoding/json"
 	"github.com/gorilla/mux"
 	"net/http"
@@ -11,11 +12,11 @@ import (
 )
 
 type NotesUsecase interface {
-	GetAllNotes(userID uint64) ([]models.Note, error)
-	CreateNote(userID uint64) (*models.Note, error)
-	GetNoteById(userID uint64, noteID uint64) (*models.Note, error)
-	UpdateNote(userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
-	DeleteNote(userID uint64, noteID uint64) error
+	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
+	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
+	GetNoteById(ctx context.Context, userID uint64, noteID uint64) (*models.Note, error)
+	UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
+	DeleteNote(ctx context.Context, userID uint64, noteID uint64) error
 }
 
 type NotesDelivery struct {
@@ -35,7 +36,7 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	notes, err := d.Usecase.GetAllNotes(userID)
+	notes, err := d.Usecase.GetAllNotes(r.Context(), userID)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get notes")
 		return
@@ -52,7 +53,7 @@ func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.Usecase.CreateNote(userID)
+	note, err := d.Usecase.CreateNote(r.Context(), userID)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to create note")
 		return
@@ -76,7 +77,7 @@ func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.Usecase.GetNoteById(userID, noteID)
+	note, err := d.Usecase.GetNoteById(r.Context(), userID, noteID)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get note")
 		return
@@ -116,7 +117,7 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.Usecase.UpdateNote(userID, noteID, req.Title, req.IsArchived)
+	note, err := d.Usecase.UpdateNote(r.Context(), userID, noteID, req.Title, req.IsArchived)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to update note")
 		return
@@ -140,7 +141,7 @@ func (d *NotesDelivery) DeleteNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = d.Usecase.DeleteNote(userID, noteID)
+	err = d.Usecase.DeleteNote(r.Context(), userID, noteID)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to delete note")
 		return
