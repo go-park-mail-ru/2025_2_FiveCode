@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/gorilla/mux"
+	"io"
 	"net/http"
 	"strconv"
 )
@@ -111,6 +112,12 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
+	defer func(Body io.ReadCloser) {
+		err := Body.Close()
+		if err != nil {
+
+		}
+	}(r.Body)
 
 	if req.Title == nil && req.IsArchived == nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
