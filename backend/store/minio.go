@@ -17,14 +17,12 @@ type MinioStorage struct {
 }
 
 func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*MinioStorage, error) {
-	// Логируем параметры (БЕЗ secretKey!)
 	log.Info().
 		Str("endpoint", endpoint).
 		Str("access_key", accessKey).
 		Bool("secure", secure).
 		Msg("Initializing MinIO client")
 
-	// Создаем клиент
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: secure,
@@ -37,14 +35,12 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 		client: client,
 	}
 
-	// Проверяем существование bucket
 	ctx := context.Background()
 
 	log.Info().Str("bucket", defaultBucketName).Msg("Checking bucket existence")
 
 	exists, err := client.BucketExists(ctx, defaultBucketName)
 	if err != nil {
-		// Добавляем больше информации в ошибку
 		return nil, fmt.Errorf("failed to check bucket existence (endpoint=%s, secure=%v): %w",
 			endpoint, secure, err)
 	}

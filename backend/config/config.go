@@ -15,10 +15,10 @@ type CookieConfig struct {
 }
 
 type MinioConfig struct {
-	Endpoint  string `mapstructure:"endpoint"`   // ← исправил
-	AccessKey string `mapstructure:"access_key"` // ← исправил
-	SecretKey string `mapstructure:"secret_key"` // ← исправил
-	Secure    bool   `mapstructure:"secure"`     // ← исправил
+	Endpoint  string `mapstructure:"endpoint"`
+	AccessKey string `mapstructure:"access_key"`
+	SecretKey string `mapstructure:"secret_key"`
+	Secure    bool   `mapstructure:"secure"`
 }
 
 type Config struct {
