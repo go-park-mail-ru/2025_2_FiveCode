@@ -17,12 +17,6 @@ type MinioStorage struct {
 }
 
 func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*MinioStorage, error) {
-	log.Info().
-		Str("endpoint", endpoint).
-		Str("access_key", accessKey).
-		Bool("secure", secure).
-		Msg("Initializing MinIO client")
-
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: secure,
@@ -37,8 +31,6 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 
 	ctx := context.Background()
 
-	log.Info().Str("bucket", defaultBucketName).Msg("Checking bucket existence")
-
 	exists, err := client.BucketExists(ctx, defaultBucketName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to check bucket existence (endpoint=%s, secure=%v): %w",
@@ -46,12 +38,10 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 	}
 
 	if !exists {
-		log.Info().Str("bucket", defaultBucketName).Msg("Creating MinIO bucket")
 		err = client.MakeBucket(ctx, defaultBucketName, minio.MakeBucketOptions{})
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %w", err)
 		}
-		log.Info().Str("bucket", defaultBucketName).Msg("MinIO bucket created successfully")
 	} else {
 		log.Info().Str("bucket", defaultBucketName).Msg("MinIO bucket already exists")
 	}
