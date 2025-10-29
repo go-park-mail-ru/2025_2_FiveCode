@@ -1,6 +1,7 @@
 package store
 
 import (
+	"backend/config"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"fmt"
@@ -15,6 +16,7 @@ import (
 
 type Store struct {
 	Mu           sync.RWMutex
+	Minio        *MinioStorage
 	Users        map[uint64]*models.User
 	UsersByEmail map[string]uint64
 	Notes        map[uint64]*models.Note
@@ -28,6 +30,21 @@ type Store struct {
 	nextBlockID     uint64
 	nextBlockTextID uint64
 	nextFormatID    uint64
+}
+
+func (s *Store) InitMinioStorage(conf *config.Config) error {
+	minioStorage, err := NewMinioStorage(
+		conf.Minio.Endpoint,
+		conf.Minio.AccessKey,
+		conf.Minio.SecretKey,
+		conf.Minio.Secure,
+	)
+	if err != nil {
+		return err
+	}
+
+	s.Minio = minioStorage
+	return nil
 }
 
 func (s *Store) InitFillStore() error {
