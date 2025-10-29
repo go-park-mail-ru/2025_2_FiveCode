@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// Note представляет заметку пользователя
 type Note struct {
 	ID           uint64     `json:"id"`
 	OwnerID      uint64     `json:"owner_id"`

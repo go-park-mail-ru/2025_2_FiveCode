@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// User представляет пользователя — используется в ответах API (пароль скрыт).
 type User struct {
 	ID        uint64    `json:"id"`
 	Email     string    `json:"email"`

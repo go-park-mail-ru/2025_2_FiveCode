@@ -1,4 +1,3 @@
-// models/block.go
 package models
 
 import "time"
@@ -54,7 +53,6 @@ type BlockTextFormat struct {
 	UpdatedAt     time.Time `json:"updated_at"`
 }
 
-// Для удобства работы - полный блок с текстом и форматами
 type BlockWithContent struct {
 	Block
 	Text    string            `json:"text,omitempty"`

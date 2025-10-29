@@ -1,4 +1,3 @@
-// usecase/blocks_usecase.go
 package blocksUsecase
 
 import (
