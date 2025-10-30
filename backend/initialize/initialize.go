@@ -15,14 +15,42 @@ import (
 	userDelivery "backend/user/delivery"
 	userRepository "backend/user/repository"
 	userUsecase "backend/user/usecase"
+	"net/http"
 	"time"
 )
 
+type AuthDeliveryInterface interface {
+	Login(w http.ResponseWriter, r *http.Request)
+	Logout(w http.ResponseWriter, r *http.Request)
+}
+
+type UserDeliveryInterface interface {
+	Register(w http.ResponseWriter, r *http.Request)
+	GetProfile(w http.ResponseWriter, r *http.Request)
+}
+
+type NotesDeliveryInterface interface {
+	GetAllNotes(w http.ResponseWriter, r *http.Request)
+	CreateNote(w http.ResponseWriter, r *http.Request)
+	GetNoteById(w http.ResponseWriter, r *http.Request)
+	UpdateNote(w http.ResponseWriter, r *http.Request)
+	DeleteNote(w http.ResponseWriter, r *http.Request)
+}
+
+type BlocksDeliveryInterface interface {
+	CreateBlock(w http.ResponseWriter, r *http.Request)
+	GetBlocks(w http.ResponseWriter, r *http.Request)
+	GetBlock(w http.ResponseWriter, r *http.Request)
+	UpdateBlock(w http.ResponseWriter, r *http.Request)
+	DeleteBlock(w http.ResponseWriter, r *http.Request)
+	UpdateBlockPosition(w http.ResponseWriter, r *http.Request)
+}
+
 type Deliveries struct {
-	AuthDelivery   *authDelivery.AuthDelivery
-	UserDelivery   *userDelivery.UserDelivery
-	NotesDelivery  *notesDelivery.NotesDelivery
-	BlocksDelivery *blocksDelivery.BlocksDelivery
+	AuthDelivery   AuthDeliveryInterface
+	UserDelivery   UserDeliveryInterface
+	NotesDelivery  NotesDeliveryInterface
+	BlocksDelivery BlocksDeliveryInterface
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
@@ -30,7 +58,7 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 
 	authR := authRepository.NewAuthRepository(s)
 	authUC := authUsecase.NewAuthUsecase(authR)
-	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Cookie.SessionDuration)*24*time.Hour)
+	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
 	userR := userRepository.NewUserRepository(s)
 	userUC := userUsecase.NewUserUsecase(userR)

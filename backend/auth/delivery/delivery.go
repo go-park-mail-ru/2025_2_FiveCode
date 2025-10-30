@@ -1,4 +1,4 @@
-package authDelivery
+package Delivery
 
 import (
 	"backend/apiutils"

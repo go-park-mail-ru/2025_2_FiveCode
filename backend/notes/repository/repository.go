@@ -1,10 +1,10 @@
-package notesRepository
+package Repository
 
 import (
 	"backend/models"
 	"backend/store"
 	"context"
-	"fmt"
+	"errors"
 )
 
 type NotesRepository struct {
@@ -25,7 +25,7 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	note, err := r.Store.CreateNote(userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create note: %w", err)
+		return nil, errors.New("failed to create note: " + err.Error())
 	}
 
 	return note, nil
@@ -34,7 +34,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64) (*models.Note, error) {
 	note, err := r.Store.GetNoteById(noteID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get note: %w", err)
+		return nil, errors.New("failed to get note: " + err.Error())
 	}
 
 	return note, nil
@@ -43,7 +43,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64) (*mode
 func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
 	note, err := r.Store.UpdateNote(noteID, title, isArchived)
 	if err != nil {
-		return nil, fmt.Errorf("failed to update note: %w", err)
+		return nil, errors.New("failed to update note: " + err.Error())
 	}
 
 	return note, nil
@@ -52,7 +52,7 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 func (r *NotesRepository) DeleteNote(ctx context.Context, noteID uint64) error {
 	err := r.Store.DeleteNote(noteID)
 	if err != nil {
-		return fmt.Errorf("failed to delete note: %w", err)
+		return errors.New("failed to delete note: " + err.Error())
 	}
 
 	return nil

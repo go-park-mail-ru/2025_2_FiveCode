@@ -22,9 +22,17 @@ type MinioConfig struct {
 }
 
 type Config struct {
+	Storages Storages `mapstructure:"storages"`
+	Auth     Auth     `mapstructure:"auth"`
+}
+
+type Storages struct {
+	Minio MinioConfig `mapstructure:"minio"`
+}
+
+type Auth struct {
 	Cors   CorsConfig   `mapstructure:"cors"`
 	Cookie CookieConfig `mapstructure:"cookie"`
-	Minio  MinioConfig  `mapstructure:"minio"`
 }
 
 func LoadConfig(path string) (*Config, error) {

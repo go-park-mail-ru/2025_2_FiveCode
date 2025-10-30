@@ -1,4 +1,4 @@
-package notesDelivery
+package Delivery
 
 import (
 	"backend/apiutils"
@@ -7,7 +7,6 @@ import (
 	"context"
 	"encoding/json"
 	"github.com/gorilla/mux"
-	"io"
 	"net/http"
 	"strconv"
 )
@@ -33,7 +32,7 @@ func NewNotesDelivery(usecase NotesUsecase) *NotesDelivery {
 func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
 		return
 	}
 
@@ -50,7 +49,7 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
 		return
 	}
 
@@ -74,7 +73,7 @@ func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
 		return
 	}
 
@@ -103,21 +102,20 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
 		return
 	}
 
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			// тут будет лог
+		}
+	}()
 	var req UpdateNoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
-	}(r.Body)
 
 	if req.Title == nil && req.IsArchived == nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
@@ -144,7 +142,7 @@ func (d *NotesDelivery) DeleteNote(w http.ResponseWriter, r *http.Request) {
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
 		return
 	}
 

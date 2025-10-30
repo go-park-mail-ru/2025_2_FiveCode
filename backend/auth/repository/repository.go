@@ -1,4 +1,4 @@
-package authRepository
+package Repository
 
 import (
 	"backend/models"

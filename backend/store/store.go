@@ -4,7 +4,7 @@ import (
 	"backend/config"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"fmt"
+	"errors"
 	"sort"
 	"sync"
 	"time"
@@ -34,13 +34,13 @@ type Store struct {
 
 func (s *Store) InitMinioStorage(conf *config.Config) error {
 	minioStorage, err := NewMinioStorage(
-		conf.Minio.Endpoint,
-		conf.Minio.AccessKey,
-		conf.Minio.SecretKey,
-		conf.Minio.Secure,
+		conf.Storages.Minio.Endpoint,
+		conf.Storages.Minio.AccessKey,
+		conf.Storages.Minio.SecretKey,
+		conf.Storages.Minio.Secure,
 	)
 	if err != nil {
-		return err
+		return errors.New("Error to init Minio storage: " + err.Error())
 	}
 
 	s.Minio = minioStorage
@@ -50,7 +50,7 @@ func (s *Store) InitMinioStorage(conf *config.Config) error {
 func (s *Store) InitFillStore() error {
 	_, err := s.CreateUser("user@example.com", "password")
 	if err != nil {
-		return fmt.Errorf("init fill store: %w", err)
+		return errors.New("Error to init Fill Store: " + err.Error())
 	}
 
 	notes := []*models.Note{
@@ -194,7 +194,7 @@ func (s *Store) CreateUser(email, password string) (*models.User, error) {
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return nil, fmt.Errorf("cannot hash password: %w", err)
+		return nil, errors.New("Cannot hash password:" + err.Error())
 	}
 
 	user := &models.User{
@@ -394,10 +394,10 @@ func (s *Store) calculatePosition(noteID uint64, beforeBlockID *uint64, excludeB
 
 	beforeBlock, ok := s.Blocks[*beforeBlockID]
 	if !ok {
-		return 0, fmt.Errorf("before_block not found")
+		return 0, errors.New("before_block not found")
 	}
 	if beforeBlock.NoteID != noteID {
-		return 0, fmt.Errorf("before_block belongs to different note")
+		return 0, errors.New("before_block belongs to different note")
 	}
 
 	var prevBlock *models.Block
@@ -499,7 +499,7 @@ func (s *Store) UpdateBlockText(blockID uint64, text string, formats []models.Bl
 	}
 
 	if block.Type != models.BlockTypeText {
-		return nil, fmt.Errorf("block is not text type")
+		return nil, errors.New("block is not text type")
 	}
 
 	block.UpdatedAt = time.Now().UTC()
@@ -715,7 +715,7 @@ func (s *Store) UpdateBlockPosition(blockID uint64, beforeBlockID *uint64) (*mod
 
 	position, err := s.calculatePosition(block.NoteID, beforeBlockID, blockID)
 	if err != nil {
-		return nil, err
+		return nil, errors.New("Error calculating position: " + err.Error())
 	}
 
 	block.Position = position

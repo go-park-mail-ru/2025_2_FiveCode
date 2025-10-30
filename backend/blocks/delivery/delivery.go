@@ -1,4 +1,4 @@
-package blocksDelivery
+package Delivery
 
 import (
 	"backend/apiutils"
@@ -7,7 +7,6 @@ import (
 	namederrors "backend/named_errors"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -51,17 +50,16 @@ func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			// тут будет лог
+		}
+	}()
 	var req CreateBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
-	}(r.Body)
 
 	block, err := d.Usecase.CreateBlock(r.Context(), userID, noteID, req.BeforeBlockID)
 	if err != nil {
@@ -152,17 +150,16 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			// тут будет лог
+		}
+	}()
 	var req UpdateBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
-	}(r.Body)
 
 	formats := convertToFormats(req.Formats)
 
@@ -216,17 +213,16 @@ func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			// тут будет лог
+		}
+	}()
 	var req UpdateBlockPositionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
-	defer func(Body io.ReadCloser) {
-		err := Body.Close()
-		if err != nil {
-
-		}
-	}(r.Body)
 
 	block, err := d.Usecase.UpdateBlockPosition(r.Context(), userID, blockID, req.BeforeBlockID)
 	if err != nil {
@@ -254,35 +250,14 @@ func convertToFormats(inputs []BlockTextFormatInput) []models.BlockTextFormat {
 		formats[i] = models.BlockTextFormat{
 			StartOffset:   input.StartOffset,
 			EndOffset:     input.EndOffset,
-			Bold:          getBool(input.Bold, false),
-			Italic:        getBool(input.Italic, false),
-			Underline:     getBool(input.Underline, false),
-			Strikethrough: getBool(input.Strikethrough, false),
+			Bold:          apiutils.GetBool(input.Bold, false),
+			Italic:        apiutils.GetBool(input.Italic, false),
+			Underline:     apiutils.GetBool(input.Underline, false),
+			Strikethrough: apiutils.GetBool(input.Strikethrough, false),
 			Link:          input.Link,
-			Font:          models.TextFont(getString(input.Font, string(models.FontInter))),
-			Size:          getInt(input.Size, 12),
+			Font:          models.TextFont(apiutils.GetString(input.Font, string(models.FontInter))),
+			Size:          apiutils.GetInt(input.Size, 12),
 		}
 	}
 	return formats
-}
-
-func getBool(val *bool, def bool) bool {
-	if val != nil {
-		return *val
-	}
-	return def
-}
-
-func getString(val *string, def string) string {
-	if val != nil {
-		return *val
-	}
-	return def
-}
-
-func getInt(val *int, def int) int {
-	if val != nil {
-		return *val
-	}
-	return def
 }

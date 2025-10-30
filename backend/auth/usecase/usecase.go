@@ -1,4 +1,4 @@
-package authUsecase
+package Usecase
 
 import (
 	"backend/models"

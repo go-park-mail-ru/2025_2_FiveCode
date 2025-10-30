@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -22,7 +23,7 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 		Secure: secure,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to create minio client: %w", err)
+		return nil, errors.New("failed to create minio client:" + err.Error())
 	}
 
 	storage := &MinioStorage{

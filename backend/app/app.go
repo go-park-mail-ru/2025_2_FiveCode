@@ -43,7 +43,7 @@ func RunApp() error {
 	if err := s.InitMinioStorage(conf); err != nil {
 		return fmt.Errorf("failed to initialize minio storage: %w", err)
 	}
-	log.Info().Str("addr", conf.Minio.Endpoint).Msg("MinIO storage initialized successfully")
+	log.Info().Str("addr", conf.Storages.Minio.Endpoint).Msg("MinIO storage initialized successfully")
 
 	deliveries := initialize.InitDeliveries(s, conf)
 
