@@ -5,6 +5,7 @@ import (
 	"backend/models"
 	namederrors "backend/named_errors"
 	"errors"
+	"fmt"
 	"sort"
 	"sync"
 	"time"
@@ -17,6 +18,7 @@ import (
 type Store struct {
 	Mu           sync.RWMutex
 	Minio        *MinioStorage
+	Db           *PostgresDB
 	Users        map[uint64]*models.User
 	UsersByEmail map[string]uint64
 	Notes        map[uint64]*models.Note
@@ -30,6 +32,23 @@ type Store struct {
 	nextBlockID     uint64
 	nextBlockTextID uint64
 	nextFormatID    uint64
+}
+
+func (s *Store) InitPostgres(conf *config.Config) error {
+	pg, err := NewPostgresDB(
+		conf.Storages.Db.Host,
+		conf.Storages.Db.Port,
+		conf.Storages.Db.User,
+		conf.Storages.Db.Password,
+		conf.Storages.Db.DBName,
+		conf.Storages.Db.SSLMode,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to init postgres: %w", err)
+	}
+
+	s.Db = pg
+	return nil
 }
 
 func (s *Store) InitMinioStorage(conf *config.Config) error {

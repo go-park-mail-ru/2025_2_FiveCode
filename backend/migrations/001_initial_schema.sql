@@ -1,4 +1,4 @@
--- 001_migrations_table.sql
+-- 001_initial_schema.sql
 
 
 -- ENUM TYPES
@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS file
 
 
 -- USER
-CREATE TABLE IF NOT EXISTS user
+CREATE TABLE IF NOT EXISTS "user"
 (
     id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email          TEXT        NOT NULL UNIQUE CHECK (LENGTH(email) <= 40 AND
@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS note
     title          TEXT        NOT NULL CHECK (LENGTH(title) >= 1 AND LENGTH(title) <= 200),
     icon_file_id   INTEGER     REFERENCES file (id) ON DELETE SET NULL,
     is_archived    BOOLEAN     NOT NULL DEFAULT false,
-    id_shared      BOOLEAN     NOT NULL DEFAULT false,
+    is_shared      BOOLEAN     NOT NULL DEFAULT false,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at     TIMESTAMPTZ

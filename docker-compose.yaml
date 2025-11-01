@@ -13,5 +13,17 @@ services:
       - minio_data:/data
     restart: always
 
+  postgres:
+    image: postgres:14
+    container_name: goose_postgres
+    environment:
+      POSTGRES_USER: ${DB_ROOT_USER}
+      POSTGRES_PASSWORD: ${DB_ROOT_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    ports:
+      - "5432:5432"
+    restart: always
+
 volumes:
   minio_data:
+  postgres_data:

@@ -40,6 +40,17 @@ func RunApp() error {
 		return fmt.Errorf("failed to load config: %w", err)
 	}
 
+	if err := s.InitPostgres(conf); err != nil {
+		log.Fatal().Msg("Failed to init postgres")
+	}
+	defer s.Db.Close()
+	log.Info().Str("addr", conf.Storages.Minio.Endpoint).Msg("Postgres initialized successfully")
+
+	if err := s.Db.RunMigrations("./migrations"); err != nil {
+		log.Fatal().Msg("Failed to run migrations")
+	}
+	log.Info().Str("addr", conf.Storages.Minio.Endpoint).Msg("Migrations run successfully")
+
 	if err := s.InitMinioStorage(conf); err != nil {
 		return fmt.Errorf("failed to initialize minio storage: %w", err)
 	}
