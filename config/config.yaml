@@ -8,17 +8,3 @@ cors:
 
 cookie:
   session_duration: 30
-
-minio:
-  endpoint: "localhost:9000"
-  access_key: ""
-  secret_key: ""
-  secure: false
-
-db:
-  host: "localhost"
-  port: 5432
-  user: ""
-  password: ""
-  dbname: ""
-  sslmode: "disable"

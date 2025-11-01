@@ -2,9 +2,6 @@ package config
 
 import (
 	"fmt"
-	"os"
-	"strconv"
-
 	"github.com/spf13/viper"
 )
 
@@ -17,19 +14,19 @@ type CookieConfig struct {
 }
 
 type MinioConfig struct {
-	Endpoint  string `mapstructure:"endpoint"`
-	AccessKey string `mapstructure:"access_key"`
-	SecretKey string `mapstructure:"secret_key"`
-	Secure    bool   `mapstructure:"secure"`
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Secure    bool
 }
 
-type Postgres struct {
-	Host     string `mapstructure:"host"`
-	Port     int    `mapstructure:"port"`
-	User     string `mapstructure:"user"`
-	Password string `mapstructure:"password"`
-	DBName   string `mapstructure:"dbname"`
-	SSLMode  string `mapstructure:"sslmode"`
+type PostgresConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
 }
 
 type Config struct {
@@ -38,8 +35,8 @@ type Config struct {
 }
 
 type Storages struct {
-	Minio MinioConfig `mapstructure:"minio"`
-	Db    Postgres    `mapstructure:"db"`
+	Minio MinioConfig    `mapstructure:"minio"`
+	Db    PostgresConfig `mapstructure:"db"`
 }
 
 type Auth struct {
@@ -63,37 +60,33 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	overrideFromEnv(&config)
+	if err := loadEnvFile(); err != nil {
+		return nil, fmt.Errorf("failed to load env file: %w", err)
+	}
+
+	getMinioCfg(&config)
+
+	getDbCfg(&config)
 
 	return &config, nil
 }
 
-func overrideFromEnv(cfg *Config) {
-	if user := os.Getenv("DB_ROOT_USER"); user != "" {
-		cfg.Storages.Db.User = user
+func getDbCfg(c *Config) {
+	c.Storages.Db = PostgresConfig{
+		Host:     viper.GetString("DB_HOST"),
+		Port:     viper.GetInt("DB_PORT"),
+		User:     viper.GetString("DB_USER"),
+		Password: viper.GetString("DB_PASSWORD"),
+		DBName:   viper.GetString("DB_NAME"),
+		SSLMode:  viper.GetString("DB_SSLMODE"),
 	}
-	if password := os.Getenv("DB_ROOT_PASSWORD"); password != "" {
-		cfg.Storages.Db.Password = password
-	}
-	if dbname := os.Getenv("DB_NAME"); dbname != "" {
-		cfg.Storages.Db.DBName = dbname
-	}
-	if host := os.Getenv("DB_HOST"); host != "" {
-		cfg.Storages.Db.Host = host
-	}
-	if portStr := os.Getenv("DB_PORT"); portStr != "" {
-		if port, err := strconv.Atoi(portStr); err == nil {
-			cfg.Storages.Db.Port = port
-		}
-	}
+}
 
-	if accessKey := os.Getenv("MINIO_ROOT_USER"); accessKey != "" {
-		cfg.Storages.Minio.AccessKey = accessKey
-	}
-	if secretKey := os.Getenv("MINIO_ROOT_PASSWORD"); secretKey != "" {
-		cfg.Storages.Minio.SecretKey = secretKey
-	}
-	if endpoint := os.Getenv("MINIO_ENDPOINT"); endpoint != "" {
-		cfg.Storages.Minio.Endpoint = endpoint
+func getMinioCfg(c *Config) {
+	c.Storages.Minio = MinioConfig{
+		Endpoint:  viper.GetString("MINIO_ENDPOINT"),
+		AccessKey: viper.GetString("MINIO_ACCESS_KEY"),
+		SecretKey: viper.GetString("MINIO_SECRET_KEY"),
+		Secure:    viper.GetBool("MINIO_SECURE"),
 	}
 }
