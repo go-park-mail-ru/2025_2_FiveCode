@@ -32,18 +32,43 @@ func RunApp() error {
 
 	configPath, err := config.ReadConfigPath()
 	if err != nil {
-		return fmt.Errorf("failed to read config path: %w", err)
+		return fmt.Errorf("failed to read cfgig path: %w", err)
 	}
 
-	conf, err := config.LoadConfig(configPath)
+	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load config: %w", err)
+		return fmt.Errorf("failed to load cfgig: %w", err)
 	}
 
-	deliveries, err := initialize.InitDeliveries(s, conf)
-	if err != nil {
-		return fmt.Errorf("failed to initialize deliveries: %w", err)
+	log.Info().
+		Str("host", cfg.Storages.Db.Host).
+		Int("port", cfg.Storages.Db.Port).
+		Str("user", cfg.Storages.Db.User).
+		Str("dbname", cfg.Storages.Db.DBName).
+		Str("sslmode", cfg.Storages.Db.SSLMode).
+		Msg("Attempting to connect to PostgreSQL...")
+
+	if err := s.InitPostgres(cfg); err != nil {
+		log.Fatal().
+			Err(err).
+			Str("host", cfg.Storages.Db.Host).
+			Int("port", cfg.Storages.Db.Port).
+			Msg("Failed to init PostgreSQL")
 	}
+	defer s.Db.Close()
+	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("Postgres initialized successfully")
+
+	if err := s.Db.RunMigrations("./migrations"); err != nil {
+		log.Fatal().Err(err).Msg("Failed to run migrations")
+	}
+	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("Migrations run successfully")
+
+	if err := s.InitMinioStorage(cfg); err != nil {
+		return fmt.Errorf("failed to initialize minio storage: %w", err)
+	}
+	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("MinIO storage initialized successfully")
+
+	deliveries := initialize.InitDeliveries(s, cfg)
 
 	r := router.NewRouter(s, deliveries)
 

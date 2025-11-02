@@ -8,6 +8,7 @@ var (
 	ErrNotFound               = errors.New("not found")
 	ErrNoCookie               = errors.New("no cookie")
 	ErrInvalidSession         = errors.New("invalid session")
+	ErrNoAccess               = errors.New("no access")
 	ErrUpdateProfile          = errors.New("failed to update profile")
 	ErrGetProfile             = errors.New("failed to get profile")
 	ErrFileUpload             = errors.New("failed to upload file")

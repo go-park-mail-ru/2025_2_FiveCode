@@ -8,11 +8,3 @@ cors:
 
 cookie:
   session_duration: 30
-
-minio:
-  endpoint: "localhost:9000"
-  access_key_id: "minioadmin"
-  secret_access_key: "minioadmin"
-  use_ssl: false
-  bucket_name: "avatars"
-  

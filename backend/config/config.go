@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-
 	"github.com/spf13/viper"
 )
 
@@ -14,18 +13,35 @@ type CookieConfig struct {
 	SessionDuration int `mapstructure:"session_duration"`
 }
 
-type MinIOConfig struct {
-	Endpoint        string `mapstructure:"endpoint"`
-	AccessKeyID     string `mapstructure:"access_key_id"`
-	SecretAccessKey string `mapstructure:"secret_access_key"`
-	UseSSL          bool   `mapstructure:"use_ssl"`
-	BucketName      string `mapstructure:"bucket_name"`
+type MinioConfig struct {
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Secure    bool
+}
+
+type PostgresConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
 }
 
 type Config struct {
+	Storages Storages `mapstructure:"storages"`
+	Auth     Auth     `mapstructure:"auth"`
+}
+
+type Storages struct {
+	Minio MinioConfig    `mapstructure:"minio"`
+	Db    PostgresConfig `mapstructure:"db"`
+}
+
+type Auth struct {
 	Cors   CorsConfig   `mapstructure:"cors"`
 	Cookie CookieConfig `mapstructure:"cookie"`
-	MinIO  MinIOConfig  `mapstructure:"minio"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -44,5 +60,33 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	if err := loadEnvFile(); err != nil {
+		return nil, fmt.Errorf("failed to load env file: %w", err)
+	}
+
+	getMinioCfg(&config)
+
+	getDbCfg(&config)
+
 	return &config, nil
+}
+
+func getDbCfg(c *Config) {
+	c.Storages.Db = PostgresConfig{
+		Host:     viper.GetString("DB_HOST"),
+		Port:     viper.GetInt("DB_PORT"),
+		User:     viper.GetString("DB_USER"),
+		Password: viper.GetString("DB_PASSWORD"),
+		DBName:   viper.GetString("DB_NAME"),
+		SSLMode:  viper.GetString("DB_SSLMODE"),
+	}
+}
+
+func getMinioCfg(c *Config) {
+	c.Storages.Minio = MinioConfig{
+		Endpoint:  viper.GetString("MINIO_ENDPOINT"),
+		AccessKey: viper.GetString("MINIO_ACCESS_KEY"),
+		SecretKey: viper.GetString("MINIO_SECRET_KEY"),
+		Secure:    viper.GetBool("MINIO_SECURE"),
+	}
 }

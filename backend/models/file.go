@@ -2,7 +2,6 @@ package models
 
 import "time"
 
-// File представляет загруженный файл
 type File struct {
 	ID        uint64     `json:"id"`
 	URL       string     `json:"url"`

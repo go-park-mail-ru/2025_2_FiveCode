@@ -1,8 +1,10 @@
 package userDelivery
 
 import (
+	"context"
+
 	"backend/apiutils"
-	"backend/constants"
+	userUsecase "backend/user/usecase"
 	"backend/middleware"
 	"backend/models"
 	namederrors "backend/named_errors"
@@ -22,11 +24,11 @@ type UserDelivery struct {
 }
 
 type UserUsecase interface {
-	RegisterUser(email string, password string) (*models.User, error)
-	GetUserBySession(session string) (*models.User, error)
-	UpdateProfile(userID uint64, username *string, password *string) (*models.User, error)
-	GetProfile(userID uint64) (*models.User, error)
-	UploadAvatar(file io.Reader, filename, contentType string, size int64) (*models.File, error)
+	RegisterUser(ctx context.Context, email string, password string) (*models.User, error)
+	GetUserBySession(ctx context.Context, session string) (*models.User, error)
+	UpdateProfile(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
+	GetProfile(ctx context.Context, userID uint64) (*models.User, error)
+	UploadAvatar(ctx context.Context, file io.Reader, filename, contentType string, size int64) (*models.File, error)
 }
 
 func NewUserDelivery(u UserUsecase) *UserDelivery {
@@ -46,6 +48,7 @@ func (d *UserDelivery) Register(w http.ResponseWriter, r *http.Request) {
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid json")
+		return
 	}
 
 	if err = validation.ValidateStruct(req); err != nil {
@@ -57,7 +60,7 @@ func (d *UserDelivery) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := d.Usecase.RegisterUser(req.Email, req.Password)
+	user, err := d.Usecase.RegisterUser(r.Context(), req.Email, req.Password)
 	if errors.Is(err, namederrors.ErrUserExists) {
 		apiutils.WriteError(w, http.StatusBadRequest, "user already exists")
 		return
@@ -84,7 +87,7 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 
 	sessionID := cookie.Value
 
-	user, err := d.Usecase.GetUserBySession(sessionID)
+	user, err := d.Usecase.GetUserBySession(r.Context(), sessionID)
 	if errors.Is(err, namederrors.ErrInvalidSession) {
 		apiutils.WriteJSON(w, http.StatusUnauthorized, nil)
 		return
@@ -122,7 +125,7 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := d.Usecase.UpdateProfile(userID, username, password)
+	user, err := d.Usecase.UpdateProfile(r.Context(), userID, username, password, avatarFileID)
 	if err != nil {
 		log.Error().Err(err).Msg("error updating profile")
 		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("error updating profile: %v", err))
@@ -139,7 +142,7 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	user, err := d.Usecase.GetProfile(userID)
+	user, err := d.Usecase.GetProfile(r.Context(), userID)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting profile")
 		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("error getting profile: %v", err))
@@ -150,7 +153,7 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *uint64, error) {
-	err := r.ParseMultipartForm(constants.MaxAvatarFileSize)
+	err := r.ParseMultipartForm(userUsecase.MaxAvatarFileSize)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error parsing multipart form: %w", err)
 	}
@@ -171,7 +174,7 @@ func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *u
 	if err == nil {
 		defer file.Close()
 
-		fileModel, err := d.Usecase.UploadAvatar(file, header.Filename, header.Header.Get("Content-Type"), header.Size)
+		fileModel, err := d.Usecase.UploadAvatar(r.Context(), file, header.Filename, header.Header.Get("Content-Type"), header.Size)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to upload file: %w", err)
 		}

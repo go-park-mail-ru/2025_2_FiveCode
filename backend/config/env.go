@@ -9,10 +9,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-func loadEnvFile() error{
+func loadEnvFile() error {
 	viper.SetConfigName(".env")
 	viper.SetConfigType("env")
-	viper.AddConfigPath(".")
+	viper.AddConfigPath("../")
 
 	viper.AutomaticEnv()
 

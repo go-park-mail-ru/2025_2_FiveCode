@@ -63,3 +63,24 @@ func WriteJSON(w http.ResponseWriter, code int, v interface{}) {
 		log.Error().Err(err).Msg("json encode error")
 	}
 }
+
+func GetBool(val *bool, def bool) bool {
+	if val != nil {
+		return *val
+	}
+	return def
+}
+
+func GetString(val *string, def string) string {
+	if val != nil {
+		return *val
+	}
+	return def
+}
+
+func GetInt(val *int, def int) int {
+	if val != nil {
+		return *val
+	}
+	return def
+}
