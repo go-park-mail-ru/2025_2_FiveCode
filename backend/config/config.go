@@ -29,6 +29,13 @@ type PostgresConfig struct {
 	SSLMode  string
 }
 
+type RedisConfig struct {
+	Host     string
+	Port     int
+	Password string
+	DB       int
+}
+
 type Config struct {
 	Storages Storages `mapstructure:"storages"`
 	Auth     Auth     `mapstructure:"auth"`
@@ -37,6 +44,7 @@ type Config struct {
 type Storages struct {
 	Minio MinioConfig    `mapstructure:"minio"`
 	Db    PostgresConfig `mapstructure:"db"`
+	Redis RedisConfig    `mapstructure:"redis"`
 }
 
 type Auth struct {
@@ -68,6 +76,8 @@ func LoadConfig(path string) (*Config, error) {
 
 	getDbCfg(&config)
 
+	getRedisCfg(&config)
+
 	return &config, nil
 }
 
@@ -88,5 +98,14 @@ func getMinioCfg(c *Config) {
 		AccessKey: viper.GetString("MINIO_ACCESS_KEY"),
 		SecretKey: viper.GetString("MINIO_SECRET_KEY"),
 		Secure:    viper.GetBool("MINIO_SECURE"),
+	}
+}
+
+func getRedisCfg(c *Config) {
+	c.Storages.Redis = RedisConfig{
+		Host:     viper.GetString("REDIS_HOST"),
+		Port:     viper.GetInt("REDIS_PORT"),
+		Password: viper.GetString("REDIS_PASSWORD"),
+		DB:       viper.GetInt("REDIS_DB"),
 	}
 }

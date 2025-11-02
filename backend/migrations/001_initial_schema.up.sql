@@ -1,4 +1,4 @@
--- 001_initial_schema.sql
+-- 001_initial_schema.up.sql
 
 
 -- ENUM TYPES
@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS "user"
 CREATE TABLE IF NOT EXISTS note
 (
     id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    owner_id       INTEGER     REFERENCES user (id) ON DELETE SET NULL,
+    owner_id       INTEGER     REFERENCES "user" (id) ON DELETE SET NULL,
     parent_note_id INTEGER REFERENCES note (id) ON DELETE CASCADE,
     title          TEXT        NOT NULL CHECK (LENGTH(title) >= 1 AND LENGTH(title) <= 200),
     icon_file_id   INTEGER     REFERENCES file (id) ON DELETE SET NULL,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS block
     position       NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
     created_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    last_edited_by INTEGER        REFERENCES user (id) ON DELETE SET NULL
+    last_edited_by INTEGER        REFERENCES "user" (id) ON DELETE SET NULL
 );
 
 CREATE TABLE block_text
@@ -120,8 +120,8 @@ CREATE TABLE IF NOT EXISTS note_permission
 (
     note_permission_id INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     note_id            INTEGER REFERENCES note (id) ON DELETE CASCADE,
-    granted_by         INTEGER REFERENCES user (id),
-    granted_to         INTEGER REFERENCES user (id),
+    granted_by         INTEGER REFERENCES "user" (id),
+    granted_to         INTEGER REFERENCES "user" (id),
     role               note_role,
     can_share          BOOLEAN     NOT NULL DEFAULT false,
     created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -134,7 +134,7 @@ CREATE TABLE IF NOT EXISTS note_permission
 -- FAVORITE
 CREATE TABLE IF NOT EXISTS favorite
 (
-    user_id    INTEGER     NOT NULL REFERENCES user (id) ON DELETE CASCADE,
+    user_id    INTEGER     NOT NULL REFERENCES "user" (id) ON DELETE CASCADE,
     note_id    INTEGER     NOT NULL REFERENCES note (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
@@ -147,7 +147,7 @@ CREATE TABLE IF NOT EXISTS tag
 (
     id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name       TEXT        NOT NULL UNIQUE CHECK (LENGTH(name) <= 50),
-    created_by INTEGER REFERENCES user (id) ON DELETE CASCADE,
+    created_by INTEGER REFERENCES "user" (id) ON DELETE CASCADE,
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -187,7 +187,7 @@ $$ LANGUAGE plpgsql;
 -- триггеры таблицы user
 CREATE TRIGGER trigger_set_timestamps
     BEFORE INSERT OR UPDATE
-    ON user
+    ON "user"
     FOR EACH ROW
 EXECUTE FUNCTION set_timestamps();
 

@@ -19,6 +19,7 @@ type Store struct {
 	Mu           sync.RWMutex
 	Minio        *MinioStorage
 	Db           *PostgresDB
+	Redis        *RedisDB
 	Users        map[uint64]*models.User
 	UsersByEmail map[string]uint64
 	Notes        map[uint64]*models.Note
@@ -32,6 +33,21 @@ type Store struct {
 	nextBlockID     uint64
 	nextBlockTextID uint64
 	nextFormatID    uint64
+}
+
+func (s *Store) InitRedis(conf *config.Config) error {
+	rdb, err := NewRedisDB(
+		conf.Storages.Redis.Host,
+		conf.Storages.Redis.Port,
+		conf.Storages.Redis.Password,
+		conf.Storages.Redis.DB,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to init redis: %w", err)
+	}
+
+	s.Redis = rdb
+	return nil
 }
 
 func (s *Store) InitPostgres(conf *config.Config) error {
