@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"backend/apiutils"
-	"backend/middleware"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"backend/validation"
@@ -31,8 +30,8 @@ type UserDelivery struct {
 type UserUsecase interface {
 	RegisterUser(ctx context.Context, email string, password string) (*models.User, error)
 	GetUserBySession(ctx context.Context, session string) (*models.User, error)
-	UpdateProfile(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
-	GetProfile(ctx context.Context, userID uint64) (*models.User, error)
+	UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error)
+	GetProfile(ctx context.Context) (*models.User, error)
 	UploadAvatar(ctx context.Context, file io.Reader, filename, contentType string, size int64) (*models.File, error)
 }
 
@@ -97,11 +96,15 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 	sessionID := cookie.Value
 
 	user, err := d.Usecase.GetUserBySession(r.Context(), sessionID)
-	if errors.Is(err, namederrors.ErrInvalidSession) {
-		apiutils.WriteJSON(w, http.StatusUnauthorized, nil)
-		return
-	}
 	if err != nil {
+		if errors.Is(err, namederrors.ErrInvalidSession) {
+			apiutils.WriteJSON(w, http.StatusUnauthorized, nil)
+			return
+		}
+		if errors.Is(err, namederrors.ErrNotFound) {
+			apiutils.WriteJSON(w, http.StatusNotFound, nil)
+			return
+		}
 		log.Error().Err(err).Msg("error getting user by session")
 		apiutils.WriteJSON(w, http.StatusInternalServerError, nil)
 		return
@@ -111,12 +114,6 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 }
 
 func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
 	contentType := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
 		apiutils.WriteError(w, http.StatusBadRequest, "content type must be multipart/form-data")
@@ -125,6 +122,10 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	username, password, avatarFileID, err := d.parseMultipartForm(r)
 	if err != nil {
+		if errors.Is(err, namederrors.ErrInvalidFileType) {
+			apiutils.WriteError(w, http.StatusBadRequest, "invalid file type")
+			return
+		}
 		apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("error parsing multipart form: %v", err))
 		return
 	}
@@ -149,8 +150,12 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	user, err := d.Usecase.UpdateProfile(r.Context(), userID, username, password, avatarFileID)
+	user, err := d.Usecase.UpdateProfile(r.Context(), username, password, avatarFileID)
 	if err != nil {
+		if errors.Is(err, namederrors.ErrNotFound) {
+			apiutils.WriteError(w, http.StatusNotFound, "user not found")
+			return
+		}
 		log.Error().Err(err).Msg("error updating profile")
 		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("error updating profile: %v", err))
 		return
@@ -160,13 +165,7 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
-	userID, ok := middleware.GetUserID(r.Context())
-	if !ok {
-		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
-		return
-	}
-
-	user, err := d.Usecase.GetProfile(r.Context(), userID)
+	user, err := d.Usecase.GetProfile(r.Context())
 	if errors.Is(err, namederrors.ErrNotFound) {
 		apiutils.WriteError(w, http.StatusNotFound, "user not found")
 		return
@@ -204,14 +203,22 @@ func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *u
 			return nil, nil, nil, fmt.Errorf("file size exceeds maximum allowed size of %d bytes", MaxAvatarFileSize)
 		}
 
+		contentType := header.Header.Get("Content-Type")
+		if contentType != "image/jpeg" && contentType != "image/png" {
+			return nil, nil, nil, namederrors.ErrInvalidFileType
+		}
+
 		defer func() {
 			if err := file.Close(); err != nil {
 				log.Error().Err(err).Msg("Failed to close avatar file")
 			}
 		}()
 
-		fileModel, err := d.Usecase.UploadAvatar(r.Context(), file, header.Filename, header.Header.Get("Content-Type"), header.Size)
+		fileModel, err := d.Usecase.UploadAvatar(r.Context(), file, header.Filename, contentType, header.Size)
 		if err != nil {
+			if errors.Is(err, namederrors.ErrInvalidFileType) || errors.Is(err, namederrors.ErrNotFound) {
+				return nil, nil, nil, err
+			}
 			return nil, nil, nil, fmt.Errorf("failed to upload file: %w", err)
 		}
 
