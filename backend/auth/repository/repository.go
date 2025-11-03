@@ -37,11 +37,3 @@ func (r *AuthRepository) DeleteSession(sessionID string) error {
 	r.Store.DeleteSession(sessionID)
 	return nil
 }
-
-func (r *AuthRepository) GetUserIDBySession(sessionID string) (uint64, error) {
-	userID, ok := r.Store.GetUserIDBySession(sessionID)
-	if !ok {
-		return 0, namederrors.ErrInvalidSession
-	}
-	return userID, nil
-}

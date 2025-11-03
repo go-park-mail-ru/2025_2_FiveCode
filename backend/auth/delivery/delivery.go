@@ -59,7 +59,6 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 	session := &http.Cookie{
 		Name:     "session_id",
 		Value:    sessionID,
-		Path:     "/",
 		Expires:  expiration,
 		HttpOnly: true,
 	}

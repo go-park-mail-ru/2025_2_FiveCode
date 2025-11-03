@@ -17,10 +17,6 @@ type MinioStorage struct {
 	client *minio.Client
 }
 
-func (s *MinioStorage) GetClient() *minio.Client {
-	return s.client
-}
-
 func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*MinioStorage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),

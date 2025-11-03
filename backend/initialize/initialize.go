@@ -27,8 +27,6 @@ type AuthDeliveryInterface interface {
 type UserDeliveryInterface interface {
 	Register(w http.ResponseWriter, r *http.Request)
 	GetProfile(w http.ResponseWriter, r *http.Request)
-	GetProfileBySession(w http.ResponseWriter, r *http.Request)
-	UpdateProfile(w http.ResponseWriter, r *http.Request)
 }
 
 type NotesDeliveryInterface interface {
@@ -63,7 +61,7 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
 	userR := userRepository.NewUserRepository(s)
-	userUC := userUsecase.NewUserUsecase(userR, authR)
+	userUC := userUsecase.NewUserUsecase(userR)
 	layers.UserDelivery = userDelivery.NewUserDelivery(userUC)
 
 	notesR := notesRepository.NewNotesRepository(s)

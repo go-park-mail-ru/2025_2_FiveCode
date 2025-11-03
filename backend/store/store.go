@@ -4,16 +4,13 @@ import (
 	"backend/config"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"context"
 	"errors"
 	"fmt"
-	"io"
 	"sort"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/minio/minio-go/v7"
 	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 )
@@ -28,7 +25,6 @@ type Store struct {
 	Blocks       map[uint64]*models.Block
 	BlockTexts   map[uint64]*models.BlockText
 	BlockFormats map[uint64][]models.BlockTextFormat
-	Files        map[uint64]*models.File
 	sessions     map[string]uint64
 
 	nextUserID      uint64
@@ -36,7 +32,6 @@ type Store struct {
 	nextBlockID     uint64
 	nextBlockTextID uint64
 	nextFormatID    uint64
-	nextFileID      uint64
 }
 
 func (s *Store) InitPostgres(conf *config.Config) error {
@@ -141,7 +136,6 @@ func NewStore() *Store {
 		Blocks:       make(map[uint64]*models.Block),
 		BlockTexts:   make(map[uint64]*models.BlockText),
 		BlockFormats: make(map[uint64][]models.BlockTextFormat),
-		Files:        make(map[uint64]*models.File),
 		sessions:     make(map[string]uint64),
 
 		nextUserID:      1,
@@ -149,15 +143,14 @@ func NewStore() *Store {
 		nextBlockID:     1,
 		nextBlockTextID: 1,
 		nextFormatID:    1,
-		nextFileID:      1,
 	}
 }
 
 func (s *Store) CreateDefaultNotes(userID uint64) {
 	notes := []*models.Note{
 		{
-			ID:           s.nextNoteID,
-			OwnerID:      userID,
+			ID:           1,
+			OwnerID:      userID*1000 + 1,
 			ParentNoteID: nil,
 			Title:        "University Lectures",
 			IconFileID:   nil,
@@ -168,8 +161,8 @@ func (s *Store) CreateDefaultNotes(userID uint64) {
 			DeletedAt:    nil,
 		},
 		{
-			ID:           s.nextNoteID + 1,
-			OwnerID:      userID,
+			ID:           2,
+			OwnerID:      userID*1000 + 2,
 			ParentNoteID: nil,
 			Title:        "Project Ideas",
 			IconFileID:   nil,
@@ -180,8 +173,8 @@ func (s *Store) CreateDefaultNotes(userID uint64) {
 			DeletedAt:    nil,
 		},
 		{
-			ID:           s.nextNoteID + 2,
-			OwnerID:      userID,
+			ID:           3,
+			OwnerID:      userID*1000 + 3,
 			ParentNoteID: nil,
 			Title:        "Shopping List",
 			IconFileID:   nil,
@@ -192,8 +185,8 @@ func (s *Store) CreateDefaultNotes(userID uint64) {
 			DeletedAt:    nil,
 		},
 		{
-			ID:           s.nextNoteID + 3,
-			OwnerID:      userID,
+			ID:           4,
+			OwnerID:      userID*1000 + 4,
 			ParentNoteID: nil,
 			Title:        "Random Note",
 			IconFileID:   nil,
@@ -226,7 +219,6 @@ func (s *Store) CreateUser(email, password string) (*models.User, error) {
 	user := &models.User{
 		ID:        s.nextUserID,
 		Email:     email,
-		Username:  fmt.Sprintf("user_%d", s.nextUserID),
 		Password:  string(hashedPassword),
 		CreatedAt: time.Now().UTC(),
 	}
@@ -284,19 +276,6 @@ func (s *Store) GetUserBySession(sessionID string) (*models.User, bool) {
 	user, ok := s.Users[userID]
 
 	return user, ok
-}
-
-func (s *Store) GetUserIDBySession(sessionID string) (uint64, bool) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	userID, ok := s.sessions[sessionID]
-	if !ok {
-		log.Info().Str("session_id", sessionID).Msg("session not found")
-		return 0, false
-	}
-
-	return userID, true
 }
 
 func (s *Store) ListNotes(ownerID uint64) []models.Note {
@@ -774,112 +753,4 @@ func (s *Store) GetBlockNoteID(blockID uint64) (uint64, error) {
 	}
 
 	return block.NoteID, nil
-}
-
-func (s *Store) UpdateUserProfile(userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	user, ok := s.Users[userID]
-	if !ok {
-		return nil, namederrors.ErrNotFound
-	}
-
-	if username != nil {
-		user.Username = *username
-	}
-	if password != nil {
-		user.Password = *password
-	}
-	if avatarFileID != nil {
-		user.AvatarFileID = avatarFileID
-	}
-
-	now := time.Now().UTC()
-	user.UpdatedAt = &now
-
-	return user, nil
-}
-
-func (s *Store) GetUserByID(userID uint64) (*models.User, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	user, ok := s.Users[userID]
-	if !ok {
-		return nil, namederrors.ErrNotFound
-	}
-
-	return user, nil
-}
-
-func (s *Store) SaveFile(file *models.File) (*models.File, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	file.ID = s.nextFileID
-	s.Files[file.ID] = file
-	s.nextFileID++
-
-	return file, nil
-}
-
-func (s *Store) GetFileByID(fileID uint64) (*models.File, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	file, ok := s.Files[fileID]
-	if !ok {
-		return nil, namederrors.ErrNotFound
-	}
-
-	return file, nil
-}
-
-func (s *Store) UpdateFile(file *models.File) error {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	_, ok := s.Files[file.ID]
-	if !ok {
-		return namederrors.ErrNotFound
-	}
-
-	s.Files[file.ID] = file
-	return nil
-}
-
-func (s *Store) DeleteFile(fileID uint64) error {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	_, ok := s.Files[fileID]
-	if !ok {
-		return namederrors.ErrNotFound
-	}
-
-	delete(s.Files, fileID)
-	return nil
-}
-
-func (s *Store) UploadFileToMinIO(ctx context.Context, filename string, file io.Reader, size int64, contentType string) (string, error) {
-	if s.Minio == nil {
-		return "", errors.New("minio storage not initialized")
-	}
-
-	objectName := fmt.Sprintf("%s-%s", uuid.New().String(), filename)
-	bucketName := "notes-app"
-
-	client := s.Minio.GetClient()
-	_, err := client.PutObject(ctx, bucketName, objectName, file, size, minio.PutObjectOptions{
-		ContentType: contentType,
-	})
-	if err != nil {
-		return "", fmt.Errorf("failed to upload file to MinIO: %w", err)
-	}
-
-	endpoint := client.EndpointURL()
-	scheme := endpoint.Scheme
-	url := fmt.Sprintf("%s://%s/%s/%s", scheme, endpoint.Host, bucketName, objectName)
-	return url, nil
 }
