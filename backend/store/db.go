@@ -4,8 +4,11 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"path/filepath"
+
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
+	_ "github.com/golang-migrate/migrate/v4/source/file"
 	_ "github.com/lib/pq"
 )
 
@@ -36,20 +39,26 @@ func (p *PostgresDB) Close() error {
 func (p *PostgresDB) RunMigrations(migrationsPath string) error {
 	driver, err := postgres.WithInstance(p.DB, &postgres.Config{})
 	if err != nil {
-		return errors.New("failed to create migrate driver: " + err.Error())
+		return fmt.Errorf("failed to create migrate driver: %w", err)
 	}
 
+	absPath, err := filepath.Abs(migrationsPath)
+	if err != nil {
+		return fmt.Errorf("failed to resolve migration path: %w", err)
+	}
+
+	migrationURL := fmt.Sprintf("file://%s", absPath)
 	m, err := migrate.NewWithDatabaseInstance(
-		fmt.Sprintf("file://%s", migrationsPath),
+		migrationURL,
 		"postgres",
 		driver,
 	)
 	if err != nil {
-		return errors.New("failed to create migrate instance: " + err.Error())
+		return fmt.Errorf("failed to create migrate instance (path: %s): %w", migrationURL, err)
 	}
 
 	if err := m.Up(); err != nil && !errors.Is(err, migrate.ErrNoChange) {
-		return errors.New("failed to run migrations: " + err.Error())
+		return fmt.Errorf("failed to run migrations: %w", err)
 	}
 
 	return nil

@@ -40,7 +40,7 @@ func RunApp() error {
 		return fmt.Errorf("failed to load cfgig: %w", err)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("host", cfg.Storages.Db.Host).
 		Int("port", cfg.Storages.Db.Port).
 		Str("user", cfg.Storages.Db.User).
@@ -55,18 +55,22 @@ func RunApp() error {
 			Int("port", cfg.Storages.Db.Port).
 			Msg("Failed to init PostgreSQL")
 	}
-	defer s.Db.Close()
+	defer func() {
+		if err := s.Db.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close database connection")
+		}
+	}()
 	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("Postgres initialized successfully")
 
 	if err := s.Db.RunMigrations("./migrations"); err != nil {
-		log.Fatal().Msg("Failed to run migrations")
+		log.Fatal().Err(err).Msg("Failed to run migrations")
 	}
 	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("Migrations run successfully")
 
 	if err := s.InitMinioStorage(cfg); err != nil {
 		return fmt.Errorf("failed to initialize minio storage: %w", err)
 	}
-	log.Info().Str("addr", string(cfg.Storages.Db.Port)).Msg("MinIO storage initialized successfully")
+	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("MinIO storage initialized successfully")
 
 	deliveries := initialize.InitDeliveries(s, cfg)
 
