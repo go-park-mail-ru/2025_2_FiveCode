@@ -32,15 +32,15 @@ func RunApp() error {
 
 	configPath, err := config.ReadConfigPath()
 	if err != nil {
-		return fmt.Errorf("failed to read cfgig path: %w", err)
+		return fmt.Errorf("failed to read config path: %w", err)
 	}
 
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load cfgig: %w", err)
+		return fmt.Errorf("failed to load config: %w", err)
 	}
 
-	log.Info().
+	log.Debug().
 		Str("host", cfg.Storages.Db.Host).
 		Int("port", cfg.Storages.Db.Port).
 		Str("user", cfg.Storages.Db.User).
@@ -55,7 +55,11 @@ func RunApp() error {
 			Int("port", cfg.Storages.Db.Port).
 			Msg("Failed to init PostgreSQL")
 	}
-	defer s.Db.Close()
+	defer func() {
+		if err := s.Db.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close database connection")
+		}
+	}()
 	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("Postgres initialized successfully")
 
 	if err := s.Db.RunMigrations("./migrations"); err != nil {
