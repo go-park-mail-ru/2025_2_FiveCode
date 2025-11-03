@@ -1,11 +1,10 @@
-package userUsecase
+package usecase
 
 import (
 	"context"
 
 	"backend/models"
 	namederrors "backend/named_errors"
-	"backend/validation"
 	"bytes"
 	"fmt"
 	"image"
@@ -16,24 +15,27 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
-const (
-	MaxAvatarFileSize = 10 * 1024 * 1024
-)
-
 type UserRepository interface {
 	CreateUser(ctx context.Context, email string, password string) (*models.User, error)
-	GetUserBySession(ctx context.Context, sessionID string) (*models.User, error)
 	UpdateProfile(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	GetProfile(ctx context.Context, userID uint64) (*models.User, error)
 	UploadAndSaveFile(ctx context.Context, file io.Reader, filename, contentType string, size int64, width, height int) (*models.File, error)
 }
 
-type UserUsecase struct {
-	Repository UserRepository
+type AuthRepository interface {
+	GetUserIDBySession(sessionID string) (uint64, error)
 }
 
-func NewUserUsecase(UserRepository UserRepository) *UserUsecase {
-	return &UserUsecase{Repository: UserRepository}
+type UserUsecase struct {
+	Repository   UserRepository
+	AuthRepo     AuthRepository
+}
+
+func NewUserUsecase(UserRepository UserRepository, AuthRepo AuthRepository) *UserUsecase {
+	return &UserUsecase{
+		Repository: UserRepository,
+		AuthRepo:   AuthRepo,
+	}
 }
 
 func (uc *UserUsecase) RegisterUser(ctx context.Context, email string, password string) (*models.User, error) {
@@ -46,32 +48,24 @@ func (uc *UserUsecase) RegisterUser(ctx context.Context, email string, password 
 }
 
 func (uc *UserUsecase) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {
-	user, err := uc.Repository.GetUserBySession(ctx, sessionID)
+	userID, err := uc.AuthRepo.GetUserIDBySession(sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user by session: %w", err)
+		return nil, fmt.Errorf("failed to get user ID by session: %w", err)
 	}
+
+	user, err := uc.Repository.GetProfile(ctx, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user profile: %w", err)
+	}
+
 	return user, nil
 }
 
-type updatePasswordRequest struct {
-	Password string `valid:"password"`
-}
-
 func (uc *UserUsecase) UpdateProfile(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
-	if username != nil {
-		if len(*username) < 3 || len(*username) > 50 {
-			return nil, namederrors.ErrUpdateProfile
-		}
-	}
-
 	if password != nil {
-		passwordReq := updatePasswordRequest{Password: *password}
-		if err := validation.ValidateStruct(passwordReq); err != nil {
-			return nil, namederrors.ErrUpdateProfile
-		}
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
 		if err != nil {
-			return nil, namederrors.ErrUpdateProfile
+			return nil, fmt.Errorf("failed to hash password: %w", err)
 		}
 		passwordStr := string(hashedPassword)
 		password = &passwordStr
@@ -79,7 +73,7 @@ func (uc *UserUsecase) UpdateProfile(ctx context.Context, userID uint64, usernam
 
 	user, err := uc.Repository.UpdateProfile(ctx, userID, username, password, avatarFileID)
 	if err != nil {
-		return nil, namederrors.ErrUpdateProfile
+		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
 	return user, nil
 }
@@ -87,16 +81,12 @@ func (uc *UserUsecase) UpdateProfile(ctx context.Context, userID uint64, usernam
 func (uc *UserUsecase) GetProfile(ctx context.Context, userID uint64) (*models.User, error) {
 	user, err := uc.Repository.GetProfile(ctx, userID)
 	if err != nil {
-		return nil, namederrors.ErrGetProfile
+		return nil, fmt.Errorf("failed to get profile: %w", err)
 	}
 	return user, nil
 }
 
 func (uc *UserUsecase) UploadAvatar(ctx context.Context, file io.Reader, filename, contentType string, size int64) (*models.File, error) {
-	if size > MaxAvatarFileSize {
-		return nil, namederrors.ErrFileTooLarge
-	}
-
 	if contentType != "image/jpeg" && contentType != "image/png" {
 		return nil, namederrors.ErrInvalidFileType
 	}

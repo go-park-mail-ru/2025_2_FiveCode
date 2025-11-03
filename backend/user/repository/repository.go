@@ -1,12 +1,11 @@
-package userRepository
+package repository
 
 import (
 	"context"
-	"errors"
+	"fmt"
 	"io"
 
 	"backend/models"
-	namederrors "backend/named_errors"
 	"backend/store"
 )
 
@@ -23,15 +22,7 @@ func NewUserRepository(store *store.Store) *UserRepository {
 func (r *UserRepository) CreateUser(ctx context.Context, email string, password string) (*models.User, error) {
 	user, err := r.Store.CreateUser(email, password)
 	if err != nil {
-		return nil, errors.New("failed to create user: " + err.Error())
-	}
-	return user, nil
-}
-
-func (r *UserRepository) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {
-	user, ok := r.Store.GetUserBySession(sessionID)
-	if !ok {
-		return nil, namederrors.ErrInvalidSession
+		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 	return user, nil
 }
@@ -39,7 +30,7 @@ func (r *UserRepository) GetUserBySession(ctx context.Context, sessionID string)
 func (r *UserRepository) UpdateProfile(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
 	user, err := r.Store.UpdateUserProfile(userID, username, password, avatarFileID)
 	if err != nil {
-		return nil, errors.New("failed to update profile: " + err.Error())
+		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
 	return user, nil
 }
@@ -47,7 +38,7 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, userID uint64, usern
 func (r *UserRepository) GetProfile(ctx context.Context, userID uint64) (*models.User, error) {
 	user, err := r.Store.GetUserByID(userID)
 	if err != nil {
-		return nil, errors.New("failed to get profile: " + err.Error())
+		return nil, fmt.Errorf("failed to get profile: %w", err)
 	}
 	return user, nil
 }
@@ -55,7 +46,7 @@ func (r *UserRepository) GetProfile(ctx context.Context, userID uint64) (*models
 func (r *UserRepository) UploadAndSaveFile(ctx context.Context, file io.Reader, filename, contentType string, size int64, width, height int) (*models.File, error) {
 	url, err := r.Store.UploadFileToMinIO(ctx, filename, file, size, contentType)
 	if err != nil {
-		return nil, errors.New("failed to upload file to MinIO: " + err.Error())
+		return nil, fmt.Errorf("failed to upload file to MinIO: %w", err)
 	}
 
 	fileModel := &models.File{
@@ -68,7 +59,7 @@ func (r *UserRepository) UploadAndSaveFile(ctx context.Context, file io.Reader, 
 
 	savedFile, err := r.Store.SaveFile(fileModel)
 	if err != nil {
-		return nil, errors.New("failed to save file: " + err.Error())
+		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
 
 	return savedFile, nil

@@ -1,10 +1,9 @@
-package userDelivery
+package delivery
 
 import (
 	"context"
 
 	"backend/apiutils"
-	userUsecase "backend/user/usecase"
 	"backend/middleware"
 	"backend/models"
 	namederrors "backend/named_errors"
@@ -17,6 +16,12 @@ import (
 
 	"github.com/pkg/errors"
 	"github.com/rs/zerolog/log"
+)
+
+const (
+	MinUsernameLength = 3
+	MaxUsernameLength = 50
+	MaxAvatarFileSize = 10 * 1024 * 1024
 )
 
 type UserDelivery struct {
@@ -41,6 +46,10 @@ type registerRequest struct {
 	Email           string `json:"email" valid:"required,email"`
 	Password        string `json:"password" valid:"required,password"`
 	ConfirmPassword string `json:"confirm_password" valid:"required,password"`
+}
+
+type updatePasswordRequest struct {
+	Password string `valid:"password"`
 }
 
 func (d *UserDelivery) Register(w http.ResponseWriter, r *http.Request) {
@@ -125,6 +134,21 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if username != nil {
+		if len(*username) < MinUsernameLength || len(*username) > MaxUsernameLength {
+			apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("username must be between %d and %d characters", MinUsernameLength, MaxUsernameLength))
+			return
+		}
+	}
+
+	if password != nil {
+		passwordReq := updatePasswordRequest{Password: *password}
+		if err := validation.ValidateStruct(passwordReq); err != nil {
+			apiutils.WriteValidationError(w, http.StatusBadRequest, err)
+			return
+		}
+	}
+
 	user, err := d.Usecase.UpdateProfile(r.Context(), userID, username, password, avatarFileID)
 	if err != nil {
 		log.Error().Err(err).Msg("error updating profile")
@@ -143,6 +167,10 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, err := d.Usecase.GetProfile(r.Context(), userID)
+	if errors.Is(err, namederrors.ErrNotFound) {
+		apiutils.WriteError(w, http.StatusNotFound, "user not found")
+		return
+	}
 	if err != nil {
 		log.Error().Err(err).Msg("error getting profile")
 		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("error getting profile: %v", err))
@@ -153,7 +181,7 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *uint64, error) {
-	err := r.ParseMultipartForm(userUsecase.MaxAvatarFileSize)
+	err := r.ParseMultipartForm(MaxAvatarFileSize)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error parsing multipart form: %w", err)
 	}
@@ -172,7 +200,15 @@ func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *u
 
 	file, header, err := r.FormFile("avatar")
 	if err == nil {
-		defer file.Close()
+		if header.Size > MaxAvatarFileSize {
+			return nil, nil, nil, fmt.Errorf("file size exceeds maximum allowed size of %d bytes", MaxAvatarFileSize)
+		}
+
+		defer func() {
+			if err := file.Close(); err != nil {
+				log.Error().Err(err).Msg("Failed to close avatar file")
+			}
+		}()
 
 		fileModel, err := d.Usecase.UploadAvatar(r.Context(), file, header.Filename, header.Header.Get("Content-Type"), header.Size)
 		if err != nil {

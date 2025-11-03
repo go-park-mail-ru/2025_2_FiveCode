@@ -303,6 +303,19 @@ func (s *Store) GetUserBySession(sessionID string) (*models.User, bool) {
 	return user, ok
 }
 
+func (s *Store) GetUserIDBySession(sessionID string) (uint64, bool) {
+	s.Mu.RLock()
+	defer s.Mu.RUnlock()
+
+	userID, ok := s.sessions[sessionID]
+	if !ok {
+		log.Info().Str("session_id", sessionID).Msg("session not found")
+		return 0, false
+	}
+
+	return userID, true
+}
+
 func (s *Store) ListNotes(ownerID uint64) []models.Note {
 	s.Mu.RLock()
 	defer s.Mu.RUnlock()
