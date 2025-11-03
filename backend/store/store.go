@@ -56,6 +56,23 @@ func (s *Store) InitPostgres(conf *config.Config) error {
 	return nil
 }
 
+func (s *Store) InitPostgres(conf *config.Config) error {
+	pg, err := NewPostgresDB(
+		conf.Storages.Db.Host,
+		conf.Storages.Db.Port,
+		conf.Storages.Db.User,
+		conf.Storages.Db.Password,
+		conf.Storages.Db.DBName,
+		conf.Storages.Db.SSLMode,
+	)
+	if err != nil {
+		return fmt.Errorf("failed to init postgres: %w", err)
+	}
+
+	s.Db = pg
+	return nil
+}
+
 func (s *Store) InitMinioStorage(conf *config.Config) error {
 	minioStorage, err := NewMinioStorage(
 		conf.Storages.Minio.Endpoint,
