@@ -2,7 +2,6 @@ package config
 
 import (
 	"fmt"
-
 	"github.com/spf13/viper"
 )
 
@@ -15,10 +14,26 @@ type CookieConfig struct {
 }
 
 type MinioConfig struct {
-	Endpoint  string `mapstructure:"endpoint"`
-	AccessKey string `mapstructure:"access_key"`
-	SecretKey string `mapstructure:"secret_key"`
-	Secure    bool   `mapstructure:"secure"`
+	Endpoint  string
+	AccessKey string
+	SecretKey string
+	Secure    bool
+}
+
+type PostgresConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
+}
+
+type RedisConfig struct {
+	Host     string
+	Port     int
+	Password string
+	DB       int
 }
 
 type Config struct {
@@ -27,7 +42,9 @@ type Config struct {
 }
 
 type Storages struct {
-	Minio MinioConfig `mapstructure:"minio"`
+	Minio MinioConfig    `mapstructure:"minio"`
+	Db    PostgresConfig `mapstructure:"db"`
+	Redis RedisConfig    `mapstructure:"redis"`
 }
 
 type Auth struct {
@@ -51,5 +68,44 @@ func LoadConfig(path string) (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
+	if err := loadEnvFile(); err != nil {
+		return nil, fmt.Errorf("failed to load env file: %w", err)
+	}
+
+	getMinioCfg(&config)
+
+	getDbCfg(&config)
+
+	getRedisCfg(&config)
+
 	return &config, nil
+}
+
+func getDbCfg(c *Config) {
+	c.Storages.Db = PostgresConfig{
+		Host:     viper.GetString("DB_HOST"),
+		Port:     viper.GetInt("DB_PORT"),
+		User:     viper.GetString("DB_USER"),
+		Password: viper.GetString("DB_PASSWORD"),
+		DBName:   viper.GetString("DB_NAME"),
+		SSLMode:  viper.GetString("DB_SSLMODE"),
+	}
+}
+
+func getMinioCfg(c *Config) {
+	c.Storages.Minio = MinioConfig{
+		Endpoint:  viper.GetString("MINIO_ENDPOINT"),
+		AccessKey: viper.GetString("MINIO_ACCESS_KEY"),
+		SecretKey: viper.GetString("MINIO_SECRET_KEY"),
+		Secure:    viper.GetBool("MINIO_SECURE"),
+	}
+}
+
+func getRedisCfg(c *Config) {
+	c.Storages.Redis = RedisConfig{
+		Host:     viper.GetString("REDIS_HOST"),
+		Port:     viper.GetInt("REDIS_PORT"),
+		Password: viper.GetString("REDIS_PASSWORD"),
+		DB:       viper.GetInt("REDIS_DB"),
+	}
 }

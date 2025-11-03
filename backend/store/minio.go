@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
-	"github.com/rs/zerolog/log"
 	"mime/multipart"
 	"os"
 )
@@ -43,8 +42,6 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %w", err)
 		}
-	} else {
-		log.Info().Str("bucket", defaultBucketName).Msg("MinIO bucket already exists")
 	}
 
 	return storage, nil

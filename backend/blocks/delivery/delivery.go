@@ -1,4 +1,4 @@
-package Delivery
+package delivery
 
 import (
 	"backend/apiutils"

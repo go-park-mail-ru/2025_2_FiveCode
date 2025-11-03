@@ -1,10 +1,14 @@
-package Repository
+package repository
 
 import (
 	"backend/models"
+	namederrors "backend/named_errors"
 	"backend/store"
 	"context"
+	"database/sql"
 	"errors"
+	"fmt"
+	"time"
 )
 
 type NotesRepository struct {
@@ -18,41 +22,244 @@ func NewNotesRepository(store *store.Store) *NotesRepository {
 }
 
 func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
-	notes := r.Store.ListNotes(userID)
+	r.Store.Mu.RLock()
+	defer r.Store.Mu.RUnlock()
+
+	query := `
+		SELECT id, owner_id, parent_note_id, title, icon_file_id,
+		       is_archived, is_shared, created_at, updated_at
+		FROM note
+		WHERE owner_id = $1 AND deleted_at IS NULL
+		ORDER BY updated_at DESC
+	`
+
+	rows, err := r.Store.Postgres.DB.QueryContext(ctx, query, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list notes: %w", err)
+	}
+	defer rows.Close()
+
+	notes := make([]models.Note, 0)
+
+	for rows.Next() {
+		var note models.Note
+		var parentNoteID, iconFileID sql.NullInt64
+
+		err := rows.Scan(
+			&note.ID,
+			&note.OwnerID,
+			&parentNoteID,
+			&note.Title,
+			&iconFileID,
+			&note.IsArchived,
+			&note.IsShared,
+			&note.CreatedAt,
+			&note.UpdatedAt,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("failed to scan note: %w", err)
+		}
+
+		if parentNoteID.Valid {
+			val := uint64(parentNoteID.Int64)
+			note.ParentNoteID = &val
+		}
+		if iconFileID.Valid {
+			val := uint64(iconFileID.Int64)
+			note.IconFileID = &val
+		}
+
+		notes = append(notes, note)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating notes: %w", err)
+	}
+
 	return notes, nil
 }
 
 func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
-	note, err := r.Store.CreateNote(userID)
+	r.Store.Mu.Lock()
+	defer r.Store.Mu.Unlock()
+
+	query := `
+		INSERT INTO note (owner_id, title, is_archived, is_shared)
+		VALUES ($1, $2, $3, $4)
+		RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
+		          is_archived, is_shared, created_at, updated_at, deleted_at
+	`
+
+	defaultTitle := "New Note"
+
+	note := &models.Note{}
+	var parentNoteID, iconFileID sql.NullInt64
+	var deletedAt sql.NullTime
+
+	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, userID, defaultTitle, false, false).Scan(
+		&note.ID,
+		&note.OwnerID,
+		&parentNoteID,
+		&note.Title,
+		&iconFileID,
+		&note.IsArchived,
+		&note.IsShared,
+		&note.CreatedAt,
+		&note.UpdatedAt,
+		&deletedAt,
+	)
+
 	if err != nil {
-		return nil, errors.New("failed to create note: " + err.Error())
+		return nil, fmt.Errorf("failed to create note: %w", err)
+	}
+
+	if parentNoteID.Valid {
+		val := uint64(parentNoteID.Int64)
+		note.ParentNoteID = &val
+	}
+	if iconFileID.Valid {
+		val := uint64(iconFileID.Int64)
+		note.IconFileID = &val
+	}
+	if deletedAt.Valid {
+		note.DeletedAt = &deletedAt.Time
 	}
 
 	return note, nil
 }
 
 func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64) (*models.Note, error) {
-	note, err := r.Store.GetNoteById(noteID)
+	r.Store.Mu.RLock()
+	defer r.Store.Mu.RUnlock()
+
+	query := `
+		SELECT id, owner_id, parent_note_id, title, icon_file_id,
+		       is_archived, is_shared, created_at, updated_at, deleted_at
+		FROM note
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	note := &models.Note{}
+	var parentNoteID, iconFileID sql.NullInt64
+	var deletedAt sql.NullTime
+
+	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, noteID).Scan(
+		&note.ID,
+		&note.OwnerID,
+		&parentNoteID,
+		&note.Title,
+		&iconFileID,
+		&note.IsArchived,
+		&note.IsShared,
+		&note.CreatedAt,
+		&note.UpdatedAt,
+		&deletedAt,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, namederrors.ErrNotFound
+	}
 	if err != nil {
-		return nil, errors.New("failed to get note: " + err.Error())
+		return nil, fmt.Errorf("failed to get note: %w", err)
+	}
+
+	if parentNoteID.Valid {
+		val := uint64(parentNoteID.Int64)
+		note.ParentNoteID = &val
+	}
+	if iconFileID.Valid {
+		val := uint64(iconFileID.Int64)
+		note.IconFileID = &val
 	}
 
 	return note, nil
 }
 
 func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
-	note, err := r.Store.UpdateNote(noteID, title, isArchived)
+	r.Store.Mu.Lock()
+	defer r.Store.Mu.Unlock()
+
+	checkQuery := `SELECT 1 FROM note WHERE id = $1 AND deleted_at IS NULL`
+	var exists int
+	err := r.Store.Postgres.DB.QueryRowContext(ctx, checkQuery, noteID).Scan(&exists)
+	if errors.Is(err, sql.ErrNoRows) {
+		return nil, namederrors.ErrNotFound
+	}
 	if err != nil {
-		return nil, errors.New("failed to update note: " + err.Error())
+		return nil, fmt.Errorf("failed to check note existence: %w", err)
+	}
+
+	query := `UPDATE note SET updated_at = $1`
+	args := []interface{}{time.Now().UTC()}
+	argIndex := 2
+
+	if title != nil {
+		query += fmt.Sprintf(", title = $%d", argIndex)
+		args = append(args, *title)
+		argIndex++
+	}
+
+	if isArchived != nil {
+		query += fmt.Sprintf(", is_archived = $%d", argIndex)
+		args = append(args, *isArchived)
+		argIndex++
+	}
+
+	query += fmt.Sprintf(" WHERE id = $%d", argIndex)
+	args = append(args, noteID)
+
+	query += ` RETURNING id, owner_id, parent_note_id, title, icon_file_id,
+	          is_archived, is_shared, created_at, updated_at`
+
+	note := &models.Note{}
+	var parentNoteID, iconFileID sql.NullInt64
+
+	err = r.Store.Postgres.DB.QueryRowContext(ctx, query, args...).Scan(
+		&note.ID,
+		&note.OwnerID,
+		&parentNoteID,
+		&note.Title,
+		&iconFileID,
+		&note.IsArchived,
+		&note.IsShared,
+		&note.CreatedAt,
+		&note.UpdatedAt,
+	)
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to update note: %w", err)
+	}
+
+	if parentNoteID.Valid {
+		val := uint64(parentNoteID.Int64)
+		note.ParentNoteID = &val
+	}
+	if iconFileID.Valid {
+		val := uint64(iconFileID.Int64)
+		note.IconFileID = &val
 	}
 
 	return note, nil
 }
 
 func (r *NotesRepository) DeleteNote(ctx context.Context, noteID uint64) error {
-	err := r.Store.DeleteNote(noteID)
+	r.Store.Mu.Lock()
+	defer r.Store.Mu.Unlock()
+
+	query := `DELETE FROM note WHERE id = $1`
+
+	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, noteID)
 	if err != nil {
-		return errors.New("failed to delete note: " + err.Error())
+		return fmt.Errorf("failed to delete note: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return namederrors.ErrNotFound
 	}
 
 	return nil

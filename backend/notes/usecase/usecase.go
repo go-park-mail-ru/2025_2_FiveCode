@@ -1,10 +1,10 @@
-package Usecase
+package usecase
 
 import (
 	"backend/models"
 	namederrors "backend/named_errors"
 	"context"
-	"errors"
+	"fmt"
 )
 
 type NotesUsecase struct {
@@ -28,7 +28,7 @@ func NewNotesUsecase(Repository NotesRepository) *NotesUsecase {
 func (u *NotesUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
 	notes, err := u.Repository.GetNotes(ctx, userID)
 	if err != nil {
-		return nil, errors.New("failed to get notes: " + err.Error())
+		return nil, fmt.Errorf("failed to get notes: %w", err)
 	}
 	return notes, nil
 }
@@ -36,7 +36,7 @@ func (u *NotesUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models
 func (u *NotesUsecase) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	note, err := u.Repository.CreateNote(ctx, userID)
 	if err != nil {
-		return nil, errors.New("failed to create note: " + err.Error())
+		return nil, fmt.Errorf("failed to create note: %w", err)
 	}
 
 	return note, nil
@@ -45,7 +45,7 @@ func (u *NotesUsecase) CreateNote(ctx context.Context, userID uint64) (*models.N
 func (u *NotesUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
 	note, err := u.Repository.GetNoteById(ctx, noteID)
 	if err != nil {
-		return nil, errors.New("failed to get note: " + err.Error())
+		return nil, fmt.Errorf("failed to get note: %w", err)
 	}
 
 	if note.OwnerID != userID {
@@ -58,7 +58,7 @@ func (u *NotesUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (
 func (u *NotesUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
 	note, err := u.Repository.GetNoteById(ctx, noteID)
 	if err != nil {
-		return nil, errors.New("failed to get note: " + err.Error())
+		return nil, fmt.Errorf("failed to get note: %w", err)
 	}
 
 	if note.OwnerID != userID {
@@ -67,7 +67,7 @@ func (u *NotesUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uin
 
 	updatedNote, err := u.Repository.UpdateNote(ctx, noteID, title, isArchived)
 	if err != nil {
-		return nil, errors.New("failed to update note: " + err.Error())
+		return nil, fmt.Errorf("failed to update note: %w", err)
 	}
 
 	return updatedNote, nil
@@ -76,16 +76,15 @@ func (u *NotesUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uin
 func (u *NotesUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint64) error {
 	note, err := u.Repository.GetNoteById(ctx, noteID)
 	if err != nil {
-		return errors.New("failed to get note: " + err.Error())
+		return fmt.Errorf("failed to get note: %w", err)
 	}
 
 	if note.OwnerID != userID {
 		return namederrors.ErrNoAccess
 	}
 
-	err = u.Repository.DeleteNote(ctx, noteID)
-	if err != nil {
-		return errors.New("failed to delete note: " + err.Error())
+	if err := u.Repository.DeleteNote(ctx, noteID); err != nil {
+		return fmt.Errorf("failed to delete note: %w", err)
 	}
 
 	return nil
