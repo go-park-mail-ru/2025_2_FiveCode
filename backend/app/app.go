@@ -31,8 +31,6 @@ func RunApp() error {
 		return fmt.Errorf("failed to read cfgig path: %w", err)
 	}
 
-	log.Info().Msg(configPath)
-
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cfgig: %w", err)

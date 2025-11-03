@@ -11,6 +11,7 @@ type AuthRepository interface {
 	GetUserByEmail(email string) (*models.User, error)
 	CreateSession(userID uint64) (string, error)
 	DeleteSession(sessionID string) error
+	GetUserIDBySession(sessionID string) (uint64, error)
 }
 
 type AuthUsecase struct {
