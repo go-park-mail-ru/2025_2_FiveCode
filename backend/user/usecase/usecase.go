@@ -4,9 +4,7 @@ import (
 	"context"
 
 	"backend/models"
-	namederrors "backend/named_errors"
 	"bytes"
-	"errors"
 	"fmt"
 	"image"
 	_ "image/jpeg"
@@ -29,8 +27,8 @@ type AuthRepository interface {
 }
 
 type UserUsecase struct {
-	Repository   UserRepository
-	AuthRepo     AuthRepository
+	Repository UserRepository
+	AuthRepo   AuthRepository
 }
 
 func NewUserUsecase(UserRepository UserRepository, AuthRepo AuthRepository) *UserUsecase {
@@ -43,9 +41,6 @@ func NewUserUsecase(UserRepository UserRepository, AuthRepo AuthRepository) *Use
 func (uc *UserUsecase) RegisterUser(ctx context.Context, email string, password string) (*models.User, error) {
 	user, err := uc.Repository.CreateUser(ctx, email, password)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrUserExists) {
-			return nil, fmt.Errorf("failed to create user: %w", err)
-		}
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 
@@ -55,17 +50,11 @@ func (uc *UserUsecase) RegisterUser(ctx context.Context, email string, password 
 func (uc *UserUsecase) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {
 	userID, err := uc.AuthRepo.GetUserIDBySession(sessionID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrInvalidSession) {
-			return nil, fmt.Errorf("failed to get user ID by session: %w", err)
-		}
 		return nil, fmt.Errorf("failed to get user ID by session: %w", err)
 	}
 
 	user, err := uc.Repository.GetUserByID(ctx, userID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to get user profile: %w", err)
-		}
 		return nil, fmt.Errorf("failed to get user profile: %w", err)
 	}
 
@@ -84,9 +73,6 @@ func (uc *UserUsecase) UpdateProfile(ctx context.Context, username *string, pass
 
 	user, err := uc.Repository.UpdateProfile(ctx, username, password, avatarFileID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to update profile: %w", err)
-		}
 		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
 	return user, nil
@@ -95,9 +81,6 @@ func (uc *UserUsecase) UpdateProfile(ctx context.Context, username *string, pass
 func (uc *UserUsecase) GetProfile(ctx context.Context) (*models.User, error) {
 	user, err := uc.Repository.GetProfile(ctx)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to get profile: %w", err)
-		}
 		return nil, fmt.Errorf("failed to get profile: %w", err)
 	}
 	return user, nil
@@ -119,9 +102,6 @@ func (uc *UserUsecase) UploadAvatar(ctx context.Context, file io.Reader, filenam
 
 	fileModel, err := uc.Repository.UploadAndSaveFile(ctx, bytes.NewReader(fileBytes), filename, contentType, size, width, height)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) || errors.Is(err, namederrors.ErrInvalidFileType) {
-			return nil, fmt.Errorf("failed to upload and save file: %w", err)
-		}
 		return nil, fmt.Errorf("failed to upload and save file: %w", err)
 	}
 

@@ -2,13 +2,11 @@ package repository
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 
 	"backend/middleware"
 	"backend/models"
-	namederrors "backend/named_errors"
 	"backend/store"
 )
 
@@ -25,9 +23,6 @@ func NewUserRepository(store *store.Store) *UserRepository {
 func (r *UserRepository) CreateUser(ctx context.Context, email string, password string) (*models.User, error) {
 	user, err := r.Store.CreateUser(email, password)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrUserExists) {
-			return nil, fmt.Errorf("failed to create user: %w", err)
-		}
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 	return user, nil
@@ -41,9 +36,6 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, username *string, pa
 
 	user, err := r.Store.UpdateUserProfile(userID, username, password, avatarFileID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to update profile: %w", err)
-		}
 		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
 	return user, nil
@@ -57,9 +49,6 @@ func (r *UserRepository) GetProfile(ctx context.Context) (*models.User, error) {
 
 	user, err := r.Store.GetUserByID(userID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to get profile: %w", err)
-		}
 		return nil, fmt.Errorf("failed to get profile: %w", err)
 	}
 	return user, nil
@@ -68,9 +57,6 @@ func (r *UserRepository) GetProfile(ctx context.Context) (*models.User, error) {
 func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*models.User, error) {
 	user, err := r.Store.GetUserByID(userID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to get user: %w", err)
-		}
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
 	return user, nil
@@ -92,9 +78,6 @@ func (r *UserRepository) UploadAndSaveFile(ctx context.Context, file io.Reader, 
 
 	savedFile, err := r.Store.SaveFile(fileModel)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrNotFound) {
-			return nil, fmt.Errorf("failed to save file: %w", err)
-		}
 		return nil, fmt.Errorf("failed to save file: %w", err)
 	}
 
