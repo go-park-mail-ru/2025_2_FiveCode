@@ -26,19 +26,19 @@ func init() {
 func RunApp() error {
 	s := store.NewStore()
 
-	if err := s.InitFillStore(); err != nil {
-		return fmt.Errorf("failed to fill store: %w", err)
-	}
-
 	configPath, err := config.ReadConfigPath()
 	if err != nil {
 		return fmt.Errorf("failed to read cfgig path: %w", err)
 	}
 
+	log.Info().Msg(configPath)
+
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
 		return fmt.Errorf("failed to load cfgig: %w", err)
 	}
+
+	log.Info().Int("session", cfg.Auth.Cookie.SessionDuration).Msg(configPath)
 
 	if err := s.InitPostgres(cfg); err != nil {
 		log.Fatal().
@@ -47,10 +47,10 @@ func RunApp() error {
 			Int("port", cfg.Storages.Db.Port).
 			Msg("Failed to init PostgreSQL")
 	}
-	defer s.Db.Close()
+	defer s.Postgres.Close()
 	log.Info().Int("addr", cfg.Storages.Db.Port).Msg("Postgres initialized successfully")
 
-	if err := s.Db.RunMigrations("./migrations"); err != nil {
+	if err := s.Postgres.RunMigrations("./migrations"); err != nil {
 		log.Fatal().
 			Err(err).
 			Str("migrations_path", "./migrations").
@@ -67,6 +67,10 @@ func RunApp() error {
 		log.Fatal().Err(err).Msg("Failed to init redis")
 	}
 	log.Info().Int("addr", cfg.Storages.Redis.Port).Msg("Redis initialized successfully")
+
+	if err := s.InitFillStore(); err != nil {
+		return fmt.Errorf("failed to fill store: %w", err)
+	}
 
 	deliveries := initialize.InitDeliveries(s, cfg)
 

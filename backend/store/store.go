@@ -4,9 +4,12 @@ import (
 	"backend/config"
 	"backend/models"
 	namederrors "backend/named_errors"
+	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"sort"
+	"strings"
 	"sync"
 	"time"
 
@@ -16,10 +19,11 @@ import (
 )
 
 type Store struct {
-	Mu           sync.RWMutex
-	Minio        *MinioStorage
-	Db           *PostgresDB
-	Redis        *RedisDB
+	Mu       sync.RWMutex
+	Minio    *MinioStorage
+	Postgres *PostgresDB
+	Redis    *RedisDB
+
 	Users        map[uint64]*models.User
 	UsersByEmail map[string]uint64
 	Notes        map[uint64]*models.Note
@@ -63,7 +67,7 @@ func (s *Store) InitPostgres(conf *config.Config) error {
 		return fmt.Errorf("failed to init postgres: %w", err)
 	}
 
-	s.Db = pg
+	s.Postgres = pg
 	return nil
 }
 
@@ -83,64 +87,115 @@ func (s *Store) InitMinioStorage(conf *config.Config) error {
 }
 
 func (s *Store) InitFillStore() error {
-	_, err := s.CreateUser("user@example.com", "password")
-	if err != nil {
-		return errors.New("Error to init Fill Store: " + err.Error())
+	ctx := context.Background()
+	email := "user@example.com"
+	password := "password"
+
+	var userID uint64
+	var exists bool
+	checkQuery := `SELECT id FROM "user" WHERE email = $1`
+	err := s.Postgres.DB.QueryRowContext(ctx, checkQuery, email).Scan(&userID)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+		if err != nil {
+			return fmt.Errorf("failed to hash password: %w", err)
+		}
+
+		username := strings.Split(email, "@")[0]
+		insertQuery := `
+            INSERT INTO "user" (email, password_hash, username)
+            VALUES ($1, $2, $3)
+            RETURNING id
+        `
+		err = s.Postgres.DB.QueryRowContext(ctx, insertQuery, email, string(hashedPassword), username).Scan(&userID)
+		if err != nil {
+			return fmt.Errorf("failed to create user in PostgreSQL: %w", err)
+		}
+		exists = false
+	} else if err != nil {
+		return fmt.Errorf("failed to check user existence: %w", err)
+	} else {
+		exists = true
 	}
 
-	notes := []*models.Note{
-		{
-			ID:           1,
-			OwnerID:      1,
-			ParentNoteID: nil,
-			Title:        "University Lectures",
-			IconFileID:   nil,
-			IsArchived:   false,
-			IsShared:     false,
-			CreatedAt:    time.Now().Add(-30 * 24 * time.Hour),
-			UpdatedAt:    time.Now().Add(-5 * 24 * time.Hour),
-			DeletedAt:    nil,
-		},
-		{
-			ID:           2,
-			OwnerID:      1,
-			ParentNoteID: nil,
-			Title:        "Project Ideas",
-			IconFileID:   nil,
-			IsArchived:   false,
-			IsShared:     true,
-			CreatedAt:    time.Now().Add(-20 * 24 * time.Hour),
-			UpdatedAt:    time.Now().Add(-2 * 24 * time.Hour),
-			DeletedAt:    nil,
-		},
-		{
-			ID:           3,
-			OwnerID:      1,
-			ParentNoteID: nil,
-			Title:        "Shopping List",
-			IconFileID:   nil,
-			IsArchived:   false,
-			IsShared:     false,
-			CreatedAt:    time.Now().Add(-7 * 24 * time.Hour),
-			UpdatedAt:    time.Now().Add(-6 * time.Hour),
-			DeletedAt:    nil,
-		},
-		{
-			ID:           4,
-			OwnerID:      1,
-			ParentNoteID: nil,
-			Title:        "Random Note",
-			IconFileID:   nil,
-			IsArchived:   false,
-			IsShared:     false,
-			CreatedAt:    time.Now().Add(-10 * 24 * time.Hour),
-			UpdatedAt:    time.Now().Add(-8 * 24 * time.Hour),
-			DeletedAt:    nil,
-		},
+	user, err := s.CreateUser(email, password)
+	if err != nil && !errors.Is(err, namederrors.ErrUserExists) {
+		return fmt.Errorf("failed to create user in memory: %w", err)
 	}
-	for _, note := range notes {
-		s.Notes[note.ID] = note
+	if err == nil {
+		s.Mu.Lock()
+		delete(s.Users, user.ID)
+		delete(s.UsersByEmail, email)
+
+		user.ID = userID
+		s.Users[userID] = user
+		s.UsersByEmail[email] = userID
+		s.Mu.Unlock()
+
+	} else {
 	}
+
+	if !exists {
+		notes := []struct {
+			Title     string
+			IsShared  bool
+			CreatedAt time.Time
+			UpdatedAt time.Time
+		}{
+			{
+				Title:     "University Lectures",
+				IsShared:  false,
+				CreatedAt: time.Now().Add(-30 * 24 * time.Hour),
+				UpdatedAt: time.Now().Add(-5 * 24 * time.Hour),
+			},
+			{
+				Title:     "Project Ideas",
+				IsShared:  true,
+				CreatedAt: time.Now().Add(-20 * 24 * time.Hour),
+				UpdatedAt: time.Now().Add(-2 * 24 * time.Hour),
+			},
+			{
+				Title:     "Shopping List",
+				IsShared:  false,
+				CreatedAt: time.Now().Add(-7 * 24 * time.Hour),
+				UpdatedAt: time.Now().Add(-6 * time.Hour),
+			},
+			{
+				Title:     "Random Note",
+				IsShared:  false,
+				CreatedAt: time.Now().Add(-10 * 24 * time.Hour),
+				UpdatedAt: time.Now().Add(-8 * 24 * time.Hour),
+			},
+		}
+
+		for _, note := range notes {
+			insertNoteQuery := `
+                INSERT INTO note (owner_id, title, is_archived, is_shared, created_at, updated_at)
+                VALUES ($1, $2, $3, $4, $5, $6)
+                RETURNING id
+            `
+			var noteID uint64
+			err = s.Postgres.DB.QueryRowContext(
+				ctx,
+				insertNoteQuery,
+				userID,
+				note.Title,
+				false,
+				note.IsShared,
+				note.CreatedAt,
+				note.UpdatedAt,
+			).Scan(&noteID)
+
+			if err != nil {
+				return fmt.Errorf("failed to create note '%s': %w", note.Title, err)
+			}
+
+		}
+	} else {
+	}
+
+	log.Info().Msg("InitFillStore completed successfully")
 	return nil
 }
 
@@ -306,64 +361,6 @@ func (s *Store) ListNotes(ownerID uint64) []models.Note {
 	}
 
 	return result
-}
-
-func (s *Store) CreateNote(userID uint64) (*models.Note, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	result := &models.Note{
-		ID:        s.nextNoteID,
-		OwnerID:   userID,
-		Title:     "",
-		CreatedAt: time.Now().UTC(),
-		UpdatedAt: time.Now().UTC(),
-	}
-
-	s.Notes[result.ID] = result
-	s.nextNoteID++
-	return result, nil
-}
-
-func (s *Store) GetNoteById(noteID uint64) (*models.Note, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	result := s.Notes[noteID]
-	if result == nil {
-		return nil, namederrors.ErrNotFound
-	}
-
-	return result, nil
-}
-
-func (s *Store) DeleteNote(noteID uint64) error {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	delete(s.Notes, noteID)
-
-	return nil
-}
-
-func (s *Store) UpdateNote(noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	if s.Notes[noteID] == nil {
-		return nil, namederrors.ErrNotFound
-	}
-
-	if title != nil {
-		s.Notes[noteID].Title = *title
-	}
-
-	if isArchived != nil {
-		s.Notes[noteID].IsArchived = *isArchived
-	}
-	s.Notes[noteID].UpdatedAt = time.Now().UTC()
-
-	return s.Notes[noteID], nil
 }
 
 func (s *Store) CreateBlock(noteID uint64, blockType models.BlockType, beforeBlockID *uint64) (*models.Block, error) {
