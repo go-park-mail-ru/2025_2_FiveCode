@@ -5,6 +5,7 @@ import (
 	"backend/initialize"
 	"backend/router"
 	"backend/store"
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -28,46 +29,40 @@ func RunApp() error {
 
 	configPath, err := config.ReadConfigPath()
 	if err != nil {
-		return fmt.Errorf("failed to read cfgig path: %w", err)
+		log.Fatal().Err(err).Msg("failed to read config path")
 	}
 
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
-		return fmt.Errorf("failed to load cfgig: %w", err)
+		log.Fatal().Err(err).Str("config_path", configPath).Msg("failed to load config")
 	}
 
-	log.Info().Int("session", cfg.Auth.Cookie.SessionDuration).Msg(configPath)
+	log.Info().Int("session_duration_days", cfg.Auth.Cookie.SessionDuration).Msg("config loaded")
 
 	if err := s.InitPostgres(cfg); err != nil {
-		log.Fatal().
-			Err(err).
-			Str("host", cfg.Storages.Db.Host).
-			Int("port", cfg.Storages.Db.Port).
-			Msg("Failed to init PostgreSQL")
+		log.Fatal().Err(err).Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("failed to init Postgres")
 	}
 	defer s.Postgres.Close()
-	log.Info().Int("addr", cfg.Storages.Db.Port).Msg("Postgres initialized successfully")
+	log.Info().Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("Postgres initialized successfully")
 
 	if err := s.Postgres.RunMigrations("./migrations"); err != nil {
-		log.Fatal().
-			Err(err).
-			Str("migrations_path", "./migrations").
-			Msg("Failed to run migrations")
+		log.Fatal().Err(err).Msg("failed to run migrations")
 	}
 	log.Info().Msg("Migrations run successfully")
 
 	if err := s.InitMinioStorage(cfg); err != nil {
-		log.Fatal().Err(err).Msg("Failed to init minio storage")
+		log.Fatal().Err(err).Msg("failed to init minio storage")
 	}
-	log.Info().Str("addr", cfg.Storages.Minio.Endpoint).Msg("MinIO storage initialized successfully")
+	log.Info().Str("endpoint", cfg.Storages.Minio.Endpoint).Msg("MinIO storage initialized successfully")
 
 	if err := s.InitRedis(cfg); err != nil {
-		log.Fatal().Err(err).Msg("Failed to init redis")
+		log.Fatal().Err(err).Msg("failed to init redis")
 	}
-	log.Info().Int("addr", cfg.Storages.Redis.Port).Msg("Redis initialized successfully")
+	defer s.Redis.Close()
+	log.Info().Str("host", cfg.Storages.Redis.Host).Int("port", cfg.Storages.Redis.Port).Msg("Redis initialized successfully")
 
-	if err := s.InitFillStore(); err != nil {
-		return fmt.Errorf("failed to fill store: %w", err)
+	if err := s.InitFillStore(context.Background()); err != nil {
+		log.Fatal().Err(err).Msg("failed to fill store")
 	}
 
 	deliveries := initialize.InitDeliveries(s, cfg)
@@ -84,7 +79,7 @@ func RunApp() error {
 		Handler: r,
 	}
 
-	log.Info().Str("addr", server.Addr).Msg("listening")
+	log.Info().Str("address", server.Addr).Msg("starting server")
 	err = server.ListenAndServe()
 	if err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return fmt.Errorf("server error: %w", err)

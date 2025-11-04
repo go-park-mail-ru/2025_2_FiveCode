@@ -69,7 +69,7 @@ func TestUserAccessMiddleware(t *testing.T) {
 		router.HandleFunc("/user/{user_id}/notes", func(w http.ResponseWriter, r *http.Request) {
 			w.WriteHeader(http.StatusOK)
 		}).Methods("GET")
-		
+
 		req := httptest.NewRequest("GET", "/user/1/notes", nil)
 		req = req.WithContext(WithUserID(req.Context(), user.ID))
 		rr := httptest.NewRecorder()
@@ -85,7 +85,7 @@ func TestUserAccessMiddleware(t *testing.T) {
 		router.HandleFunc("/user/{user_id}/notes", func(w http.ResponseWriter, r *http.Request) {
 			t.Fatal("handler should not be called")
 		}).Methods("GET")
-		
+
 		req := httptest.NewRequest("GET", "/user/1/notes", nil)
 		req = mux.SetURLVars(req, map[string]string{"user_id": "1"})
 		rr := httptest.NewRecorder()
@@ -100,7 +100,7 @@ func TestUserAccessMiddleware(t *testing.T) {
 		router.HandleFunc("/user/{user_id}/notes", func(w http.ResponseWriter, r *http.Request) {
 			t.Fatal("handler should not be called")
 		}).Methods("GET")
-		
+
 		req := httptest.NewRequest("GET", "/user/2/notes", nil)
 		req = req.WithContext(WithUserID(req.Context(), user.ID))
 		req = mux.SetURLVars(req, map[string]string{"user_id": "2"})
@@ -116,7 +116,7 @@ func TestUserAccessMiddleware(t *testing.T) {
 		router.HandleFunc("/user/{user_id}/notes", func(w http.ResponseWriter, r *http.Request) {
 			t.Fatal("handler should not be called")
 		}).Methods("GET")
-		
+
 		req := httptest.NewRequest("GET", "/user//notes", nil)
 		req = req.WithContext(WithUserID(req.Context(), user.ID))
 		req = mux.SetURLVars(req, map[string]string{"user_id": ""})
@@ -132,7 +132,7 @@ func TestUserAccessMiddleware(t *testing.T) {
 		router.HandleFunc("/user/{user_id}/notes", func(w http.ResponseWriter, r *http.Request) {
 			t.Fatal("handler should not be called")
 		}).Methods("GET")
-		
+
 		req := httptest.NewRequest("GET", "/user/invalid/notes", nil)
 		req = req.WithContext(WithUserID(req.Context(), user.ID))
 		req = mux.SetURLVars(req, map[string]string{"user_id": "invalid"})

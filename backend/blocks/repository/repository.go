@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"backend/store"
@@ -10,8 +11,6 @@ import (
 	"errors"
 	"fmt"
 	"time"
-
-	"github.com/rs/zerolog/log"
 )
 
 type BlocksRepository struct {
@@ -25,7 +24,8 @@ func NewBlocksRepository(store *store.Store) *BlocksRepository {
 }
 
 func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, blockType models.BlockType, position float64) (*models.Block, error) {
-	log.Info().Uint64("note_id", noteID).Str("type", string(blockType)).Float64("position", position).Msg("CreateBlock: start")
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("note_id", noteID).Str("type", string(blockType)).Float64("position", position).Msg("executing CreateBlock")
 
 	r.Store.Mu.Lock()
 	defer r.Store.Mu.Unlock()
@@ -42,6 +42,7 @@ func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, block
 		VALUES ($1, $2, $3)
 		RETURNING id, note_id, type, position, created_at, updated_at, last_edited_by
 	`
+	log.Info().Str("query", logger.SanitizeQuery(blockQuery)).Msg("Executing insert block query")
 
 	block := &models.Block{}
 	var lastEditedBy sql.NullInt64
@@ -56,6 +57,7 @@ func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, block
 		&lastEditedBy,
 	)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to create block")
 		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
@@ -64,13 +66,16 @@ func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, block
 			INSERT INTO block_text (block_id, text)
 			VALUES ($1, $2)
 		`
+		log.Info().Str("query", logger.SanitizeQuery(textQuery)).Msg("Executing insert block_text query")
 		_, err = tx.ExecContext(ctx, textQuery, block.ID, "")
 		if err != nil {
+			log.Error().Err(err).Msg("failed to create block_text")
 			return nil, fmt.Errorf("failed to create block_text: %w", err)
 		}
 	}
 
 	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("failed to commit transaction")
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
@@ -78,6 +83,7 @@ func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, block
 }
 
 func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
 	r.Store.Mu.RLock()
 	defer r.Store.Mu.RUnlock()
 
@@ -108,9 +114,11 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		GROUP BY b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at, bt.text
 		ORDER BY b.position ASC
 	`
+	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
 
 	rows, err := r.Store.Postgres.DB.QueryContext(ctx, query, noteID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to query blocks")
 		return nil, fmt.Errorf("failed to query blocks: %w", err)
 	}
 	defer rows.Close()
@@ -133,6 +141,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 			&formatsJSON,
 		)
 		if err != nil {
+			log.Error().Err(err).Msg("failed to scan block")
 			return nil, fmt.Errorf("failed to scan block: %w", err)
 		}
 
@@ -143,7 +152,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		if len(formatsJSON) > 0 {
 			var formats []models.BlockTextFormat
 			if err := json.Unmarshal(formatsJSON, &formats); err != nil {
-				log.Warn().Err(err).Msg("Failed to unmarshal formats")
+				log.Warn().Err(err).Msg("failed to unmarshal formats")
 			} else {
 				block.Formats = formats
 			}
@@ -156,7 +165,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 }
 
 func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error) {
-
+	log := logger.FromContext(ctx)
 	r.Store.Mu.RLock()
 	defer r.Store.Mu.RUnlock()
 
@@ -167,6 +176,7 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 		LEFT JOIN block_text bt ON b.id = bt.block_id
 		WHERE b.id = $1
 	`
+	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockByID query")
 
 	block := &models.BlockWithContent{}
 	var text sql.NullString
@@ -182,9 +192,11 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Err(err).Uint64("block_id", blockID).Msg("block not found")
 		return nil, namederrors.ErrNotFound
 	}
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get block")
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
@@ -200,10 +212,11 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 			WHERE bt.block_id = $1
 			ORDER BY btf.start_offset
 		`
+		log.Info().Str("query", logger.SanitizeQuery(formatsQuery)).Uint64("block_id", blockID).Msg("Executing get formats query")
 
 		rows, err := r.Store.Postgres.DB.QueryContext(ctx, formatsQuery, blockID)
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to query formats")
+			log.Error().Err(err).Msg("failed to query formats")
 			return nil, fmt.Errorf("failed to query formats: %w", err)
 		}
 		defer rows.Close()
@@ -227,6 +240,7 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 				&format.Size,
 			)
 			if err != nil {
+				log.Error().Err(err).Msg("failed to scan format")
 				return nil, fmt.Errorf("failed to scan format: %w", err)
 			}
 
@@ -238,17 +252,17 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 		}
 
 		if err := rows.Err(); err != nil {
+			log.Error().Err(err).Msg("error iterating formats")
 			return nil, fmt.Errorf("error iterating formats: %w", err)
 		}
 
 		block.Formats = formats
 	}
-
-	log.Info().Uint64("block_id", blockID).Msg("GetBlockByID completed successfully")
 	return block, nil
 }
 
 func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
 	r.Store.Mu.Lock()
 
 	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
@@ -282,7 +296,7 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 	deleteFormatsQuery := `DELETE FROM block_text_format WHERE block_text_id = $1`
 	if _, err = tx.ExecContext(ctx, deleteFormatsQuery, blockTextID); err != nil {
 		r.Store.Mu.Unlock()
-		log.Error().Err(err).Uint64("block_id", blockID).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: delete old formats failed")
+		log.Error().Err(err).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: delete old formats failed")
 		return nil, fmt.Errorf("failed to delete old formats: %w", err)
 	}
 
@@ -300,7 +314,7 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 				blockTextID, f.StartOffset, f.EndOffset, f.Bold, f.Italic, f.Underline, f.Strikethrough, link, f.Font, f.Size,
 			); err != nil {
 				r.Store.Mu.Unlock()
-				log.Error().Err(err).Uint64("block_id", blockID).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: insert format failed")
+				log.Error().Err(err).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: insert format failed")
 				return nil, fmt.Errorf("failed to insert format: %w", err)
 			}
 		}
@@ -316,14 +330,14 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 
 	block, err := r.GetBlockByID(ctx, blockID)
 	if err != nil {
-		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: GetBlockByID failed")
+		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: GetBlockByID after update failed")
 		return nil, err
 	}
-	log.Info().Uint64("block_id", blockID).Msg("UpdateBlockText: success")
 	return block, nil
 }
 
 func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models.Block, error) {
+	log := logger.FromContext(ctx)
 	r.Store.Mu.Lock()
 	defer r.Store.Mu.Unlock()
 
@@ -333,6 +347,7 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
 		WHERE id = $3
 		RETURNING id, note_id, type, position, created_at, updated_at
 	`
+	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Float64("position", position).Msg("Executing UpdateBlockPosition query")
 
 	block := &models.Block{}
 	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, position, time.Now().UTC(), blockID).Scan(
@@ -345,9 +360,11 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Err(err).Uint64("block_id", blockID).Msg("block not found for position update")
 		return nil, namederrors.ErrNotFound
 	}
 	if err != nil {
+		log.Error().Err(err).Msg("failed to update block position")
 		return nil, fmt.Errorf("failed to update block position: %w", err)
 	}
 
@@ -355,42 +372,50 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
 }
 
 func (r *BlocksRepository) DeleteBlock(ctx context.Context, blockID uint64) error {
+	log := logger.FromContext(ctx)
 	r.Store.Mu.Lock()
 	defer r.Store.Mu.Unlock()
 
 	query := `DELETE FROM block WHERE id = $1`
+	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing DeleteBlock query")
 
 	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, blockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to delete block")
 		return fmt.Errorf("failed to delete block: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
 		return fmt.Errorf("failed to get rows affected: %w", err)
 	}
 
 	if rowsAffected == 0 {
+		log.Warn().Uint64("block_id", blockID).Msg("block not found for deletion")
 		return namederrors.ErrNotFound
 	}
 
-	log.Info().Uint64("block_id", blockID).Msg("Block deleted")
 	return nil
 }
 
 func (r *BlocksRepository) GetBlockNoteID(ctx context.Context, blockID uint64) (uint64, error) {
+	log := logger.FromContext(ctx)
 	r.Store.Mu.RLock()
 	defer r.Store.Mu.RUnlock()
 
 	query := `SELECT note_id FROM block WHERE id = $1`
+	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockNoteID query")
 
 	var noteID uint64
 	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, blockID).Scan(&noteID)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Err(err).Uint64("block_id", blockID).Msg("block not found, cannot get note_id")
 		return 0, namederrors.ErrNotFound
 	}
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get block note_id")
 		return 0, fmt.Errorf("failed to get block note_id: %w", err)
 	}
 
@@ -401,6 +426,7 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 	ID       uint64
 	Position float64
 }, error) {
+	log := logger.FromContext(ctx)
 	r.Store.Mu.RLock()
 	defer r.Store.Mu.RUnlock()
 
@@ -410,17 +436,19 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 		WHERE note_id = $1 AND id != $2
 		ORDER BY position
 	`
+	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteIDForPositionCalc query")
 
 	rows, err := r.Store.Postgres.DB.QueryContext(ctx, query, noteID, excludeBlockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to query blocks for position calc")
 		return nil, fmt.Errorf("failed to query blocks for position calc: %w", err)
 	}
 	defer rows.Close()
 
-	blocks := make([]struct {
+	var blocks []struct {
 		ID       uint64
 		Position float64
-	}, 0)
+	}
 
 	for rows.Next() {
 		var block struct {
@@ -428,6 +456,7 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 			Position float64
 		}
 		if err := rows.Scan(&block.ID, &block.Position); err != nil {
+			log.Error().Err(err).Msg("failed to scan block for position calc")
 			return nil, fmt.Errorf("failed to scan block: %w", err)
 		}
 		blocks = append(blocks, block)

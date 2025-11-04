@@ -2,3 +2,6 @@
 cover
 .env
 .DS_Store
+.vscode
+*.sh
+*.txt

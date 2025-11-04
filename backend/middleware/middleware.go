@@ -2,14 +2,20 @@ package middleware
 
 import (
 	"backend/apiutils"
+	"backend/logger"
 	"backend/store"
+	"bytes"
 	"context"
 	"errors"
+	"io"
+	"net"
 	"net/http"
 	"strconv"
+	"time"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/rs/zerolog/log"
+	"github.com/rs/zerolog"
 )
 
 type ctxKey string
@@ -40,7 +46,7 @@ func CORS(next http.Handler) http.Handler {
 		origin := r.Header.Get("Origin")
 		if allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
-			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
 			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
@@ -54,22 +60,108 @@ func CORS(next http.Handler) http.Handler {
 	})
 }
 
+func RequestIDMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := uuid.New().String()
+		baseLogger := logger.FromContext(r.Context())
+		reqLogger := baseLogger.With().Str("request_id", requestID).Logger()
+		ctx := logger.ToContext(r.Context(), reqLogger)
+		r = r.WithContext(ctx)
+		next.ServeHTTP(w, r)
+	})
+}
+
+type responseWriterInterceptor struct {
+	http.ResponseWriter
+	statusCode int
+}
+
+func (w *responseWriterInterceptor) WriteHeader(statusCode int) {
+	w.statusCode = statusCode
+	w.ResponseWriter.WriteHeader(statusCode)
+}
+
+func realIP(r *http.Request) string {
+	ip := r.Header.Get("X-Forwarded-For")
+	if ip == "" {
+		ip = r.Header.Get("X-Real-IP")
+	}
+	if ip == "" {
+		ip, _, _ = net.SplitHostPort(r.RemoteAddr)
+	}
+	return ip
+}
+
+const maxBodyLogSize = 1024
+
+func AccessLogMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		start := time.Now()
+		log := logger.FromContext(r.Context())
+
+		bodyBytes, _ := io.ReadAll(r.Body)
+		r.Body.Close()
+		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		wInt := &responseWriterInterceptor{ResponseWriter: w, statusCode: http.StatusOK}
+
+		defer func() {
+			duration := time.Since(start)
+			status := wInt.statusCode
+
+			var logEvent *zerolog.Event
+			msg := ""
+
+			switch {
+			case status >= 500:
+				logEvent = log.Error()
+				msg = "Server error"
+			case status >= 400:
+				logEvent = log.Info()
+				msg = "Client error"
+			default:
+				logEvent = log.Info()
+				msg = "Request processed successfully"
+			}
+
+			if len(bodyBytes) > 0 && len(bodyBytes) < maxBodyLogSize {
+				logEvent = logEvent.Bytes("body", bodyBytes)
+			}
+
+			logEvent.
+				Str("method", r.Method).
+				Str("remote_addr", r.RemoteAddr).
+				Str("url", r.URL.Path).
+				Dur("work_time", duration).
+				Int("status", status).
+				Str("user_agent", r.UserAgent()).
+				Str("host", r.Host).
+				Str("real_ip", realIP(r)).
+				Int64("content_length", r.ContentLength).
+				Str("start_time", start.Format(time.RFC3339)).
+				Str("duration_human", duration.String()).
+				Int64("duration_ms", duration.Milliseconds()).
+				Msg(msg)
+		}()
+
+		next.ServeHTTP(wInt, r)
+	})
+}
+
 func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, err := r.Cookie("session_id")
 			if errors.Is(err, http.ErrNoCookie) {
-				log.Info().Msg("no session cookie found in auth middleware")
 				apiutils.WriteError(w, http.StatusBadRequest, "no session cookie")
 				return
 			}
 			if err != nil {
-				log.Error().Err(err).Msg("error getting session cookie in auth middleware")
 				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
 				return
 			}
 
-			user, ok := s.GetUserBySession(session.Value)
+			user, ok := s.GetUserBySession(r.Context(), session.Value)
 			if !ok {
 				apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
 				return

@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"backend/apiutils"
+	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"backend/validation"
@@ -14,7 +15,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 const (
@@ -52,38 +52,47 @@ type updatePasswordRequest struct {
 }
 
 func (d *UserDelivery) Register(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	var req registerRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
+		log.Warn().Err(err).Msg("invalid json body for registration")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
 	if err = validation.ValidateStruct(req); err != nil {
+		log.Warn().Err(err).Msg("registration validation failed")
 		apiutils.WriteValidationError(w, http.StatusBadRequest, err)
 		return
 	}
 	if req.Password != req.ConfirmPassword {
+		log.Warn().Msg("passwords do not match during registration")
 		apiutils.WriteError(w, http.StatusBadRequest, "passwords do not match")
 		return
 	}
 
 	user, err := d.Usecase.RegisterUser(r.Context(), req.Email, req.Password)
 	if errors.Is(err, namederrors.ErrUserExists) {
+		log.Warn().Str("email", req.Email).Msg("user already exists")
 		apiutils.WriteError(w, http.StatusBadRequest, "user already exists")
 		return
 	}
 	if err != nil {
-		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprint("error registering user:", err))
+		log.Error().Err(err).Msg("error registering user")
+		apiutils.WriteError(w, http.StatusInternalServerError, "error registering user")
 		return
 	}
 
+	log.Info().Uint64("user_id", user.ID).Msg("user registered successfully")
 	apiutils.WriteJSON(w, http.StatusCreated, user)
 }
 
 func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	cookie, err := r.Cookie("session_id")
 	if errors.Is(err, http.ErrNoCookie) {
+		log.Info().Msg("no session cookie found, responding with null user")
 		apiutils.WriteJSON(w, http.StatusOK, nil)
 		return
 	}
@@ -97,12 +106,9 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 
 	user, err := d.Usecase.GetUserBySession(r.Context(), sessionID)
 	if err != nil {
-		if errors.Is(err, namederrors.ErrInvalidSession) {
-			apiutils.WriteJSON(w, http.StatusUnauthorized, nil)
-			return
-		}
-		if errors.Is(err, namederrors.ErrNotFound) {
-			apiutils.WriteJSON(w, http.StatusNotFound, nil)
+		if errors.Is(err, namederrors.ErrInvalidSession) || errors.Is(err, namederrors.ErrNotFound) {
+			log.Warn().Err(err).Msg("failed to get user by session, responding with null user")
+			apiutils.WriteJSON(w, http.StatusOK, nil)
 			return
 		}
 		log.Error().Err(err).Msg("error getting user by session")
@@ -114,8 +120,10 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 }
 
 func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	contentType := r.Header.Get("Content-Type")
 	if !strings.HasPrefix(contentType, "multipart/form-data") {
+		log.Warn().Str("content-type", contentType).Msg("invalid content type for profile update")
 		apiutils.WriteError(w, http.StatusBadRequest, "content type must be multipart/form-data")
 		return
 	}
@@ -123,20 +131,24 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	username, password, avatarFileID, err := d.parseMultipartForm(r)
 	if err != nil {
 		if errors.Is(err, namederrors.ErrInvalidFileType) {
+			log.Warn().Err(err).Msg("invalid file type for avatar")
 			apiutils.WriteError(w, http.StatusBadRequest, "invalid file type")
 			return
 		}
+		log.Error().Err(err).Msg("error parsing multipart form")
 		apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("error parsing multipart form: %v", err))
 		return
 	}
 
 	if username == nil && password == nil && avatarFileID == nil {
+		log.Warn().Msg("attempted to update profile with no fields provided")
 		apiutils.WriteError(w, http.StatusBadRequest, "at least one field must be provided")
 		return
 	}
 
 	if username != nil {
 		if len(*username) < MinUsernameLength || len(*username) > MaxUsernameLength {
+			log.Warn().Str("username", *username).Msg("invalid username length")
 			apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("username must be between %d and %d characters", MinUsernameLength, MaxUsernameLength))
 			return
 		}
@@ -145,6 +157,7 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	if password != nil {
 		passwordReq := updatePasswordRequest{Password: *password}
 		if err := validation.ValidateStruct(passwordReq); err != nil {
+			log.Warn().Err(err).Msg("password validation failed")
 			apiutils.WriteValidationError(w, http.StatusBadRequest, err)
 			return
 		}
@@ -153,26 +166,30 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 	user, err := d.Usecase.UpdateProfile(r.Context(), username, password, avatarFileID)
 	if err != nil {
 		if errors.Is(err, namederrors.ErrNotFound) {
+			log.Warn().Err(err).Msg("user not found for profile update")
 			apiutils.WriteError(w, http.StatusNotFound, "user not found")
 			return
 		}
 		log.Error().Err(err).Msg("error updating profile")
-		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("error updating profile: %v", err))
+		apiutils.WriteError(w, http.StatusInternalServerError, "error updating profile")
 		return
 	}
 
+	log.Info().Uint64("user_id", user.ID).Msg("profile updated successfully")
 	apiutils.WriteJSON(w, http.StatusOK, user)
 }
 
 func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	user, err := d.Usecase.GetProfile(r.Context())
 	if errors.Is(err, namederrors.ErrNotFound) {
+		log.Warn().Err(err).Msg("user not found when getting profile")
 		apiutils.WriteError(w, http.StatusNotFound, "user not found")
 		return
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("error getting profile")
-		apiutils.WriteError(w, http.StatusInternalServerError, fmt.Sprintf("error getting profile: %v", err))
+		apiutils.WriteError(w, http.StatusInternalServerError, "error getting profile")
 		return
 	}
 
@@ -180,6 +197,7 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *uint64, error) {
+	log := logger.FromContext(r.Context())
 	err := r.ParseMultipartForm(MaxAvatarFileSize)
 	if err != nil {
 		return nil, nil, nil, fmt.Errorf("error parsing multipart form: %w", err)
@@ -200,7 +218,7 @@ func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *u
 	file, header, err := r.FormFile("avatar")
 	if err == nil {
 		if header.Size > MaxAvatarFileSize {
-			return nil, nil, nil, fmt.Errorf("file size exceeds maximum allowed size of %d bytes", MaxAvatarFileSize)
+			return nil, nil, nil, fmt.Errorf("file size %d exceeds maximum allowed size of %d bytes", header.Size, MaxAvatarFileSize)
 		}
 
 		contentType := header.Header.Get("Content-Type")
@@ -210,7 +228,7 @@ func (d *UserDelivery) parseMultipartForm(r *http.Request) (*string, *string, *u
 
 		defer func() {
 			if err := file.Close(); err != nil {
-				log.Error().Err(err).Msg("Failed to close avatar file")
+				log.Error().Err(err).Msg("failed to close avatar file")
 			}
 		}()
 
