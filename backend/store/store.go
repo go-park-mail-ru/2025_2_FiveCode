@@ -74,7 +74,7 @@ func (s *Store) InitMinioStorage(conf *config.Config) error {
 		conf.Storages.Minio.Secure,
 	)
 	if err != nil {
-		return errors.New("Error to init Minio storage: " + err.Error())
+		return fmt.Errorf("error to init Minio storage: %w", err)
 	}
 
 	s.Minio = minioStorage

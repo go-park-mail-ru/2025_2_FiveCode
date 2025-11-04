@@ -27,15 +27,16 @@ func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, block
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("note_id", noteID).Str("type", string(blockType)).Float64("position", position).Msg("executing CreateBlock")
 
-	r.Store.Mu.Lock()
-	defer r.Store.Mu.Unlock()
-
 	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("CreateBlock: begin transaction failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Error().Err(err).Msg("CreateBlock: rollback failed")
+		}
+	}()
 
 	blockQuery := `
 		INSERT INTO block (note_id, type, position)
@@ -84,8 +85,6 @@ func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, block
 
 func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.RLock()
-	defer r.Store.Mu.RUnlock()
 
 	query := `
 		SELECT b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
@@ -121,7 +120,11 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		log.Error().Err(err).Msg("failed to query blocks")
 		return nil, fmt.Errorf("failed to query blocks: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
 
 	blocks := make([]models.BlockWithContent, 0)
 
@@ -166,8 +169,6 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 
 func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.RLock()
-	defer r.Store.Mu.RUnlock()
 
 	query := `
 		SELECT b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
@@ -219,7 +220,11 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 			log.Error().Err(err).Msg("failed to query formats")
 			return nil, fmt.Errorf("failed to query formats: %w", err)
 		}
-		defer rows.Close()
+		defer func() {
+			if err := rows.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close rows")
+			}
+		}()
 
 		formats := make([]models.BlockTextFormat, 0)
 		for rows.Next() {
@@ -263,19 +268,20 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 
 func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.Lock()
 
 	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
 	if err != nil {
-		r.Store.Mu.Unlock()
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: begin tx failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Error().Err(err).Msg("CreateBlock: rollback failed")
+		}
+	}()
 
 	updateBlockQuery := `UPDATE block SET updated_at = $1 WHERE id = $2`
 	if _, err = tx.ExecContext(ctx, updateBlockQuery, time.Now().UTC(), blockID); err != nil {
-		r.Store.Mu.Unlock()
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: update block timestamp failed")
 		return nil, fmt.Errorf("failed to update block timestamp: %w", err)
 	}
@@ -288,14 +294,12 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 		RETURNING id
 	`
 	if err = tx.QueryRowContext(ctx, updateTextQuery, text, time.Now().UTC(), blockID).Scan(&blockTextID); err != nil {
-		r.Store.Mu.Unlock()
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: update block_text failed")
 		return nil, fmt.Errorf("failed to update block_text: %w", err)
 	}
 
 	deleteFormatsQuery := `DELETE FROM block_text_format WHERE block_text_id = $1`
 	if _, err = tx.ExecContext(ctx, deleteFormatsQuery, blockTextID); err != nil {
-		r.Store.Mu.Unlock()
 		log.Error().Err(err).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: delete old formats failed")
 		return nil, fmt.Errorf("failed to delete old formats: %w", err)
 	}
@@ -321,12 +325,9 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 	}
 
 	if err = tx.Commit(); err != nil {
-		r.Store.Mu.Unlock()
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: commit failed")
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
-
-	r.Store.Mu.Unlock()
 
 	block, err := r.GetBlockByID(ctx, blockID)
 	if err != nil {
@@ -338,8 +339,6 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 
 func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.Lock()
-	defer r.Store.Mu.Unlock()
 
 	query := `
 		UPDATE block
@@ -373,8 +372,6 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
 
 func (r *BlocksRepository) DeleteBlock(ctx context.Context, blockID uint64) error {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.Lock()
-	defer r.Store.Mu.Unlock()
 
 	query := `DELETE FROM block WHERE id = $1`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing DeleteBlock query")
@@ -401,8 +398,6 @@ func (r *BlocksRepository) DeleteBlock(ctx context.Context, blockID uint64) erro
 
 func (r *BlocksRepository) GetBlockNoteID(ctx context.Context, blockID uint64) (uint64, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.RLock()
-	defer r.Store.Mu.RUnlock()
 
 	query := `SELECT note_id FROM block WHERE id = $1`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockNoteID query")
@@ -427,8 +422,6 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 	Position float64
 }, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.RLock()
-	defer r.Store.Mu.RUnlock()
 
 	query := `
 		SELECT id, position
@@ -443,7 +436,11 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 		log.Error().Err(err).Msg("failed to query blocks for position calc")
 		return nil, fmt.Errorf("failed to query blocks for position calc: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
 
 	var blocks []struct {
 		ID       uint64

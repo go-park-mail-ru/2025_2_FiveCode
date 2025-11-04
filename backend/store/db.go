@@ -22,11 +22,11 @@ func NewPostgresDB(host string, port int, user, password, dbname, sslmode string
 
 	db, err := sql.Open("postgres", dsn)
 	if err != nil {
-		return nil, errors.New("Error connecting to Postgres database: " + err.Error())
+		return nil, fmt.Errorf("error connecting to Postgres database: %w", err)
 	}
 
 	if err := db.Ping(); err != nil {
-		return nil, errors.New("failed to ping database: " + err.Error())
+		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
 	return &PostgresDB{DB: db}, nil

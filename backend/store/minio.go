@@ -2,7 +2,6 @@ package store
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"mime/multipart"
 	"os"
@@ -23,7 +22,7 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 		Secure: secure,
 	})
 	if err != nil {
-		return nil, errors.New("failed to create minio client:" + err.Error())
+		return nil, fmt.Errorf("failed to create minio client: %w", err)
 	}
 
 	storage := &MinioStorage{
@@ -66,4 +65,9 @@ func (s *MinioStorage) DeleteImg(bucketName, fileName string) error {
 func (s *MinioStorage) GetFileURL(fileName string) string {
 	endpoint := s.client.EndpointURL().String()
 	return fmt.Sprintf("%s/%s/%s", endpoint, defaultBucketName, fileName)
+}
+
+// GetClient возвращает MinIO клиента (правильная сигнатура)
+func (s *MinioStorage) GetClient() *minio.Client {
+	return s.client
 }

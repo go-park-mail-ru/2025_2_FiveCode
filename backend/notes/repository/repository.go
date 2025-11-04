@@ -24,8 +24,6 @@ func NewNotesRepository(store *store.Store) *NotesRepository {
 
 func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.RLock()
-	defer r.Store.Mu.RUnlock()
 
 	query := `
 		SELECT id, owner_id, parent_note_id, title, icon_file_id,
@@ -41,7 +39,11 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 		log.Error().Err(err).Msg("failed to list notes")
 		return nil, fmt.Errorf("failed to list notes: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
 
 	notes := make([]models.Note, 0)
 
@@ -87,8 +89,6 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 
 func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.Lock()
-	defer r.Store.Mu.Unlock()
 
 	query := `
 		INSERT INTO note (owner_id, title, is_archived, is_shared)
@@ -137,8 +137,6 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 
 func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.RLock()
-	defer r.Store.Mu.RUnlock()
 
 	query := `
 		SELECT id, owner_id, parent_note_id, title, icon_file_id,
@@ -188,8 +186,6 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64) (*mode
 
 func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.Lock()
-	defer r.Store.Mu.Unlock()
 
 	checkQuery := `SELECT 1 FROM note WHERE id = $1 AND deleted_at IS NULL`
 	log.Info().Str("query", logger.SanitizeQuery(checkQuery)).Uint64("note_id", noteID).Msg("Executing check note existence query")
@@ -260,8 +256,6 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 
 func (r *NotesRepository) DeleteNote(ctx context.Context, noteID uint64) error {
 	log := logger.FromContext(ctx)
-	r.Store.Mu.Lock()
-	defer r.Store.Mu.Unlock()
 
 	query := `DELETE FROM note WHERE id = $1`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing DeleteNote query")

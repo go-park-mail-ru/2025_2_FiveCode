@@ -8,6 +8,9 @@ import (
 	blocksRepository "backend/blocks/repository"
 	blocksUsecase "backend/blocks/usecase"
 	"backend/config"
+	fileDelivery "backend/file/delivery"
+	fileRepository "backend/file/repository"
+	fileUsecase "backend/file/usecase"
 	notesDelivery "backend/notes/delivery"
 	notesRepository "backend/notes/repository"
 	notesUsecase "backend/notes/usecase"
@@ -22,10 +25,10 @@ import (
 type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
+	Register(w http.ResponseWriter, r *http.Request)
 }
 
 type UserDeliveryInterface interface {
-	Register(w http.ResponseWriter, r *http.Request)
 	GetProfile(w http.ResponseWriter, r *http.Request)
 	GetProfileBySession(w http.ResponseWriter, r *http.Request)
 	UpdateProfile(w http.ResponseWriter, r *http.Request)
@@ -48,11 +51,18 @@ type BlocksDeliveryInterface interface {
 	UpdateBlockPosition(w http.ResponseWriter, r *http.Request)
 }
 
+type FileDeliveryInterface interface {
+	UploadFile(w http.ResponseWriter, r *http.Request)
+	GetFile(w http.ResponseWriter, r *http.Request)
+	DeleteFile(w http.ResponseWriter, r *http.Request)
+}
+
 type Deliveries struct {
 	AuthDelivery   AuthDeliveryInterface
 	UserDelivery   UserDeliveryInterface
 	NotesDelivery  NotesDeliveryInterface
 	BlocksDelivery BlocksDeliveryInterface
+	FileDelivery   FileDeliveryInterface
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
@@ -73,6 +83,10 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	blocksR := blocksRepository.NewBlocksRepository(s)
 	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR, notesR)
 	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
+
+	fileRepo := fileRepository.NewFileRepository(s)
+	fileUC := fileUsecase.NewFileUsecase(fileRepo)
+	layers.FileDelivery = fileDelivery.NewFileDelivery(fileUC)
 
 	return layers
 }

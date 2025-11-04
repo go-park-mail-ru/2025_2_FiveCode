@@ -1,14 +1,17 @@
 package repository
 
 import (
-	"context"
-	"fmt"
-	"io"
-
 	"backend/logger"
 	"backend/middleware"
 	"backend/models"
+	namederrors "backend/named_errors"
 	"backend/store"
+	"context"
+	"database/sql"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
 )
 
 type UserRepository struct {
@@ -21,83 +24,141 @@ func NewUserRepository(store *store.Store) *UserRepository {
 	}
 }
 
-func (r *UserRepository) CreateUser(ctx context.Context, email string, password string) (*models.User, error) {
-	log := logger.FromContext(ctx)
-	log.Info().Str("email", email).Msg("creating user in store")
-	user, err := r.Store.CreateUser(email, password)
-	if err != nil {
-		log.Error().Err(err).Str("email", email).Msg("failed to create user in store")
-		return nil, fmt.Errorf("failed to create user: %w", err)
-	}
-	return user, nil
-}
-
 func (r *UserRepository) UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
 	log := logger.FromContext(ctx)
+
 	userID, ok := middleware.GetUserID(ctx)
 	if !ok {
 		log.Error().Msg("user not authenticated in repository layer")
 		return nil, fmt.Errorf("user not authenticated")
 	}
-	log.Info().Uint64("user_id", userID).Msg("updating user profile in store")
-	user, err := r.Store.UpdateUserProfile(userID, username, password, avatarFileID)
+
+	log.Info().Uint64("user_id", userID).Msg("updating user profile in PostgreSQL")
+
+	setClauses := make([]string, 0)
+	args := make([]interface{}, 0)
+	argPos := 1
+
+	if username != nil {
+		setClauses = append(setClauses, fmt.Sprintf("username = $%d", argPos))
+		args = append(args, *username)
+		argPos++
+	}
+
+	if password != nil {
+		setClauses = append(setClauses, fmt.Sprintf("password_hash = $%d", argPos))
+		args = append(args, *password)
+		argPos++
+	}
+
+	if avatarFileID != nil {
+		setClauses = append(setClauses, fmt.Sprintf("avatar_file_id = $%d", argPos))
+		args = append(args, *avatarFileID)
+		argPos++
+	}
+
+	setClauses = append(setClauses, fmt.Sprintf("updated_at = $%d", argPos))
+	args = append(args, time.Now().UTC())
+	argPos++
+
+	args = append(args, userID)
+
+	query := fmt.Sprintf(`
+		UPDATE "user"
+		SET %s
+		WHERE id = $%d
+		RETURNING id, email, password_hash, username, avatar_file_id, created_at, updated_at
+	`, strings.Join(setClauses, ", "), argPos)
+
+	user := &models.User{}
+	var avatarFileIDResult sql.NullInt64
+	var updatedAt sql.NullTime
+
+	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, args...).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Password,
+		&user.Username,
+		&avatarFileIDResult,
+		&user.CreatedAt,
+		&updatedAt,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Uint64("user_id", userID).Msg("user not found")
+		return nil, namederrors.ErrNotFound
+	}
 	if err != nil {
-		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to update profile in store")
+		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to update profile in PostgreSQL")
 		return nil, fmt.Errorf("failed to update profile: %w", err)
 	}
+
+	if avatarFileIDResult.Valid {
+		val := uint64(avatarFileIDResult.Int64)
+		user.AvatarFileID = &val
+	}
+	if updatedAt.Valid {
+		user.UpdatedAt = &updatedAt.Time
+	}
+
+	log.Info().Uint64("user_id", userID).Msg("profile updated successfully")
 	return user, nil
 }
 
 func (r *UserRepository) GetProfile(ctx context.Context) (*models.User, error) {
 	log := logger.FromContext(ctx)
+
 	userID, ok := middleware.GetUserID(ctx)
 	if !ok {
 		log.Error().Msg("user not authenticated in repository layer")
 		return nil, fmt.Errorf("user not authenticated")
 	}
-	log.Info().Uint64("user_id", userID).Msg("getting user profile from store")
-	user, err := r.Store.GetUserByID(userID)
-	if err != nil {
-		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to get profile from store")
-		return nil, fmt.Errorf("failed to get profile: %w", err)
-	}
-	return user, nil
+
+	log.Info().Uint64("user_id", userID).Msg("getting user profile from PostgreSQL")
+
+	return r.GetUserByID(ctx, userID)
 }
 
 func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*models.User, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Uint64("user_id", userID).Msg("getting user by id from store")
-	user, err := r.Store.GetUserByID(userID)
+	log.Info().Uint64("user_id", userID).Msg("getting user by id from PostgreSQL")
+
+	query := `
+		SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at
+		FROM "user"
+		WHERE id = $1
+	`
+
+	user := &models.User{}
+	var avatarFileID sql.NullInt64
+	var updatedAt sql.NullTime
+
+	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, userID).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Password,
+		&user.Username,
+		&avatarFileID,
+		&user.CreatedAt,
+		&updatedAt,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Uint64("user_id", userID).Msg("user not found")
+		return nil, namederrors.ErrNotFound
+	}
 	if err != nil {
-		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to get user from store")
+		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to get user from PostgreSQL")
 		return nil, fmt.Errorf("failed to get user: %w", err)
 	}
+
+	if avatarFileID.Valid {
+		val := uint64(avatarFileID.Int64)
+		user.AvatarFileID = &val
+	}
+	if updatedAt.Valid {
+		user.UpdatedAt = &updatedAt.Time
+	}
+
 	return user, nil
-}
-
-func (r *UserRepository) UploadAndSaveFile(ctx context.Context, file io.Reader, filename, contentType string, size int64, width, height int) (*models.File, error) {
-	log := logger.FromContext(ctx)
-	log.Info().Str("filename", filename).Msg("uploading file to minio")
-	url, err := r.Store.UploadFileToMinIO(ctx, filename, file, size, contentType)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to upload file to MinIO")
-		return nil, fmt.Errorf("failed to upload file to MinIO: %w", err)
-	}
-
-	fileModel := &models.File{
-		URL:       url,
-		MimeType:  contentType,
-		SizeBytes: size,
-		Width:     &width,
-		Height:    &height,
-	}
-
-	log.Info().Str("filename", filename).Msg("saving file metadata to store")
-	savedFile, err := r.Store.SaveFile(fileModel)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to save file metadata")
-		return nil, fmt.Errorf("failed to save file: %w", err)
-	}
-
-	return savedFile, nil
 }

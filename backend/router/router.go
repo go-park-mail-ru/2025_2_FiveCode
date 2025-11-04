@@ -19,7 +19,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	api := r.PathPrefix("/api").Subrouter()
 
 	api.HandleFunc("/login", deliveries.AuthDelivery.Login).Methods("POST")
-	api.HandleFunc("/register", deliveries.UserDelivery.Register).Methods("POST")
+	api.HandleFunc("/register", deliveries.AuthDelivery.Register).Methods("POST")
 	api.HandleFunc("/logout", deliveries.AuthDelivery.Logout).Methods("POST")
 	api.HandleFunc("/session", deliveries.UserDelivery.GetProfileBySession).Methods("GET")
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
@@ -45,6 +45,11 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	blocks.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.UpdateBlock).Methods("PATCH")
 	blocks.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.DeleteBlock).Methods("DELETE")
 	blocks.HandleFunc("/blocks/{block_id}/position", deliveries.BlocksDelivery.UpdateBlockPosition).Methods("PUT")
+
+	filesRouter := r.PathPrefix("/api/files").Subrouter()
+	filesRouter.HandleFunc("/upload", deliveries.FileDelivery.UploadFile).Methods("POST")
+	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.GetFile).Methods("GET")
+	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.DeleteFile).Methods("DELETE")
 
 	return mw.CORS(r)
 }

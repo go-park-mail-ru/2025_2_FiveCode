@@ -1,61 +1,110 @@
-package Usecase
+package usecase
 
 import (
 	"backend/logger"
 	"backend/models"
+	namederrors "backend/named_errors"
 	"context"
 	"fmt"
 
 	"golang.org/x/crypto/bcrypt"
 )
 
-type AuthRepository interface {
-	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
-	CreateSession(ctx context.Context, userID uint64) (string, error)
-	DeleteSession(ctx context.Context, sessionID string) error
-	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
-}
-
 type AuthUsecase struct {
 	Repository AuthRepository
 }
 
-func NewAuthUsecase(repository AuthRepository) *AuthUsecase {
-	return &AuthUsecase{Repository: repository}
+type AuthRepository interface {
+	CreateSession(ctx context.Context, userID uint64) (string, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	DeleteSession(ctx context.Context, sessionID string) error
+	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
+	CreateUser(ctx context.Context, email, passwordHash string) (*models.User, error)
+	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
 }
 
-func (uc *AuthUsecase) Login(ctx context.Context, email string, password string) (*models.User, string, error) {
+func NewAuthUsecase(Repository AuthRepository) *AuthUsecase {
+	return &AuthUsecase{
+		Repository: Repository,
+	}
+}
+
+func (u *AuthUsecase) Login(ctx context.Context, email, password string) (*models.User, string, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Str("email", email).Msg("user login attempt")
 
-	user, err := uc.Repository.GetUserByEmail(ctx, email)
+	user, err := u.Repository.GetUserByEmail(ctx, email)
 	if err != nil {
-		log.Error().Err(err).Str("email", email).Msg("failed to get user by email")
-		return nil, "", fmt.Errorf("failed to get user by email: %w", err)
+		log.Warn().Str("email", email).Msg("user not found")
+		return nil, "", namederrors.ErrInvalidEmailOrPassword
 	}
 
-	err = bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password))
-	if err != nil {
-		log.Warn().Str("email", email).Msg("wrong password provided")
-		return nil, "", fmt.Errorf("wrong password: %w", err)
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
+		log.Warn().Str("email", email).Msg("invalid password")
+		return nil, "", namederrors.ErrInvalidEmailOrPassword
 	}
 
-	sessionID, err := uc.Repository.CreateSession(ctx, user.ID)
+	sessionID, err := u.Repository.CreateSession(ctx, user.ID)
 	if err != nil {
-		log.Error().Err(err).Uint64("user_id", user.ID).Msg("failed to create session")
+		log.Error().Err(err).Msg("failed to create session")
 		return nil, "", fmt.Errorf("failed to create session: %w", err)
 	}
 
+	log.Info().Uint64("user_id", user.ID).Msg("user logged in successfully")
 	return user, sessionID, nil
 }
 
-func (uc *AuthUsecase) Logout(ctx context.Context, sessionID string) error {
+func (u *AuthUsecase) Register(ctx context.Context, email, password string) (*models.User, string, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Msg("user logout attempt")
-	err := uc.Repository.DeleteSession(ctx, sessionID)
+	log.Info().Str("email", email).Msg("user registration attempt")
+
+	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to delete session")
-		return fmt.Errorf("failed to delete session: %w", err)
+		log.Error().Err(err).Msg("failed to hash password")
+		return nil, "", fmt.Errorf("failed to hash password: %w", err)
 	}
+
+	user, err := u.Repository.CreateUser(ctx, email, string(hashedPassword))
+	if err != nil {
+		log.Error().Err(err).Str("email", email).Msg("failed to create user")
+		return nil, "", err
+	}
+
+	sessionID, err := u.Repository.CreateSession(ctx, user.ID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create session")
+		return nil, "", fmt.Errorf("failed to create session: %w", err)
+	}
+
+	log.Info().Uint64("user_id", user.ID).Msg("user registered successfully")
+	return user, sessionID, nil
+}
+
+func (u *AuthUsecase) Logout(ctx context.Context, sessionID string) error {
+	log := logger.FromContext(ctx)
+	log.Info().Str("session_id", sessionID).Msg("user logout")
+
+	if err := u.Repository.DeleteSession(ctx, sessionID); err != nil {
+		log.Error().Err(err).Msg("failed to delete session")
+		return fmt.Errorf("failed to logout: %w", err)
+	}
+
 	return nil
+}
+
+func (u *AuthUsecase) GetUserBySession(ctx context.Context, sessionID string) (*models.User, error) {
+	log := logger.FromContext(ctx)
+
+	userID, err := u.Repository.GetUserIDBySession(ctx, sessionID)
+	if err != nil {
+		return nil, err
+	}
+
+	user, err := u.Repository.GetUserByID(ctx, userID)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to get user by id")
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	return user, nil
 }

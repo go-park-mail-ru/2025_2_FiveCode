@@ -1,4 +1,4 @@
-package Delivery
+package delivery
 
 import (
 	"backend/apiutils"
@@ -21,6 +21,7 @@ type AuthDelivery struct {
 
 type AuthUsecase interface {
 	Login(ctx context.Context, email string, password string) (*models.User, string, error)
+	Register(ctx context.Context, email string, password string) (*models.User, string, error) // ← Добавить
 	Logout(ctx context.Context, sessionID string) error
 }
 
@@ -36,8 +37,21 @@ type loginRequest struct {
 	Password string `json:"password" valid:"required,password"`
 }
 
+type registerRequest struct {
+	Email           string `json:"email" valid:"required,email"`
+	Password        string `json:"password" valid:"required,password"`
+	ConfirmPassword string `json:"confirm_password" valid:"required,password"`
+}
+
 func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
+
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close request body")
+		}
+	}()
+
 	var req loginRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
@@ -70,7 +84,66 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, session)
 
 	log.Info().Uint64("user_id", user.ID).Msg("user logged in successfully")
-	apiutils.WriteJSON(w, http.StatusOK, user)
+	apiutils.WriteJSON(w, http.StatusOK, map[string]interface{}{
+		"user": user,
+	})
+}
+
+func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close request body")
+		}
+	}()
+
+	var req registerRequest
+	err := json.NewDecoder(r.Body).Decode(&req)
+	if err != nil {
+		log.Warn().Err(err).Msg("invalid json body for registration")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid json")
+		return
+	}
+
+	if err := validation.ValidateStruct(req); err != nil {
+		log.Warn().Err(err).Msg("validation failed")
+		apiutils.WriteValidationError(w, http.StatusBadRequest, err)
+		return
+	}
+
+	if req.Password != req.ConfirmPassword {
+		log.Warn().Msg("passwords do not match")
+		apiutils.WriteError(w, http.StatusBadRequest, "passwords do not match")
+		return
+	}
+
+	user, sessionID, err := d.Usecase.Register(r.Context(), req.Email, req.Password)
+	if errors.Is(err, namederrors.ErrUserExists) {
+		log.Warn().Str("email", req.Email).Msg("user already exists")
+		apiutils.WriteError(w, http.StatusBadRequest, "user already exists")
+		return
+	}
+	if err != nil {
+		log.Error().Err(err).Str("email", req.Email).Msg("registration failed")
+		apiutils.WriteError(w, http.StatusInternalServerError, "registration failed")
+		return
+	}
+
+	expiration := time.Now().Add(d.SessionDuration)
+	session := &http.Cookie{
+		Name:     "session_id",
+		Value:    sessionID,
+		Path:     "/",
+		Expires:  expiration,
+		HttpOnly: true,
+	}
+	http.SetCookie(w, session)
+
+	log.Info().Uint64("user_id", user.ID).Msg("user registered successfully")
+	apiutils.WriteJSON(w, http.StatusCreated, map[string]interface{}{
+		"user": user,
+	})
 }
 
 func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
