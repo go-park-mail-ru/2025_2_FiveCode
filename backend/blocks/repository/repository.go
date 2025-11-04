@@ -23,138 +23,64 @@ func NewBlocksRepository(store *store.Store) *BlocksRepository {
 	}
 }
 
-func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, blockType models.BlockType, position float64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
-	log.Info().
-		Uint64("note_id", noteID).
-		Float64("position", position).
-		Uint64("user_id", userID).
-		Msg("CreateTextBlock: begin")
+	log.Info().Uint64("note_id", noteID).Str("type", string(blockType)).Float64("position", position).Msg("executing CreateBlock")
 
 	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("CreateTextBlock: begin tx failed")
+		log.Error().Err(err).Msg("CreateBlock: begin transaction failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil {
-			log.Error().Err(err).Msg("CreateTextBlock: rollback failed")
+			log.Error().Err(err).Msg("CreateBlock: rollback failed")
 		}
 	}()
 
-	insertBlockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by)
-		VALUES ($1, 'text', $2, $3)
+	blockQuery := `
+		INSERT INTO block (note_id, type, position)
+		VALUES ($1, $2, $3)
 		RETURNING id, note_id, type, position, created_at, updated_at, last_edited_by
 	`
-	log.Info().Str("query", logger.SanitizeQuery(insertBlockQuery)).Msg("CreateTextBlock: insert block")
+	log.Info().Str("query", logger.SanitizeQuery(blockQuery)).Msg("Executing insert block query")
 
-	var blk models.Block
+	block := &models.Block{}
 	var lastEditedBy sql.NullInt64
 
-	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(
-		&blk.ID,
-		&blk.NoteID,
-		&blk.Type,
-		&blk.Position,
-		&blk.CreatedAt,
-		&blk.UpdatedAt,
+	err = tx.QueryRowContext(ctx, blockQuery, noteID, blockType, position).Scan(
+		&block.ID,
+		&block.NoteID,
+		&block.Type,
+		&block.Position,
+		&block.CreatedAt,
+		&block.UpdatedAt,
 		&lastEditedBy,
-	); err != nil {
-		log.Error().Err(err).Msg("CreateTextBlock: insert block failed")
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create block")
 		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
-	insertTextQuery := `
-		INSERT INTO block_text (block_id, text)
-		VALUES ($1, $2)
-	`
-	log.Info().Str("query", logger.SanitizeQuery(insertTextQuery)).Msg("CreateTextBlock: insert block_text")
-
-	if _, err := tx.ExecContext(ctx, insertTextQuery, blk.ID, ""); err != nil {
-		log.Error().Err(err).Uint64("block_id", blk.ID).Msg("CreateTextBlock: insert block_text failed")
-		return nil, fmt.Errorf("failed to create block_text: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("CreateTextBlock: commit failed")
-		return nil, fmt.Errorf("failed to commit transaction: %w", err)
-	}
-
-	res, err := r.GetBlockByID(ctx, blk.ID)
-	if err != nil {
-		log.Error().Err(err).Uint64("block_id", blk.ID).Msg("CreateTextBlock: GetBlockByID after create failed")
-		return nil, err
-	}
-	return res, nil
-}
-
-func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error) {
-	log := logger.FromContext(ctx)
-	log.Info().
-		Uint64("note_id", noteID).
-		Float64("position", position).
-		Uint64("file_id", fileID).
-		Uint64("user_id", userID).
-		Msg("CreateAttachmentBlock: begin")
-
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
-	if err != nil {
-		log.Error().Err(err).Msg("CreateAttachmentBlock: begin tx failed")
-		return nil, fmt.Errorf("failed to begin transaction: %w", err)
-	}
-	defer func() {
-		if err := tx.Rollback(); err != nil {
-			log.Error().Err(err).Msg("CreateAttachmentBlock: rollback failed")
+	if blockType == models.BlockTypeText {
+		textQuery := `
+			INSERT INTO block_text (block_id, text)
+			VALUES ($1, $2)
+		`
+		log.Info().Str("query", logger.SanitizeQuery(textQuery)).Msg("Executing insert block_text query")
+		_, err = tx.ExecContext(ctx, textQuery, block.ID, "")
+		if err != nil {
+			log.Error().Err(err).Msg("failed to create block_text")
+			return nil, fmt.Errorf("failed to create block_text: %w", err)
 		}
-	}()
-
-	insertBlockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by)
-		VALUES ($1, 'attachment', $2, $3)
-		RETURNING id, note_id, type, position, created_at, updated_at, last_edited_by
-	`
-	log.Info().Str("query", logger.SanitizeQuery(insertBlockQuery)).Msg("CreateAttachmentBlock: insert block")
-
-	var blk models.Block
-	var lastEditedBy sql.NullInt64
-
-	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(
-		&blk.ID,
-		&blk.NoteID,
-		&blk.Type,
-		&blk.Position,
-		&blk.CreatedAt,
-		&blk.UpdatedAt,
-		&lastEditedBy,
-	); err != nil {
-		log.Error().Err(err).Msg("CreateAttachmentBlock: insert block failed")
-		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
-	insertAttachQuery := `
-		INSERT INTO block_attachment (block_id, file_id, caption, created_at, updated_at)
-		VALUES ($1, $2, NULL, $3, $3)
-	`
-	now := time.Now().UTC()
-	log.Info().Str("query", logger.SanitizeQuery(insertAttachQuery)).Msg("CreateAttachmentBlock: insert block_attachment")
-
-	if _, err := tx.ExecContext(ctx, insertAttachQuery, blk.ID, fileID, now); err != nil {
-		log.Error().Err(err).Uint64("block_id", blk.ID).Msg("CreateAttachmentBlock: insert block_attachment failed")
-		return nil, fmt.Errorf("failed to create block_attachment: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("CreateAttachmentBlock: commit failed")
+	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("failed to commit transaction")
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	res, err := r.GetBlockByID(ctx, blk.ID)
-	if err != nil {
-		log.Error().Err(err).Uint64("block_id", blk.ID).Msg("CreateAttachmentBlock: GetBlockByID after create failed")
-		return nil, err
-	}
-	return res, nil
+	return block, nil
 }
 
 func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
