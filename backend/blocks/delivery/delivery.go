@@ -8,7 +8,6 @@ import (
 	namederrors "backend/named_errors"
 	"context"
 	"encoding/json"
-	"io"
 	"net/http"
 	"strconv"
 
@@ -16,13 +15,12 @@ import (
 )
 
 type BlocksUsecase interface {
+	CreateBlock(ctx context.Context, userID, noteID uint64, afterBlockID *uint64) (*models.Block, error)
 	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.BlockWithContent, error)
 	GetBlock(ctx context.Context, userID, blockID uint64) (*models.BlockWithContent, error)
 	UpdateBlock(ctx context.Context, userID, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error)
 	DeleteBlock(ctx context.Context, userID, blockID uint64) error
 	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, afterBlockID *uint64) (*models.Block, error)
-	CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error)
-	CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.BlockWithContent, error)
 }
 
 type BlocksDelivery struct {
@@ -35,96 +33,45 @@ func NewBlocksDelivery(usecase BlocksUsecase) *BlocksDelivery {
 	}
 }
 
-type baseCreateBlockRequest struct {
-	Type          models.BlockType `json:"type"`
-	BeforeBlockID *uint64          `json:"before_block_id,omitempty"`
+type CreateBlockRequest struct {
+	BeforeBlockID *uint64 `json:"before_block_id"`
 }
 
 func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
-
 	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
 	if err != nil {
 		log.Warn().Err(err).Str("note_id", vars["note_id"]).Msg("invalid note id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
 		return
 	}
+
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
+
 	defer func() {
 		if err := r.Body.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close body")
+			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
-
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // ограничим, например, 1 МБ
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to read body")
-		apiutils.WriteError(w, http.StatusBadRequest, "failed to read body")
-		return
-	}
-
-	var base baseCreateBlockRequest
-	if err := apiutils.StrictUnmarshal(body, &base); err != nil {
-		log.Warn().Err(err).Msg("invalid request (type)")
+	var req CreateBlockRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid request body")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	switch base.Type {
-	case models.BlockTypeText:
-		d.createTextBlock(w, r, userID, noteID, body)
-	case models.BlockTypeAttachment:
-		d.createAttachmentBlock(w, r, userID, noteID, body)
-	default:
-		apiutils.WriteError(w, http.StatusBadRequest, "unsupported block type")
-	}
-}
-
-type createTextBlockRequest struct {
-	baseCreateBlockRequest
-}
-
-func (d *BlocksDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
-	var req createTextBlockRequest
-	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
-		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for text")
-		return
-	}
-
-	block, err := d.Usecase.CreateTextBlock(r.Context(), userID, noteID, req.BeforeBlockID)
+	block, err := d.Usecase.CreateBlock(r.Context(), userID, noteID, req.BeforeBlockID)
 	if err != nil {
 		handleBlockError(w, r.Context(), err)
 		return
 	}
-	apiutils.WriteJSON(w, http.StatusCreated, block)
-}
 
-type createAttachmentBlockRequest struct {
-	baseCreateBlockRequest
-	FileID uint64 `json:"file_id"`
-}
-
-func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
-	var req createAttachmentBlockRequest
-	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
-		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for attachment")
-		return
-	}
-	if req.FileID == 0 {
-		apiutils.WriteError(w, http.StatusBadRequest, "file_id is required")
-		return
-	}
-	block, err := d.Usecase.CreateAttachmentBlock(r.Context(), userID, noteID, req.BeforeBlockID, req.FileID)
-	if err != nil {
-		handleBlockError(w, r.Context(), err)
-		return
-	}
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
