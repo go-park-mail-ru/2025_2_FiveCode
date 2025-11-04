@@ -1,6 +1,7 @@
 package apiutils
 
 import (
+	"bytes"
 	"encoding/json"
 	"net/http"
 	"strings"
@@ -83,4 +84,10 @@ func GetInt(val *int, def int) int {
 		return *val
 	}
 	return def
+}
+
+func StrictUnmarshal(data []byte, v any) error {
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	return dec.Decode(v)
 }
