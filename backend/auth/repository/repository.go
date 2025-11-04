@@ -11,8 +11,6 @@ import (
 	"fmt"
 	"strings"
 	"time"
-
-	"github.com/google/uuid"
 )
 
 type AuthRepository struct {
@@ -25,18 +23,20 @@ func NewAuthRepository(store *store.Store) *AuthRepository {
 
 func (r *AuthRepository) CreateSession(ctx context.Context, userID uint64) (string, error) {
 	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Msg("creating session via redis store")
+	return r.Store.Redis.CreateSession(ctx, userID, 30*24*time.Hour)
+}
 
-	sessionID := uuid.NewString()
+func (r *AuthRepository) DeleteSession(ctx context.Context, sessionID string) error {
+	log := logger.FromContext(ctx)
+	log.Info().Str("session_id", sessionID).Msg("deleting session via redis store")
+	return r.Store.Redis.DeleteSession(ctx, sessionID)
+}
 
-	key := "session:" + sessionID
-	err := r.Store.Redis.Client.Set(ctx, key, userID, 30*24*time.Hour).Err()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to create session in Redis")
-		return "", fmt.Errorf("failed to create session: %w", err)
-	}
-
-	log.Info().Str("session_id", sessionID).Uint64("user_id", userID).Msg("session created in Redis")
-	return sessionID, nil
+func (r *AuthRepository) GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Str("session_id", sessionID).Msg("getting user id by session via redis store")
+	return r.Store.Redis.GetUserIDBySession(ctx, sessionID)
 }
 
 func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
@@ -77,41 +77,6 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	}
 
 	return user, nil
-}
-
-func (r *AuthRepository) DeleteSession(ctx context.Context, sessionID string) error {
-	log := logger.FromContext(ctx)
-	log.Info().Str("session_id", sessionID).Msg("deleting session from Redis")
-
-	key := "session:" + sessionID
-	err := r.Store.Redis.Client.Del(ctx, key).Err()
-	if err != nil {
-		log.Error().Err(err).Msg("failed to delete session from Redis")
-		return fmt.Errorf("failed to delete session: %w", err)
-	}
-
-	return nil
-}
-
-func (r *AuthRepository) GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error) {
-	log := logger.FromContext(ctx)
-	log.Info().Str("session_id", sessionID).Msg("getting user id by session from Redis")
-
-	key := "session:" + sessionID
-	val, err := r.Store.Redis.Client.Get(ctx, key).Result()
-	if err != nil {
-		log.Warn().Str("session_id", sessionID).Msg("session not found in Redis")
-		return 0, namederrors.ErrInvalidSession
-	}
-
-	var userID uint64
-	_, err = fmt.Sscanf(val, "%d", &userID)
-	if err != nil {
-		log.Error().Err(err).Str("value", val).Msg("failed to parse user id from session")
-		return 0, fmt.Errorf("invalid session data: %w", err)
-	}
-
-	return userID, nil
 }
 
 func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash string) (*models.User, error) {

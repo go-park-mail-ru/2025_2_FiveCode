@@ -161,13 +161,13 @@ func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 				return
 			}
 
-			user, ok := s.GetUserBySession(r.Context(), session.Value)
-			if !ok {
-				apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
+			userID, err := s.Redis.GetUserIDBySession(r.Context(), session.Value)
+			if err != nil {
+				apiutils.WriteError(w, http.StatusUnauthorized, "invalid session")
 				return
 			}
 
-			ctx := WithUserID(r.Context(), user.ID)
+			ctx := WithUserID(r.Context(), userID)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}

@@ -3,8 +3,6 @@ package store
 import (
 	"backend/config"
 	"backend/logger"
-	"backend/models"
-	namederrors "backend/named_errors"
 	"context"
 	"database/sql"
 	"errors"
@@ -24,14 +22,6 @@ type Store struct {
 	Minio    *MinioStorage
 	Postgres *PostgresDB
 	Redis    *RedisDB
-
-	Users        map[uint64]*models.User
-	UsersByEmail map[string]uint64
-	Files        map[uint64]*models.File
-	sessions     map[string]uint64
-
-	nextUserID uint64
-	nextFileID uint64
 }
 
 func (s *Store) InitRedis(conf *config.Config) error {
@@ -117,22 +107,6 @@ func (s *Store) InitFillStore(ctx context.Context) error {
 		exists = true
 	}
 
-	user, err := s.CreateUser(email, password)
-	if err != nil && !errors.Is(err, namederrors.ErrUserExists) {
-		return fmt.Errorf("failed to create user in memory: %w", err)
-	}
-	if err == nil {
-		s.Mu.Lock()
-		delete(s.Users, user.ID)
-		delete(s.UsersByEmail, email)
-
-		user.ID = userID
-		s.Users[userID] = user
-		s.UsersByEmail[email] = userID
-		s.Mu.Unlock()
-		log.Info().Msg("default user created in memory store")
-	}
-
 	if !exists {
 		log.Info().Msg("creating default notes for new user")
 		notes := []struct {
@@ -165,193 +139,7 @@ func (s *Store) InitFillStore(ctx context.Context) error {
 }
 
 func NewStore() *Store {
-	return &Store{
-		Users:        make(map[uint64]*models.User),
-		UsersByEmail: make(map[string]uint64),
-		Files:        make(map[uint64]*models.File),
-		sessions:     make(map[string]uint64),
-		nextUserID:   1,
-		nextFileID:   1,
-	}
-}
-
-func (s *Store) CreateUser(email, password string) (*models.User, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	if _, ok := s.UsersByEmail[email]; ok {
-		return nil, namederrors.ErrUserExists
-	}
-
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return nil, errors.New("Cannot hash password:" + err.Error())
-	}
-
-	user := &models.User{
-		ID:        s.nextUserID,
-		Email:     email,
-		Username:  fmt.Sprintf("user_%d", s.nextUserID),
-		Password:  string(hashedPassword),
-		CreatedAt: time.Now().UTC(),
-	}
-	s.Users[user.ID] = user
-	s.UsersByEmail[email] = user.ID
-	s.nextUserID++
-
-	return user, nil
-}
-
-func (s *Store) AuthenticateUser(email, password string) (*models.User, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	userID, ok := s.UsersByEmail[email]
-	if !ok {
-		return nil, namederrors.ErrInvalidEmailOrPassword
-	}
-	user := s.Users[userID]
-
-	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
-		return nil, namederrors.ErrInvalidEmailOrPassword
-	}
-
-	return user, nil
-}
-
-func (s *Store) CreateSession(userID uint64) string {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	sessionID := uuid.NewString()
-	s.sessions[sessionID] = userID
-
-	return sessionID
-}
-
-func (s *Store) DeleteSession(sessionID string) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	delete(s.sessions, sessionID)
-}
-
-func (s *Store) GetUserBySession(ctx context.Context, sessionID string) (*models.User, bool) {
-	log := logger.FromContext(ctx)
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	userID, ok := s.sessions[sessionID]
-	if !ok {
-		log.Info().Str("session_id", sessionID).Msg("session not found in store")
-		return nil, false
-	}
-	user, ok := s.Users[userID]
-	if !ok {
-		log.Error().Uint64("user_id", userID).Msg("user id found in session, but user not in map")
-	}
-
-	return user, ok
-}
-
-func (s *Store) GetUserIDBySession(ctx context.Context, sessionID string) (uint64, bool) {
-	log := logger.FromContext(ctx)
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	userID, ok := s.sessions[sessionID]
-	if !ok {
-		log.Info().Str("session_id", sessionID).Msg("session not found in store")
-		return 0, false
-	}
-
-	return userID, true
-}
-
-func (s *Store) UpdateUserProfile(userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	user, ok := s.Users[userID]
-	if !ok {
-		return nil, namederrors.ErrNotFound
-	}
-
-	if username != nil {
-		user.Username = *username
-	}
-	if password != nil {
-		user.Password = *password
-	}
-	if avatarFileID != nil {
-		user.AvatarFileID = avatarFileID
-	}
-
-	now := time.Now().UTC()
-	user.UpdatedAt = &now
-
-	return user, nil
-}
-
-func (s *Store) GetUserByID(userID uint64) (*models.User, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	user, ok := s.Users[userID]
-	if !ok {
-		return nil, namederrors.ErrNotFound
-	}
-
-	return user, nil
-}
-
-func (s *Store) SaveFile(file *models.File) (*models.File, error) {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	file.ID = s.nextFileID
-	s.Files[file.ID] = file
-	s.nextFileID++
-
-	return file, nil
-}
-
-func (s *Store) GetFileByID(fileID uint64) (*models.File, error) {
-	s.Mu.RLock()
-	defer s.Mu.RUnlock()
-
-	file, ok := s.Files[fileID]
-	if !ok {
-		return nil, namederrors.ErrNotFound
-	}
-
-	return file, nil
-}
-
-func (s *Store) UpdateFile(file *models.File) error {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	_, ok := s.Files[file.ID]
-	if !ok {
-		return namederrors.ErrNotFound
-	}
-
-	s.Files[file.ID] = file
-	return nil
-}
-
-func (s *Store) DeleteFile(fileID uint64) error {
-	s.Mu.Lock()
-	defer s.Mu.Unlock()
-
-	_, ok := s.Files[fileID]
-	if !ok {
-		return namederrors.ErrNotFound
-	}
-
-	delete(s.Files, fileID)
-	return nil
+	return &Store{}
 }
 
 func (s *Store) UploadFileToMinIO(ctx context.Context, filename string, file io.Reader, size int64, contentType string) (string, error) {
