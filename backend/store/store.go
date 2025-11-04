@@ -2,6 +2,7 @@ package store
 
 import (
 	"backend/config"
+	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"context"
@@ -15,7 +16,6 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
-	"github.com/rs/zerolog/log"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -81,8 +81,8 @@ func (s *Store) InitMinioStorage(conf *config.Config) error {
 	return nil
 }
 
-func (s *Store) InitFillStore() error {
-	ctx := context.Background()
+func (s *Store) InitFillStore(ctx context.Context) error {
+	log := logger.FromContext(ctx)
 	email := "user@example.com"
 	password := "password"
 
@@ -92,6 +92,7 @@ func (s *Store) InitFillStore() error {
 	err := s.Postgres.DB.QueryRowContext(ctx, checkQuery, email).Scan(&userID)
 
 	if errors.Is(err, sql.ErrNoRows) {
+		log.Info().Str("email", email).Msg("default user not found, creating...")
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 		if err != nil {
 			return fmt.Errorf("failed to hash password: %w", err)
@@ -108,9 +109,11 @@ func (s *Store) InitFillStore() error {
 			return fmt.Errorf("failed to create user in PostgreSQL: %w", err)
 		}
 		exists = false
+		log.Info().Uint64("user_id", userID).Msg("default user created in database")
 	} else if err != nil {
 		return fmt.Errorf("failed to check user existence: %w", err)
 	} else {
+		log.Info().Str("email", email).Msg("default user already exists in database")
 		exists = true
 	}
 
@@ -127,67 +130,34 @@ func (s *Store) InitFillStore() error {
 		s.Users[userID] = user
 		s.UsersByEmail[email] = userID
 		s.Mu.Unlock()
-
-	} else {
+		log.Info().Msg("default user created in memory store")
 	}
 
 	if !exists {
+		log.Info().Msg("creating default notes for new user")
 		notes := []struct {
 			Title     string
 			IsShared  bool
 			CreatedAt time.Time
 			UpdatedAt time.Time
 		}{
-			{
-				Title:     "University Lectures",
-				IsShared:  false,
-				CreatedAt: time.Now().Add(-30 * 24 * time.Hour),
-				UpdatedAt: time.Now().Add(-5 * 24 * time.Hour),
-			},
-			{
-				Title:     "Project Ideas",
-				IsShared:  true,
-				CreatedAt: time.Now().Add(-20 * 24 * time.Hour),
-				UpdatedAt: time.Now().Add(-2 * 24 * time.Hour),
-			},
-			{
-				Title:     "Shopping List",
-				IsShared:  false,
-				CreatedAt: time.Now().Add(-7 * 24 * time.Hour),
-				UpdatedAt: time.Now().Add(-6 * time.Hour),
-			},
-			{
-				Title:     "Random Note",
-				IsShared:  false,
-				CreatedAt: time.Now().Add(-10 * 24 * time.Hour),
-				UpdatedAt: time.Now().Add(-8 * 24 * time.Hour),
-			},
+			{"University Lectures", false, time.Now().Add(-30 * 24 * time.Hour), time.Now().Add(-5 * 24 * time.Hour)},
+			{"Project Ideas", true, time.Now().Add(-20 * 24 * time.Hour), time.Now().Add(-2 * 24 * time.Hour)},
+			{"Shopping List", false, time.Now().Add(-7 * 24 * time.Hour), time.Now().Add(-6 * time.Hour)},
+			{"Random Note", false, time.Now().Add(-10 * 24 * time.Hour), time.Now().Add(-8 * 24 * time.Hour)},
 		}
 
 		for _, note := range notes {
 			insertNoteQuery := `
                 INSERT INTO note (owner_id, title, is_archived, is_shared, created_at, updated_at)
                 VALUES ($1, $2, $3, $4, $5, $6)
-                RETURNING id
             `
-			var noteID uint64
-			err = s.Postgres.DB.QueryRowContext(
-				ctx,
-				insertNoteQuery,
-				userID,
-				note.Title,
-				false,
-				note.IsShared,
-				note.CreatedAt,
-				note.UpdatedAt,
-			).Scan(&noteID)
-
+			_, err = s.Postgres.DB.ExecContext(ctx, insertNoteQuery, userID, note.Title, false, note.IsShared, note.CreatedAt, note.UpdatedAt)
 			if err != nil {
 				return fmt.Errorf("failed to create note '%s': %w", note.Title, err)
 			}
-
 		}
-	} else {
+		log.Info().Int("count", len(notes)).Msg("default notes created")
 	}
 
 	log.Info().Msg("InitFillStore completed successfully")
@@ -200,7 +170,6 @@ func NewStore() *Store {
 		UsersByEmail: make(map[string]uint64),
 		Files:        make(map[uint64]*models.File),
 		sessions:     make(map[string]uint64),
-
 		nextUserID: 1,
 		nextFileID: 1,
 	}
@@ -267,27 +236,32 @@ func (s *Store) DeleteSession(sessionID string) {
 	delete(s.sessions, sessionID)
 }
 
-func (s *Store) GetUserBySession(sessionID string) (*models.User, bool) {
+func (s *Store) GetUserBySession(ctx context.Context, sessionID string) (*models.User, bool) {
+	log := logger.FromContext(ctx)
 	s.Mu.RLock()
 	defer s.Mu.RUnlock()
 
 	userID, ok := s.sessions[sessionID]
 	if !ok {
-		log.Info().Str("session_id", sessionID).Msg("session not found")
+		log.Info().Str("session_id", sessionID).Msg("session not found in store")
 		return nil, false
 	}
 	user, ok := s.Users[userID]
+	if !ok {
+		log.Error().Uint64("user_id", userID).Msg("user id found in session, but user not in map")
+	}
 
 	return user, ok
 }
 
-func (s *Store) GetUserIDBySession(sessionID string) (uint64, bool) {
+func (s *Store) GetUserIDBySession(ctx context.Context, sessionID string) (uint64, bool) {
+	log := logger.FromContext(ctx)
 	s.Mu.RLock()
 	defer s.Mu.RUnlock()
 
 	userID, ok := s.sessions[sessionID]
 	if !ok {
-		log.Info().Str("session_id", sessionID).Msg("session not found")
+		log.Info().Str("session_id", sessionID).Msg("session not found in store")
 		return 0, false
 	}
 
@@ -381,6 +355,7 @@ func (s *Store) DeleteFile(fileID uint64) error {
 }
 
 func (s *Store) UploadFileToMinIO(ctx context.Context, filename string, file io.Reader, size int64, contentType string) (string, error) {
+	log := logger.FromContext(ctx)
 	if s.Minio == nil {
 		return "", errors.New("minio storage not initialized")
 	}
@@ -389,10 +364,12 @@ func (s *Store) UploadFileToMinIO(ctx context.Context, filename string, file io.
 	bucketName := "notes-app"
 
 	client := s.Minio.client
+	log.Info().Str("bucket", bucketName).Str("object", objectName).Msg("uploading file to minio")
 	_, err := client.PutObject(ctx, bucketName, objectName, file, size, minio.PutObjectOptions{
 		ContentType: contentType,
 	})
 	if err != nil {
+		log.Error().Err(err).Msg("failed to upload file to MinIO")
 		return "", fmt.Errorf("failed to upload file to MinIO: %w", err)
 	}
 

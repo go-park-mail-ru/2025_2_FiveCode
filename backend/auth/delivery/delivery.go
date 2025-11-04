@@ -2,16 +2,16 @@ package Delivery
 
 import (
 	"backend/apiutils"
+	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"backend/validation"
+	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/pkg/errors"
-	"github.com/rs/zerolog/log"
 )
 
 type AuthDelivery struct {
@@ -20,8 +20,8 @@ type AuthDelivery struct {
 }
 
 type AuthUsecase interface {
-	Login(email string, password string) (*models.User, string, error)
-	Logout(sessionID string) error
+	Login(ctx context.Context, email string, password string) (*models.User, string, error)
+	Logout(ctx context.Context, sessionID string) error
 }
 
 func NewAuthDelivery(uc AuthUsecase, sessionDuration time.Duration) *AuthDelivery {
@@ -37,21 +37,25 @@ type loginRequest struct {
 }
 
 func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	var req loginRequest
 	err := json.NewDecoder(r.Body).Decode(&req)
 	if err != nil {
+		log.Warn().Err(err).Msg("invalid json body")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
 	if err := validation.ValidateStruct(req); err != nil {
+		log.Warn().Err(err).Msg("validation failed")
 		apiutils.WriteValidationError(w, http.StatusBadRequest, err)
 		return
 	}
 
-	user, sessionID, err := d.Usecase.Login(req.Email, req.Password)
+	user, sessionID, err := d.Usecase.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("login failed: %v", err))
+		log.Warn().Err(err).Str("email", req.Email).Msg("login failed")
+		apiutils.WriteError(w, http.StatusUnauthorized, "invalid email or password")
 		return
 	}
 
@@ -65,13 +69,15 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 	}
 	http.SetCookie(w, session)
 
+	log.Info().Uint64("user_id", user.ID).Msg("user logged in successfully")
 	apiutils.WriteJSON(w, http.StatusOK, user)
 }
 
 func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	session, err := r.Cookie("session_id")
 	if errors.Is(err, http.ErrNoCookie) {
-		log.Info().Msg("no session cookie found")
+		log.Info().Msg("no session cookie found for logout")
 		apiutils.WriteError(w, http.StatusBadRequest, "no session cookie")
 		return
 	}
@@ -81,12 +87,14 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = d.Usecase.Logout(session.Value)
+	err = d.Usecase.Logout(r.Context(), session.Value)
 	if errors.Is(err, namederrors.ErrInvalidSession) {
+		log.Warn().Msg("logout with invalid session")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
 		return
 	}
 	if err != nil {
+		log.Error().Err(err).Msg("failed to logout")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to logout")
 		return
 	}
@@ -94,6 +102,6 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 	session.Expires = time.Now().Add(-1 * time.Hour)
 	http.SetCookie(w, session)
 
+	log.Info().Msg("user logged out successfully")
 	apiutils.WriteJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
-
 }

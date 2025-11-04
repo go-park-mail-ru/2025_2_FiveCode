@@ -2,14 +2,15 @@ package middleware
 
 import (
 	"backend/apiutils"
+	"backend/logger"
 	"backend/store"
 	"context"
 	"errors"
 	"net/http"
 	"strconv"
 
+	"github.com/google/uuid"
 	"github.com/gorilla/mux"
-	"github.com/rs/zerolog/log"
 )
 
 type ctxKey string
@@ -54,9 +55,24 @@ func CORS(next http.Handler) http.Handler {
 	})
 }
 
+func LoggerMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requestID := uuid.New().String()
+		baseLogger := logger.FromContext(r.Context())
+		reqLogger := baseLogger.With().Str("request_id", requestID).Logger()
+
+		ctx := logger.ToContext(r.Context(), reqLogger)
+		r = r.WithContext(ctx)
+
+		reqLogger.Info().Str("method", r.Method).Str("url", r.URL.String()).Msg("Request received")
+		next.ServeHTTP(w, r)
+	})
+}
+
 func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromContext(r.Context())
 			session, err := r.Cookie("session_id")
 			if errors.Is(err, http.ErrNoCookie) {
 				log.Info().Msg("no session cookie found in auth middleware")
@@ -69,7 +85,7 @@ func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 				return
 			}
 
-			user, ok := s.GetUserBySession(session.Value)
+			user, ok := s.GetUserBySession(r.Context(), session.Value)
 			if !ok {
 				apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
 				return

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
 	"context"
@@ -39,17 +40,21 @@ func NewBlocksUsecase(blocksRepo BlocksRepository, notesRepo NotesRepository) *B
 }
 
 func (u *BlocksUsecase) CreateBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("creating block")
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, fmt.Errorf("failed to check note access: %w", err)
+		return nil, err
 	}
 
 	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, 0)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to calculate position")
 		return nil, fmt.Errorf("failed to calculate position: %w", err)
 	}
 
 	block, err := u.BlocksRepo.CreateBlock(ctx, noteID, models.BlockTypeText, position)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to create block in repository")
 		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
@@ -57,12 +62,15 @@ func (u *BlocksUsecase) CreateBlock(ctx context.Context, userID, noteID uint64, 
 }
 
 func (u *BlocksUsecase) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("getting blocks")
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, fmt.Errorf("failed to check note access: %w", err)
+		return nil, err
 	}
 
 	blocks, err := u.BlocksRepo.GetBlocksByNoteID(ctx, noteID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get blocks from repository")
 		return nil, fmt.Errorf("failed to get blocks: %w", err)
 	}
 
@@ -70,32 +78,39 @@ func (u *BlocksUsecase) GetBlocks(ctx context.Context, userID, noteID uint64) ([
 }
 
 func (u *BlocksUsecase) GetBlock(ctx context.Context, userID, blockID uint64) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("block_id", blockID).Msg("getting block")
 	block, err := u.BlocksRepo.GetBlockByID(ctx, blockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get block by id from repository")
 		return nil, fmt.Errorf("failed to get block by id: %w", err)
 	}
 
 	if err := u.checkNoteAccess(ctx, userID, block.NoteID); err != nil {
-		return nil, fmt.Errorf("failed to check note access: %w", err)
+		return nil, err
 	}
 
 	return block, nil
 }
 
 func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("block_id", blockID).Msg("updating block")
 	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get block note id")
 		return nil, fmt.Errorf("failed to get block note id: %w", err)
 	}
 
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, fmt.Errorf("failed to check note access: %w", err)
+		return nil, err
 	}
 
 	optimizedFormats := optimizeFormats(text, formats)
 
 	block, err := u.BlocksRepo.UpdateBlockText(ctx, blockID, text, optimizedFormats)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to update block in repository")
 		return nil, fmt.Errorf("failed to update block: %w", err)
 	}
 
@@ -103,16 +118,20 @@ func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID, blockID uint64,
 }
 
 func (u *BlocksUsecase) DeleteBlock(ctx context.Context, userID, blockID uint64) error {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("block_id", blockID).Msg("deleting block")
 	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get block note id for deletion")
 		return fmt.Errorf("failed to get block note id: %w", err)
 	}
 
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return fmt.Errorf("failed to check note access: %w", err)
+		return err
 	}
 
 	if err := u.BlocksRepo.DeleteBlock(ctx, blockID); err != nil {
+		log.Error().Err(err).Msg("failed to delete block in repository")
 		return fmt.Errorf("failed to delete block: %w", err)
 	}
 
@@ -120,22 +139,27 @@ func (u *BlocksUsecase) DeleteBlock(ctx context.Context, userID, blockID uint64)
 }
 
 func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("block_id", blockID).Msg("updating block position")
 	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to get block note id for position update")
 		return nil, fmt.Errorf("failed to get block note id: %w", err)
 	}
 
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, fmt.Errorf("failed to check note access: %w", err)
+		return nil, err
 	}
 
 	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, blockID)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to calculate position for update")
 		return nil, fmt.Errorf("failed to calculate position: %w", err)
 	}
 
 	block, err := u.BlocksRepo.UpdateBlockPosition(ctx, blockID, position)
 	if err != nil {
+		log.Error().Err(err).Msg("failed to update position in repository")
 		return nil, fmt.Errorf("failed to update position: %w", err)
 	}
 
@@ -143,12 +167,15 @@ func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID
 }
 
 func (u *BlocksUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
+	log := logger.FromContext(ctx)
 	note, err := u.NotesRepo.GetNoteById(ctx, noteID)
 	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note for access check")
 		return fmt.Errorf("failed to get note by id: %w", err)
 	}
 
 	if note.OwnerID != userID {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Uint64("owner_id", note.OwnerID).Msg("user access denied to note")
 		return namederrors.ErrNoAccess
 	}
 

@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"backend/apiutils"
+	"backend/logger"
 	"backend/middleware"
 	"backend/models"
 	namederrors "backend/named_errors"
@@ -37,33 +38,37 @@ type CreateBlockRequest struct {
 }
 
 func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
 	if err != nil {
+		log.Warn().Err(err).Str("note_id", vars["note_id"]).Msg("invalid note id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
+		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	defer func() {
 		if err := r.Body.Close(); err != nil {
-			// тут будет лог
+			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
 	var req CreateBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid request body")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	block, err := d.Usecase.CreateBlock(r.Context(), userID, noteID, req.BeforeBlockID)
 	if err != nil {
-		handleBlockError(w, err)
+		handleBlockError(w, r.Context(), err)
 		return
 	}
 
@@ -71,22 +76,25 @@ func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
 	if err != nil {
+		log.Warn().Err(err).Str("note_id", vars["note_id"]).Msg("invalid note id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
+		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	blocks, err := d.Usecase.GetBlocks(r.Context(), userID, noteID)
 	if err != nil {
-		handleBlockError(w, err)
+		handleBlockError(w, r.Context(), err)
 		return
 	}
 
@@ -97,22 +105,25 @@ func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
+		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid block id")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
+		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	block, err := d.Usecase.GetBlock(r.Context(), userID, blockID)
 	if err != nil {
-		handleBlockError(w, err)
+		handleBlockError(w, r.Context(), err)
 		return
 	}
 
@@ -137,26 +148,30 @@ type BlockTextFormatInput struct {
 }
 
 func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
+		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid block id")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
+		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	defer func() {
 		if err := r.Body.Close(); err != nil {
-			// тут будет лог
+			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
 	var req UpdateBlockRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid request body")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
@@ -165,7 +180,7 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 
 	block, err := d.Usecase.UpdateBlock(r.Context(), userID, blockID, req.Text, formats)
 	if err != nil {
-		handleBlockError(w, err)
+		handleBlockError(w, r.Context(), err)
 		return
 	}
 
@@ -173,22 +188,25 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
+		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid block id")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
+		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	err = d.Usecase.DeleteBlock(r.Context(), userID, blockID)
 	if err != nil {
-		handleBlockError(w, err)
+		handleBlockError(w, r.Context(), err)
 		return
 	}
 
@@ -200,46 +218,54 @@ type UpdateBlockPositionRequest struct {
 }
 
 func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
+		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid block id")
 		return
 	}
 
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
+		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
 
 	defer func() {
 		if err := r.Body.Close(); err != nil {
-			// тут будет лог
+			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
 	var req UpdateBlockPositionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid request body")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
 	block, err := d.Usecase.UpdateBlockPosition(r.Context(), userID, blockID, req.BeforeBlockID)
 	if err != nil {
-		handleBlockError(w, err)
+		handleBlockError(w, r.Context(), err)
 		return
 	}
 
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
-func handleBlockError(w http.ResponseWriter, err error) {
+func handleBlockError(w http.ResponseWriter, ctx context.Context, err error) {
+	log := logger.FromContext(ctx)
 	switch err {
 	case namederrors.ErrNotFound:
+		log.Warn().Err(err).Msg("block or note not found")
 		apiutils.WriteError(w, http.StatusNotFound, "block or note not found")
 	case namederrors.ErrNoAccess:
+		log.Warn().Err(err).Msg("access to note denied")
 		apiutils.WriteError(w, http.StatusForbidden, "no access to this note")
 	default:
+		log.Error().Err(err).Msg("internal server error in blocks delivery")
 		apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
 	}
 }
