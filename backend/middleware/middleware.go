@@ -117,7 +117,7 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 				logEvent = log.Error()
 				msg = "Server error"
 			case status >= 400:
-				logEvent = log.Warn()
+				logEvent = log.Info()
 				msg = "Client error"
 			default:
 				logEvent = log.Info()
