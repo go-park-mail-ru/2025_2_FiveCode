@@ -40,7 +40,7 @@ func RunApp() error {
 	log.Info().Int("session_duration_days", cfg.Auth.Cookie.SessionDuration).Msg("config loaded")
 
 	if err := s.InitPostgres(cfg); err != nil {
-		log.Fatal().Err(err).Msg("failed to init PostgreSQL")
+		log.Fatal().Err(err).Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("failed to init Postgres")
 	}
 	defer s.Postgres.Close()
 	log.Info().Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("Postgres initialized successfully")
