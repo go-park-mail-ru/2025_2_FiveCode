@@ -49,7 +49,7 @@ func RunApp() error {
 	}()
 	log.Info().Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("Postgres initialized successfully")
 
-	if err := s.Postgres.RunMigrations("./migrations/"); err != nil {
+	if err := s.Postgres.RunMigrations("./migrations"); err != nil {
 		log.Fatal().Err(err).Msg("failed to run migrations")
 	}
 	log.Info().Msg("Migrations run successfully")
