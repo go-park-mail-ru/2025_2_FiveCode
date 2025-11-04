@@ -40,6 +40,8 @@ type NotesDeliveryInterface interface {
 	GetNoteById(w http.ResponseWriter, r *http.Request)
 	UpdateNote(w http.ResponseWriter, r *http.Request)
 	DeleteNote(w http.ResponseWriter, r *http.Request)
+	AddFavorite(w http.ResponseWriter, r *http.Request)
+	RemoveFavorite(w http.ResponseWriter, r *http.Request)
 }
 
 type BlocksDeliveryInterface interface {

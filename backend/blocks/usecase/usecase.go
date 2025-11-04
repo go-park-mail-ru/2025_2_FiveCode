@@ -29,7 +29,7 @@ type BlocksRepository interface {
 }
 
 type NotesRepository interface {
-	GetNoteById(ctx context.Context, noteID uint64) (*models.Note, error)
+	GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models.Note, error)
 }
 
 func NewBlocksUsecase(blocksRepo BlocksRepository, notesRepo NotesRepository) *BlocksUsecase {
@@ -168,7 +168,7 @@ func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID
 
 func (u *BlocksUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
-	note, err := u.NotesRepo.GetNoteById(ctx, noteID)
+	note, err := u.NotesRepo.GetNoteById(ctx, noteID, userID)
 	if err != nil {
 		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note for access check")
 		return fmt.Errorf("failed to get note by id: %w", err)

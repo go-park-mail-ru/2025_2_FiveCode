@@ -19,6 +19,8 @@ type NotesUsecase interface {
 	GetNoteById(ctx context.Context, userID uint64, noteID uint64) (*models.Note, error)
 	UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
 	DeleteNote(ctx context.Context, userID uint64, noteID uint64) error
+	AddFavorite(ctx context.Context, userID, noteID uint64) error
+	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 }
 
 type NotesDelivery struct {
@@ -171,4 +173,40 @@ func (d *NotesDelivery) DeleteNote(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutils.WriteJSON(w, http.StatusOK, "note was successfully deleted")
+}
+
+func (d *NotesDelivery) AddFavorite(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		log.Error().Msg("user not authenticated")
+		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+	vars := mux.Vars(r)
+	noteID, _ := strconv.ParseUint(vars["note_id"], 10, 64)
+	if err := d.Usecase.AddFavorite(r.Context(), userID, noteID); err != nil {
+		log.Error().Err(err).Msg("failed to add favorite")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to add favorite")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
+}
+
+func (d *NotesDelivery) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		log.Error().Msg("user not authenticated")
+		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+		return
+	}
+	vars := mux.Vars(r)
+	noteID, _ := strconv.ParseUint(vars["note_id"], 10, 64)
+	if err := d.Usecase.RemoveFavorite(r.Context(), userID, noteID); err != nil {
+		log.Error().Err(err).Msg("failed to remove favorite")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to remove favorite")
+		return
+	}
+	w.WriteHeader(http.StatusNoContent)
 }

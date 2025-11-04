@@ -36,6 +36,8 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.GetNoteById).Methods("GET")
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.UpdateNote).Methods("PUT")
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.DeleteNote).Methods("DELETE")
+	notes.HandleFunc("/notes/{note_id}/favorite", deliveries.NotesDelivery.AddFavorite).Methods("POST")
+	notes.HandleFunc("/notes/{note_id}/favorite", deliveries.NotesDelivery.RemoveFavorite).Methods("DELETE")
 
 	blocks := api.PathPrefix("").Subrouter()
 	blocks.Use(mw.AuthMiddleware(s))
