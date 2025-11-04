@@ -4,3 +4,4 @@ cover
 .DS_Store
 .vscode
 *.sh
+*.txt

@@ -14,7 +14,7 @@ import (
 
 func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	r := mux.NewRouter()
-	r.Use(mw.LoggerMiddleware)
+	r.Use(mw.RequestIDMiddleware, mw.AccessLogMiddleware)
 
 	api := r.PathPrefix("/api").Subrouter()
 

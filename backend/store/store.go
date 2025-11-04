@@ -170,8 +170,8 @@ func NewStore() *Store {
 		UsersByEmail: make(map[string]uint64),
 		Files:        make(map[uint64]*models.File),
 		sessions:     make(map[string]uint64),
-		nextUserID: 1,
-		nextFileID: 1,
+		nextUserID:   1,
+		nextFileID:   1,
 	}
 }
 

@@ -7,9 +7,10 @@ import (
 	"backend/models"
 	"context"
 	"encoding/json"
-	"github.com/gorilla/mux"
 	"net/http"
 	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 type NotesUsecase interface {
