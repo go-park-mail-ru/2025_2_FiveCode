@@ -12,7 +12,7 @@ CREATE TABLE IF NOT EXISTS file
 (
     id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     url        TEXT        NOT NULL UNIQUE CHECK (LENGTH(url) <= 255 AND
-                                                  url ~ '^https?:\/\/[a-zA-Z0-9-]+\.[a-zA-Z]{2,}(\S*)$'),
+                                                  url ~ '^https?:\/\/([a-zA-Z0-9.-]+)(:[0-9]+)?(\/.*)?$'),
     mime_type  TEXT        NOT NULL CHECK (LENGTH(mime_type) <= 50),
     size_bytes INTEGER     NOT NULL CHECK (size_bytes >= 0 AND size_bytes <= 1024 * 1024 * 1024), -- 1 гб
     width      INTEGER CHECK (width >= 0),
@@ -109,7 +109,7 @@ CREATE TABLE IF NOT EXISTS block_attachment
     id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     block_id   INTEGER REFERENCES block (id) ON DELETE CASCADE,
     file_id    INTEGER     NOT NULL REFERENCES file (id) ON DELETE CASCADE,
-    caption    TEXT        NOT NULL CHECK (LENGTH(caption) <= 255),
+    caption    TEXT CHECK (LENGTH(caption) <= 255),
     created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

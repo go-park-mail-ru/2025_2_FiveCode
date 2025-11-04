@@ -62,7 +62,7 @@ func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20)) // ограничим, например, 1 МБ
+	body, err := io.ReadAll(io.LimitReader(r.Body, 1<<20))
 	if err != nil {
 		log.Warn().Err(err).Msg("failed to read body")
 		apiutils.WriteError(w, http.StatusBadRequest, "failed to read body")
@@ -70,7 +70,7 @@ func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var base baseCreateBlockRequest
-	if err := apiutils.StrictUnmarshal(body, &base); err != nil {
+	if err := json.Unmarshal(body, &base); err != nil {
 		log.Warn().Err(err).Msg("invalid request (type)")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return

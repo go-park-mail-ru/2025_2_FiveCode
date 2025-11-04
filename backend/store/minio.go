@@ -42,6 +42,23 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 		if err != nil {
 			return nil, fmt.Errorf("failed to create bucket: %w", err)
 		}
+
+		policy := fmt.Sprintf(`{
+            "Version": "2012-10-17",
+            "Statement": [
+                {
+                    "Effect": "Allow",
+                    "Principal": {"AWS": ["*"]},
+                    "Action": ["s3:GetObject"],
+                    "Resource": ["arn:aws:s3:::%s/*"]
+                }
+            ]
+        }`, defaultBucketName)
+
+		err = client.SetBucketPolicy(ctx, defaultBucketName, policy)
+		if err != nil {
+			return nil, fmt.Errorf("failed to set bucket policy: %w", err)
+		}
 	}
 
 	return storage, nil

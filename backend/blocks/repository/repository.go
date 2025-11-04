@@ -163,6 +163,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 	query := `
 		SELECT b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
 		       bt.text,
+		       f.url as file_url,
 		       COALESCE(
 		           json_agg(
 		               json_build_object(
@@ -183,8 +184,10 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		FROM block b
 		LEFT JOIN block_text bt ON b.id = bt.block_id
 		LEFT JOIN block_text_format btf ON bt.id = btf.block_text_id
+		LEFT JOIN block_attachment ba ON b.id = ba.block_id
+		LEFT JOIN file f ON ba.file_id = f.id
 		WHERE b.note_id = $1
-		GROUP BY b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at, bt.text
+		GROUP BY b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at, bt.text, f.url
 		ORDER BY b.position ASC
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
@@ -205,6 +208,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 	for rows.Next() {
 		var block models.BlockWithContent
 		var text sql.NullString
+		var fileURL sql.NullString
 		var formatsJSON []byte
 
 		err := rows.Scan(
@@ -215,6 +219,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 			&block.CreatedAt,
 			&block.UpdatedAt,
 			&text,
+			&fileURL,
 			&formatsJSON,
 		)
 		if err != nil {
@@ -224,6 +229,9 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 
 		if text.Valid {
 			block.Text = text.String
+		}
+		if fileURL.Valid {
+			block.Text = fileURL.String
 		}
 
 		if len(formatsJSON) > 0 {
@@ -246,15 +254,19 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 
 	query := `
 		SELECT b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
-		       bt.text
+		       bt.text,
+		       f.url as file_url
 		FROM block b
 		LEFT JOIN block_text bt ON b.id = bt.block_id
+		LEFT JOIN block_attachment ba ON b.id = ba.block_id
+		LEFT JOIN file f ON ba.file_id = f.id
 		WHERE b.id = $1
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockByID query")
 
 	block := &models.BlockWithContent{}
 	var text sql.NullString
+	var fileURL sql.NullString
 
 	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, blockID).Scan(
 		&block.ID,
@@ -264,6 +276,7 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 		&block.CreatedAt,
 		&block.UpdatedAt,
 		&text,
+		&fileURL,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -277,66 +290,51 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 
 	if text.Valid {
 		block.Text = text.String
+	}
 
+	if fileURL.Valid {
+		block.Text = fileURL.String
+	}
+
+	if block.Type == models.BlockTypeText {
 		formatsQuery := `
-			SELECT btf.id, btf.block_text_id, btf.start_offset, btf.end_offset, 
-			       btf.bold, btf.italic, btf.underline, btf.strikethrough, 
+			SELECT btf.id, btf.block_text_id, btf.start_offset, btf.end_offset,
+			       btf.bold, btf.italic, btf.underline, btf.strikethrough,
 			       btf.link, btf.font, btf.size
 			FROM block_text_format btf
 			JOIN block_text bt ON btf.block_text_id = bt.id
 			WHERE bt.block_id = $1
 			ORDER BY btf.start_offset
 		`
-		log.Info().Str("query", logger.SanitizeQuery(formatsQuery)).Uint64("block_id", blockID).Msg("Executing get formats query")
-
 		rows, err := r.Store.Postgres.DB.QueryContext(ctx, formatsQuery, blockID)
 		if err != nil {
-			log.Error().Err(err).Msg("failed to query formats")
 			return nil, fmt.Errorf("failed to query formats: %w", err)
 		}
-		defer func() {
-			if err := rows.Close(); err != nil {
-				log.Error().Err(err).Msg("failed to close rows")
-			}
-		}()
+		defer rows.Close()
 
 		formats := make([]models.BlockTextFormat, 0)
 		for rows.Next() {
 			var format models.BlockTextFormat
 			var link sql.NullString
-
 			err := rows.Scan(
-				&format.ID,
-				&format.BlockTextID,
-				&format.StartOffset,
-				&format.EndOffset,
-				&format.Bold,
-				&format.Italic,
-				&format.Underline,
-				&format.Strikethrough,
-				&link,
-				&format.Font,
-				&format.Size,
+				&format.ID, &format.BlockTextID, &format.StartOffset, &format.EndOffset,
+				&format.Bold, &format.Italic, &format.Underline, &format.Strikethrough,
+				&link, &format.Font, &format.Size,
 			)
 			if err != nil {
-				log.Error().Err(err).Msg("failed to scan format")
 				return nil, fmt.Errorf("failed to scan format: %w", err)
 			}
-
 			if link.Valid {
 				format.Link = &link.String
 			}
-
 			formats = append(formats, format)
 		}
-
 		if err := rows.Err(); err != nil {
-			log.Error().Err(err).Msg("error iterating formats")
 			return nil, fmt.Errorf("error iterating formats: %w", err)
 		}
-
 		block.Formats = formats
 	}
+
 	return block, nil
 }
 

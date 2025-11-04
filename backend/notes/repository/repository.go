@@ -24,21 +24,28 @@ func NewNotesRepository(store *store.Store) *NotesRepository {
 
 func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Msg("Executing CreateNote transaction")
 
-	query := `
+	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to begin transaction")
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	noteQuery := `
 		INSERT INTO note (owner_id, title, is_archived, is_shared)
 		VALUES ($1, $2, $3, $4)
 		RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
 		          is_archived, is_shared, created_at, updated_at, deleted_at
 	`
 	defaultTitle := "New Note"
-	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("user_id", userID).Msg("Executing CreateNote query")
-
+	
 	note := &models.Note{}
 	var parentNoteID, iconFileID sql.NullInt64
 	var deletedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, userID, defaultTitle, false, false).Scan(
+	err = tx.QueryRowContext(ctx, noteQuery, userID, defaultTitle, false, false).Scan(
 		&note.ID,
 		&note.OwnerID,
 		&parentNoteID,
@@ -51,8 +58,34 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		&deletedAt,
 	)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create note")
+		log.Error().Err(err).Msg("failed to create note entry")
 		return nil, fmt.Errorf("failed to create note: %w", err)
+	}
+
+	blockQuery := `
+		INSERT INTO block (note_id, type, position, last_edited_by) 
+		VALUES ($1, 'text', 1.0, $2)
+		RETURNING id
+	`
+	var blockID uint64
+	err = tx.QueryRowContext(ctx, blockQuery, note.ID, userID).Scan(&blockID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create initial block entry")
+		return nil, fmt.Errorf("failed to create initial block: %w", err)
+	}
+
+	textQuery := `
+		INSERT INTO block_text (block_id, text) VALUES ($1, '')
+	`
+	_, err = tx.ExecContext(ctx, textQuery, blockID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create initial block_text entry")
+		return nil, fmt.Errorf("failed to create initial block_text: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("failed to commit transaction")
+		return nil, fmt.Errorf("failed to commit create note transaction: %w", err)
 	}
 
 	if parentNoteID.Valid {
