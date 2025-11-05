@@ -14,6 +14,11 @@ type CookieConfig struct {
 	SessionDuration int `mapstructure:"session_duration"`
 }
 
+type CSRFConfig struct {
+	SecretKey       string `mapstructure:"secret_key"`
+	TokenTTLMinutes int    `mapstructure:"token_ttl_minutes"`
+}
+
 type MinioConfig struct {
 	Endpoint  string
 	AccessKey string
@@ -51,6 +56,7 @@ type Storages struct {
 type Auth struct {
 	Cors   CorsConfig   `mapstructure:"cors"`
 	Cookie CookieConfig `mapstructure:"cookie"`
+	CSRF   CSRFConfig   `mapstructure:"csrf"`
 }
 
 func LoadConfig(path string) (*Config, error) {
@@ -74,9 +80,7 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	getMinioCfg(&config)
-
 	getDbCfg(&config)
-
 	getRedisCfg(&config)
 
 	return &config, nil

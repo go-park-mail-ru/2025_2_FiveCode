@@ -7,3 +7,7 @@ auth:
 
   cookie:
     session_duration: 30
+
+  csrf:
+    secret_key: "your-32-byte-secret-key-here-change-in-prod" # 32 символа для AES-256
+    token_ttl_minutes: 30
