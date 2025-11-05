@@ -9,5 +9,5 @@ auth:
     session_duration: 30
 
   csrf:
-    secret_key: "your-32-byte-secret-key-here-change-in-prod" # 32 символа для AES-256
+    secret_key: "12345678901234567890123456789012"
     token_ttl_minutes: 30

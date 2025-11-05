@@ -14,6 +14,12 @@ type ErrorResponse struct {
 	Error string `json:"error"`
 }
 
+// НОВОЕ: Ошибка с кодом
+type ErrorResponseWithCode struct {
+	Error     string `json:"error"`
+	ErrorCode string `json:"error_code"`
+}
+
 type FieldError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
@@ -25,6 +31,13 @@ type ValidationErrors struct {
 
 func WriteError(w http.ResponseWriter, code int, errorText string) {
 	WriteJSON(w, code, ErrorResponse{Error: errorText})
+}
+
+func WriteErrorWithCode(w http.ResponseWriter, code int, errorText string, errorCode string) {
+	WriteJSON(w, code, ErrorResponseWithCode{
+		Error:     errorText,
+		ErrorCode: errorCode,
+	})
 }
 
 func WriteValidationErrors(w http.ResponseWriter, code int, errs []FieldError) {

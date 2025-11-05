@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"backend/apiutils"
+	"backend/config"
 	"backend/logger"
 	"backend/store"
 	"bytes"
@@ -47,7 +48,7 @@ func CORS(next http.Handler) http.Handler {
 		if allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)
 			w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, PATCH")
-			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization")
+			w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Authorization, X-CSRF-Token")
 			w.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
@@ -200,6 +201,59 @@ func UserAccessMiddleware() mux.MiddlewareFunc {
 				return
 			}
 
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func CSRFMiddleware(conf *config.Config) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromContext(r.Context())
+
+			if r.Method == http.MethodGet || r.Method == http.MethodHead || r.Method == http.MethodOptions {
+				next.ServeHTTP(w, r)
+				return
+			}
+
+			session, err := r.Cookie("session_id")
+			if errors.Is(err, http.ErrNoCookie) {
+				log.Warn().Msg("csrf check: no session cookie")
+				apiutils.WriteErrorWithCode(w, http.StatusUnauthorized, "no session cookie", "session_missing")
+				return
+			}
+			if err != nil {
+				log.Error().Err(err).Msg("csrf check: error getting session cookie")
+				apiutils.WriteErrorWithCode(w, http.StatusInternalServerError, "internal server error", "internal_error")
+				return
+			}
+
+			csrfToken := r.Header.Get("X-CSRF-Token")
+			if csrfToken == "" {
+				log.Warn().Msg("csrf check: missing csrf token in header")
+				apiutils.WriteErrorWithCode(w, http.StatusForbidden, "missing csrf token", "csrf_token_missing")
+				return
+			}
+
+			secretKey := []byte(conf.Auth.CSRF.SecretKey)
+			ttlMinutes := conf.Auth.CSRF.TokenTTLMinutes
+
+			err = apiutils.ValidateCSRFToken(csrfToken, session.Value, secretKey, ttlMinutes)
+			if err != nil {
+				log.Warn().Err(err).Msg("csrf check: invalid csrf token")
+
+				switch {
+				case errors.Is(err, apiutils.ErrTokenExpired):
+					apiutils.WriteErrorWithCode(w, http.StatusForbidden, "csrf token expired", "csrf_token_expired")
+				case errors.Is(err, apiutils.ErrSessionMismatch):
+					apiutils.WriteErrorWithCode(w, http.StatusForbidden, "csrf token session mismatch", "csrf_token_invalid")
+				default:
+					apiutils.WriteErrorWithCode(w, http.StatusForbidden, "invalid csrf token", "csrf_token_invalid")
+				}
+				return
+			}
+
+			log.Debug().Msg("csrf check: token valid")
 			next.ServeHTTP(w, r)
 		})
 	}

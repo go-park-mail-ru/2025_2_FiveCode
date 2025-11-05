@@ -26,6 +26,7 @@ type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
 	Register(w http.ResponseWriter, r *http.Request)
+	GetCSRFToken(w http.ResponseWriter, r *http.Request) // НОВОЕ
 }
 
 type UserDeliveryInterface interface {
@@ -71,7 +72,7 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	layers := &Deliveries{}
 
 	authR := authRepository.NewAuthRepository(s)
-	authUC := authUsecase.NewAuthUsecase(authR)
+	authUC := authUsecase.NewAuthUsecase(authR, []byte(conf.Auth.CSRF.SecretKey))
 	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
 	userR := userRepository.NewUserRepository(s)

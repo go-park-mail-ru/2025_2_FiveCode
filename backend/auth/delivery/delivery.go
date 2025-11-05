@@ -8,10 +8,11 @@ import (
 	"backend/validation"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"time"
 
-	"github.com/pkg/errors"
+	pkgErrors "github.com/pkg/errors"
 )
 
 type AuthDelivery struct {
@@ -24,6 +25,7 @@ type AuthUsecase interface {
 	Login(ctx context.Context, email string, password string) (*models.User, string, error)
 	Register(ctx context.Context, email string, password string) (*models.User, string, error)
 	Logout(ctx context.Context, sessionID string) error
+	GenerateCSRFToken(ctx context.Context, sessionID string) (string, error) // НОВОЕ
 }
 
 func NewAuthDelivery(uc AuthUsecase, sessionDuration time.Duration) *AuthDelivery {
@@ -120,7 +122,7 @@ func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
 	}
 
 	user, sessionID, err := d.Usecase.Register(r.Context(), req.Email, req.Password)
-	if errors.Is(err, namederrors.ErrUserExists) {
+	if pkgErrors.Is(err, namederrors.ErrUserExists) {
 		log.Warn().Str("email", req.Email).Msg("user already exists")
 		apiutils.WriteError(w, http.StatusBadRequest, "user already exists")
 		return
@@ -150,7 +152,7 @@ func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
 func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	session, err := r.Cookie("session_id")
-	if errors.Is(err, http.ErrNoCookie) {
+	if pkgErrors.Is(err, http.ErrNoCookie) {
 		log.Info().Msg("no session cookie found for logout")
 		apiutils.WriteError(w, http.StatusBadRequest, "no session cookie")
 		return
@@ -162,7 +164,7 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	err = d.Usecase.Logout(r.Context(), session.Value)
-	if errors.Is(err, namederrors.ErrInvalidSession) {
+	if pkgErrors.Is(err, namederrors.ErrInvalidSession) {
 		log.Warn().Msg("logout with invalid session")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid session")
 		return
@@ -178,4 +180,32 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msg("user logged out successfully")
 	apiutils.WriteJSON(w, http.StatusOK, map[string]string{"status": "logged out"})
+}
+
+func (d *AuthDelivery) GetCSRFToken(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	session, err := r.Cookie("session_id")
+	if errors.Is(err, http.ErrNoCookie) {
+		log.Warn().Msg("no session cookie for csrf token request")
+		apiutils.WriteError(w, http.StatusUnauthorized, "no session cookie")
+		return
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("error getting session cookie")
+		apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	token, err := d.Usecase.GenerateCSRFToken(r.Context(), session.Value)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to generate csrf token")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to generate csrf token")
+		return
+	}
+
+	log.Info().Str("session_id", session.Value).Msg("csrf token generated successfully")
+	apiutils.WriteJSON(w, http.StatusOK, map[string]string{
+		"csrf_token": token,
+	})
 }

@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"backend/apiutils"
 	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
@@ -12,6 +13,7 @@ import (
 
 type AuthUsecase struct {
 	Repository AuthRepository
+	CSRFSecret []byte
 }
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
@@ -24,9 +26,11 @@ type AuthRepository interface {
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
 }
 
-func NewAuthUsecase(Repository AuthRepository) *AuthUsecase {
+// НОВОЕ: конструктор с CSRF секретом
+func NewAuthUsecase(repository AuthRepository, csrfSecret []byte) *AuthUsecase {
 	return &AuthUsecase{
-		Repository: Repository,
+		Repository: repository,
+		CSRFSecret: csrfSecret,
 	}
 }
 
@@ -108,4 +112,17 @@ func (u *AuthUsecase) GetUserBySession(ctx context.Context, sessionID string) (*
 	}
 
 	return user, nil
+}
+
+func (u *AuthUsecase) GenerateCSRFToken(ctx context.Context, sessionID string) (string, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Str("session_id", sessionID).Msg("generating csrf token")
+
+	token, err := apiutils.GenerateCSRFToken(sessionID, u.CSRFSecret)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to generate csrf token")
+		return "", fmt.Errorf("failed to generate csrf token: %w", err)
+	}
+
+	return token, nil
 }
