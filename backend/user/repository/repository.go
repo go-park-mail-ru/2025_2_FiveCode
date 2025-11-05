@@ -162,3 +162,29 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 
 	return user, nil
 }
+
+func (r *UserRepository) DeleteUser(ctx context.Context, userID uint64) error {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Msg("deleting user from PostgreSQL")
+
+	query := `DELETE FROM "user" WHERE id = $1`
+
+	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, userID)
+	if err != nil {
+		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to delete user")
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		log.Warn().Uint64("user_id", userID).Msg("user not found for deletion")
+		return namederrors.ErrNotFound
+	}
+
+	log.Info().Uint64("user_id", userID).Msg("user deleted successfully")
+	return nil
+}

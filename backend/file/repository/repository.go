@@ -10,18 +10,21 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
 )
 
 type FileRepository struct {
-	Store *store.Store
+	Store               *store.Store
+	MinioPublicEndpoint string
 }
 
-func NewFileRepository(store *store.Store) *FileRepository {
+func NewFileRepository(store *store.Store, minioPublicEndpoint string) *FileRepository {
 	return &FileRepository{
-		Store: store,
+		Store:               store,
+		MinioPublicEndpoint: minioPublicEndpoint,
 	}
 }
 
@@ -52,8 +55,7 @@ func (r *FileRepository) UploadFileToMinIO(ctx context.Context, filename string,
 		return "", fmt.Errorf("failed to upload file to MinIO: %w", err)
 	}
 
-	endpoint := client.EndpointURL()
-	url := fmt.Sprintf("%s://%s/%s/%s", endpoint.Scheme, endpoint.Host, bucketName, objectName)
+	url := fmt.Sprintf("%s/%s/%s", r.MinioPublicEndpoint, bucketName, objectName)
 
 	log.Info().Str("url", url).Msg("file uploaded to MinIO successfully")
 	return url, nil
@@ -201,28 +203,9 @@ func (r *FileRepository) DeleteFileFromMinIO(ctx context.Context, url string) er
 }
 
 func extractObjectNameFromURL(url string) (string, error) {
-	parts := splitURL(url)
+	parts := strings.Split(url, "/")
 	if len(parts) < 2 {
 		return "", fmt.Errorf("invalid URL format")
 	}
 	return parts[len(parts)-1], nil
-}
-
-func splitURL(url string) []string {
-	var parts []string
-	current := ""
-	for _, char := range url {
-		if char == '/' {
-			if current != "" {
-				parts = append(parts, current)
-				current = ""
-			}
-		} else {
-			current += string(char)
-		}
-	}
-	if current != "" {
-		parts = append(parts, current)
-	}
-	return parts
 }

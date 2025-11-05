@@ -15,10 +15,11 @@ type CookieConfig struct {
 }
 
 type MinioConfig struct {
-	Endpoint  string
-	AccessKey string
-	SecretKey string
-	Secure    bool
+	Endpoint       string
+	PublicEndpoint string
+	AccessKey      string
+	SecretKey      string
+	Secure         bool
 }
 
 type PostgresConfig struct {
@@ -74,9 +75,7 @@ func LoadConfig(path string) (*Config, error) {
 	}
 
 	getMinioCfg(&config)
-
 	getDbCfg(&config)
-
 	getRedisCfg(&config)
 
 	return &config, nil
@@ -95,10 +94,11 @@ func getDbCfg(c *Config) {
 
 func getMinioCfg(c *Config) {
 	c.Storages.Minio = MinioConfig{
-		Endpoint:  viper.GetString("MINIO_ENDPOINT"),
-		AccessKey: viper.GetString("MINIO_ACCESS_KEY"),
-		SecretKey: viper.GetString("MINIO_SECRET_KEY"),
-		Secure:    viper.GetBool("MINIO_SECURE"),
+		Endpoint:       viper.GetString("MINIO_ENDPOINT"),
+		PublicEndpoint: viper.GetString("MINIO_PUBLIC_ENDPOINT"),
+		AccessKey:      viper.GetString("MINIO_ACCESS_KEY"),
+		SecretKey:      viper.GetString("MINIO_SECRET_KEY"),
+		Secure:         viper.GetBool("MINIO_SECURE"),
 	}
 }
 

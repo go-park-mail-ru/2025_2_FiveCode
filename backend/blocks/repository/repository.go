@@ -10,16 +10,21 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 )
 
 type BlocksRepository struct {
-	Store *store.Store
+	Store                 *store.Store
+	MinioInternalEndpoint string
+	MinioPublicEndpoint   string
 }
 
-func NewBlocksRepository(store *store.Store) *BlocksRepository {
+func NewBlocksRepository(store *store.Store, minioInternalEndpoint, minioPublicEndpoint string) *BlocksRepository {
 	return &BlocksRepository{
-		Store: store,
+		Store:                 store,
+		MinioInternalEndpoint: minioInternalEndpoint,
+		MinioPublicEndpoint:   minioPublicEndpoint,
 	}
 }
 
@@ -166,6 +171,9 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 	}()
 
 	blocks := make([]models.BlockWithContent, 0)
+	internalEndpoint := strings.Replace(r.MinioInternalEndpoint, "http://", "", 1)
+	internalEndpoint = strings.Replace(internalEndpoint, "https://", "", 1)
+
 
 	for rows.Next() {
 		var block models.BlockWithContent
@@ -193,7 +201,10 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 			block.Text = text.String
 		}
 		if fileURL.Valid {
-			block.Text = fileURL.String
+			url := fileURL.String
+			url = strings.Replace(url, "0.0.0.0:9000", internalEndpoint, 1)
+			url = strings.Replace(url, r.MinioInternalEndpoint, r.MinioPublicEndpoint, 1)
+			block.Text = url
 		}
 
 		if len(formatsJSON) > 0 {
@@ -255,8 +266,14 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 	}
 
 	if fileURL.Valid {
-		block.Text = fileURL.String
+		url := fileURL.String
+		internalEndpoint := strings.Replace(r.MinioInternalEndpoint, "http://", "", 1)
+		internalEndpoint = strings.Replace(internalEndpoint, "https://", "", 1)
+		url = strings.Replace(url, "0.0.0.0:9000", internalEndpoint, 1)
+		url = strings.Replace(url, r.MinioInternalEndpoint, r.MinioPublicEndpoint, 1)
+		block.Text = url
 	}
+
 
 	if block.Type == models.BlockTypeText {
 		formatsQuery := `

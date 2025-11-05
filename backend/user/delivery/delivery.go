@@ -28,6 +28,7 @@ type UserUsecase interface {
 	GetUserBySession(ctx context.Context, session string) (*models.User, error)
 	UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	GetProfile(ctx context.Context) (*models.User, error)
+	DeleteProfile(ctx context.Context) error
 }
 
 func NewUserDelivery(u UserUsecase) *UserDelivery {
@@ -147,4 +148,23 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutils.WriteJSON(w, http.StatusOK, user)
+}
+
+func (d *UserDelivery) DeleteProfile(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	err := d.Usecase.DeleteProfile(r.Context())
+	if err != nil {
+		if errors.Is(err, namederrors.ErrNotFound) {
+			log.Warn().Err(err).Msg("user not found for profile deletion")
+			apiutils.WriteError(w, http.StatusNotFound, "user not found")
+			return
+		}
+		log.Error().Err(err).Msg("error deleting profile")
+		apiutils.WriteError(w, http.StatusInternalServerError, "error deleting profile")
+		return
+	}
+
+	log.Info().Msg("profile deleted successfully")
+	w.WriteHeader(http.StatusNoContent)
 }

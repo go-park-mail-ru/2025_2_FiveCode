@@ -32,6 +32,7 @@ type UserDeliveryInterface interface {
 	GetProfile(w http.ResponseWriter, r *http.Request)
 	GetProfileBySession(w http.ResponseWriter, r *http.Request)
 	UpdateProfile(w http.ResponseWriter, r *http.Request)
+	DeleteProfile(w http.ResponseWriter, r *http.Request)
 }
 
 type NotesDeliveryInterface interface {
@@ -82,11 +83,11 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	notesUC := notesUsecase.NewNotesUsecase(notesR)
 	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
 
-	blocksR := blocksRepository.NewBlocksRepository(s)
+	blocksR := blocksRepository.NewBlocksRepository(s, conf.Storages.Minio.Endpoint, conf.Storages.Minio.PublicEndpoint)
 	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR, notesR)
 	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
 
-	fileRepo := fileRepository.NewFileRepository(s)
+	fileRepo := fileRepository.NewFileRepository(s, conf.Storages.Minio.PublicEndpoint)
 	fileUC := fileUsecase.NewFileUsecase(fileRepo)
 	layers.FileDelivery = fileDelivery.NewFileDelivery(fileUC)
 

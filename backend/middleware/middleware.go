@@ -39,6 +39,7 @@ var allowed = map[string]bool{
 	"http://localhost:8030":      true,
 	"http://127.0.0.1:8030":      true,
 	"http://89.208.210.115:8030": true,
+	"http://89.208.210.115:8001": true,
 }
 
 func CORS(next http.Handler) http.Handler {
