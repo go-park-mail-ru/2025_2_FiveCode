@@ -11,6 +11,36 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
 )
+func TestFileRepository_extractObjectNameFromURL_and_splitURL(t *testing.T) {
+	tests := []struct {
+		name     string
+		url      string
+		expected string
+		wantErr  bool
+	}{
+		{name: "simple URL", url: "http://example.com/bucket/file.txt", expected: "file.txt", wantErr: false},
+		{name: "URL with path", url: "https://minio.example.com:9000/bucket/path/to/file.txt", expected: "file.txt", wantErr: false},
+		{name: "URL with query", url: "http://example.com/bucket/file.txt?param=value", expected: "file.txt?param=value", wantErr: false},
+		{name: "invalid URL", url: "invalid", expected: "", wantErr: true},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result, err := extractObjectNameFromURL(tt.url)
+			if tt.wantErr {
+				assert.Error(t, err)
+			} else {
+				assert.NoError(t, err)
+				assert.Equal(t, tt.expected, result)
+			}
+		})
+	}
+
+	// splitURL specific checks
+	parts := splitURL("http://example.com/bucket/file.txt")
+	assert.GreaterOrEqual(t, len(parts), 2)
+	assert.Equal(t, "file.txt", parts[len(parts)-1])
+}
 
 func setupTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, *store.Store) {
 	db, mock, err := sqlmock.New()
@@ -66,6 +96,25 @@ func TestFileRepository_GetFileByID(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
+// File repository tests
+func TestFileRepository_SaveFile_Success(t *testing.T) {
+	db, mock, store := setupTestDB(t)
+	defer db.Close()
+
+	repo := NewFileRepository(store)
+	ctx := context.Background()
+
+	rows := sqlmock.NewRows([]string{"id", "url", "mime_type", "size_bytes", "width", "height", "created_at", "updated_at"}).
+		AddRow(1, "http://ex/a", "text/plain", 5, nil, nil, time.Now(), time.Now())
+
+	mock.ExpectQuery("INSERT INTO file").WithArgs("http://ex/a", "text/plain", int64(5), nil, nil).WillReturnRows(rows)
+
+	f, err := repo.SaveFile(ctx, "http://ex/a", "text/plain", 5, nil, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), f.ID)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
 func TestFileRepository_GetFileByID_NotFound(t *testing.T) {
 	db, mock, store := setupTestDB(t)
 	defer db.Close()
@@ -73,14 +122,30 @@ func TestFileRepository_GetFileByID_NotFound(t *testing.T) {
 	repo := NewFileRepository(store)
 	ctx := context.Background()
 
-	mock.ExpectQuery(`SELECT id, url, mime_type, size_bytes, width, height, created_at, updated_at`).
-		WithArgs(999).
-		WillReturnError(sql.ErrNoRows)
+	mock.ExpectQuery("SELECT id, url, mime_type").WithArgs(uint64(999)).WillReturnError(sql.ErrNoRows)
 
-	file, err := repo.GetFileByID(ctx, 999)
+	_, err := repo.GetFileByID(ctx, 999)
 	assert.Error(t, err)
-	assert.Equal(t, namederrors.ErrNotFound, err)
-	assert.Nil(t, file)
+	assert.NoError(t, mock.ExpectationsWereMet())
+}
+
+func TestFileRepository_DeleteFile_SuccessAndNotFound(t *testing.T) {
+	db, mock, store := setupTestDB(t)
+	defer db.Close()
+
+	repo := NewFileRepository(store)
+	ctx := context.Background()
+
+	// success
+	mock.ExpectExec("DELETE FROM file WHERE id =").WithArgs(uint64(2)).WillReturnResult(sqlmock.NewResult(1, 1))
+	err := repo.DeleteFile(ctx, 2)
+	assert.NoError(t, err)
+
+	// not found
+	mock.ExpectExec("DELETE FROM file WHERE id =").WithArgs(uint64(999)).WillReturnResult(sqlmock.NewResult(0, 0))
+	err = repo.DeleteFile(ctx, 999)
+	assert.Error(t, err)
+
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

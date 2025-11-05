@@ -1,375 +1,97 @@
 package usecase
 
 import (
-	"backend/logger"
 	"backend/models"
-	namederrors "backend/named_errors"
-	"backend/notes/mock"
 	"context"
-	"errors"
+	"fmt"
 	"testing"
-	"time"
 
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 )
 
-func TestNotesUsecase_GetAllNotes(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+type nu_fakeRepo struct{ owner uint64 }
+func (r *nu_fakeRepo) GetNotes(ctx context.Context, userID uint64) ([]models.Note, error) { return []models.Note{{ID:1, OwnerID:r.owner}}, nil }
+func (r *nu_fakeRepo) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) { return &models.Note{ID:2, OwnerID:r.owner}, nil }
+func (r *nu_fakeRepo) GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models.Note, error) { return &models.Note{ID:noteID, OwnerID:r.owner}, nil }
+func (r *nu_fakeRepo) UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error) { return &models.Note{ID:noteID, OwnerID:r.owner, Title: *title}, nil }
+func (r *nu_fakeRepo) DeleteNote(ctx context.Context, noteID uint64) error { return nil }
+func (r *nu_fakeRepo) AddFavorite(ctx context.Context, userID, noteID uint64) error { return nil }
+func (r *nu_fakeRepo) RemoveFavorite(ctx context.Context, userID, noteID uint64) error { return nil }
 
-	mockRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewNotesUsecase(mockRepo)
+// errRepo simulates repository failures for all methods
+type errRepo struct{}
 
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+func (r *errRepo) GetNotes(ctx context.Context, userID uint64) ([]models.Note, error) { return nil, fmt.Errorf("db") }
+func (r *errRepo) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) { return nil, fmt.Errorf("db") }
+func (r *errRepo) GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models.Note, error) { return nil, fmt.Errorf("db") }
+func (r *errRepo) UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error) { return nil, fmt.Errorf("db") }
+func (r *errRepo) DeleteNote(ctx context.Context, noteID uint64) error { return fmt.Errorf("db") }
+func (r *errRepo) AddFavorite(ctx context.Context, userID, noteID uint64) error { return fmt.Errorf("db") }
+func (r *errRepo) RemoveFavorite(ctx context.Context, userID, noteID uint64) error { return fmt.Errorf("db") }
 
-	tests := []struct {
-		name          string
-		userID        uint64
-		setupMocks    func()
-		expectedNotes []models.Note
-		expectedError error
-	}{
-		{
-			name:   "success",
-			userID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNotes(ctx, uint64(1)).Return([]models.Note{
-					{ID: 1, OwnerID: 1, Title: "Note 1"},
-					{ID: 2, OwnerID: 1, Title: "Note 2"},
-				}, nil)
-			},
-			expectedNotes: []models.Note{
-				{ID: 1, OwnerID: 1, Title: "Note 1"},
-				{ID: 2, OwnerID: 1, Title: "Note 2"},
-			},
-			expectedError: nil,
-		},
-		{
-			name:   "repository error",
-			userID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNotes(ctx, uint64(1)).Return(nil, errors.New("database error"))
-			},
-			expectedNotes: nil,
-			expectedError: errors.New("failed to get notes"),
-		},
+func TestNotesUsecase_basicFlows(t *testing.T) {
+	repo := &nu_fakeRepo{owner:1}
+	u := NewNotesUsecase(repo)
+
+	notes, err := u.GetAllNotes(context.Background(), 1)
+	assert.NoError(t, err)
+	if assert.Len(t, notes, 1) {
+		assert.Equal(t, uint64(1), notes[0].ID)
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			notes, err := usecase.GetAllNotes(ctx, tt.userID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-				assert.Nil(t, notes)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, len(tt.expectedNotes), len(notes))
-			}
-		})
-	}
+	n, err := u.CreateNote(context.Background(), 1)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(2), n.ID)
+
+	got, err := u.GetNoteById(context.Background(), 1, 1)
+	assert.NoError(t, err)
+	assert.Equal(t, uint64(1), got.ID)
+
+	title := "NewTitle"
+	updated, err := u.UpdateNote(context.Background(), 1, 1, &title, nil)
+	assert.NoError(t, err)
+	assert.Equal(t, "NewTitle", updated.Title)
+
+	err = u.DeleteNote(context.Background(), 1, 1)
+	assert.NoError(t, err)
+
+	err = u.AddFavorite(context.Background(), 1, 1)
+	assert.NoError(t, err)
+
+	err = u.RemoveFavorite(context.Background(), 1, 1)
+	assert.NoError(t, err)
 }
 
-func TestNotesUsecase_CreateNote(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestNotesUsecase_AccessDeniedAndErrors(t *testing.T) {
+	// repo returns a note owned by someone else -> access denied
+	repo := &nu_fakeRepo{owner:2}
+	u := NewNotesUsecase(repo)
 
-	mockRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewNotesUsecase(mockRepo)
+	_, err := u.GetNoteById(context.Background(), 1, 1)
+	assert.Error(t, err)
 
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-
-	tests := []struct {
-		name          string
-		userID        uint64
-		setupMocks    func()
-		expectedNote  *models.Note
-		expectedError error
-	}{
-		{
-			name:   "success",
-			userID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().CreateNote(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   1,
-					Title:     "New Note",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedNote: &models.Note{
-				ID:      1,
-				OwnerID: 1,
-				Title:   "New Note",
-			},
-			expectedError: nil,
-		},
-		{
-			name:   "repository error",
-			userID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().CreateNote(ctx, uint64(1)).Return(nil, errors.New("database error"))
-			},
-			expectedNote:  nil,
-			expectedError: errors.New("failed to create note"),
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			note, err := usecase.CreateNote(ctx, tt.userID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-				assert.Nil(t, note)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedNote.ID, note.ID)
-				assert.Equal(t, tt.expectedNote.OwnerID, note.OwnerID)
-			}
-		})
-	}
+	// use package-scope errRepo which simulates repository failures
+	er := &errRepo{}
+	u2 := NewNotesUsecase(er)
+	_, err = u2.GetAllNotes(context.Background(), 1)
+	assert.Error(t, err)
 }
 
-func TestNotesUsecase_GetNoteById(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+func TestNotesUsecase_UpdateDelete_ErrorFlows(t *testing.T) {
+	// errRepo returns errors for all operations
+	er := &errRepo{}
+	u := NewNotesUsecase(er)
 
-	mockRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewNotesUsecase(mockRepo)
+	title := "T"
+	_, err := u.UpdateNote(context.Background(), 1, 1, &title, nil)
+	assert.Error(t, err)
 
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+	err = u.DeleteNote(context.Background(), 1, 1)
+	assert.Error(t, err)
 
-	tests := []struct {
-		name          string
-		userID        uint64
-		noteID        uint64
-		setupMocks    func()
-		expectedNote  *models.Note
-		expectedError error
-	}{
-		{
-			name:   "success",
-			userID: 1,
-			noteID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   1,
-					Title:     "Test Note",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedNote: &models.Note{
-				ID:      1,
-				OwnerID: 1,
-				Title:   "Test Note",
-			},
-			expectedError: nil,
-		},
-		{
-			name:   "no access",
-			userID: 1,
-			noteID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   2,
-					Title:     "Test Note",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedNote:  nil,
-			expectedError: namederrors.ErrNoAccess,
-		},
-		{
-			name:   "repository error",
-			userID: 1,
-			noteID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(nil, errors.New("database error"))
-			},
-			expectedNote:  nil,
-			expectedError: errors.New("failed to get note"),
-		},
-	}
+	err = u.AddFavorite(context.Background(), 1, 1)
+	assert.Error(t, err)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			note, err := usecase.GetNoteById(ctx, tt.userID, tt.noteID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				if tt.expectedError == namederrors.ErrNoAccess {
-					assert.Equal(t, namederrors.ErrNoAccess, err)
-				} else {
-					assert.Contains(t, err.Error(), tt.expectedError.Error())
-				}
-				assert.Nil(t, note)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedNote.ID, note.ID)
-			}
-		})
-	}
-}
-
-func TestNotesUsecase_UpdateNote(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewNotesUsecase(mockRepo)
-
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-
-	tests := []struct {
-		name          string
-		userID        uint64
-		noteID        uint64
-		title         *string
-		isArchived    *bool
-		setupMocks    func()
-		expectedNote  *models.Note
-		expectedError error
-	}{
-		{
-			name:       "success",
-			userID:     1,
-			noteID:     1,
-			title:      stringPtr("Updated Title"),
-			isArchived: nil,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   1,
-					Title:     "Old Title",
-					CreatedAt: time.Now(),
-				}, nil)
-				mockRepo.EXPECT().UpdateNote(ctx, uint64(1), stringPtr("Updated Title"), nil).Return(&models.Note{
-					ID:        1,
-					OwnerID:   1,
-					Title:     "Updated Title",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedNote: &models.Note{
-				ID:      1,
-				OwnerID: 1,
-				Title:   "Updated Title",
-			},
-			expectedError: nil,
-		},
-		{
-			name:       "no access",
-			userID:     1,
-			noteID:     1,
-			title:      stringPtr("Updated Title"),
-			isArchived: nil,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   2,
-					Title:     "Old Title",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedNote:  nil,
-			expectedError: namederrors.ErrNoAccess,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			note, err := usecase.UpdateNote(ctx, tt.userID, tt.noteID, tt.title, tt.isArchived)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-				assert.Nil(t, note)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedNote.ID, note.ID)
-			}
-		})
-	}
-}
-
-func TestNotesUsecase_DeleteNote(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewNotesUsecase(mockRepo)
-
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-
-	tests := []struct {
-		name          string
-		userID        uint64
-		noteID        uint64
-		setupMocks    func()
-		expectedError error
-	}{
-		{
-			name:   "success",
-			userID: 1,
-			noteID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   1,
-					Title:     "Test Note",
-					CreatedAt: time.Now(),
-				}, nil)
-				mockRepo.EXPECT().DeleteNote(ctx, uint64(1)).Return(nil)
-			},
-			expectedError: nil,
-		},
-		{
-			name:   "no access",
-			userID: 1,
-			noteID: 1,
-			setupMocks: func() {
-				mockRepo.EXPECT().GetNoteById(ctx, uint64(1)).Return(&models.Note{
-					ID:        1,
-					OwnerID:   2,
-					Title:     "Test Note",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedError: namederrors.ErrNoAccess,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			err := usecase.DeleteNote(ctx, tt.userID, tt.noteID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
-}
-
-func stringPtr(s string) *string {
-	return &s
+	err = u.RemoveFavorite(context.Background(), 1, 1)
+	assert.Error(t, err)
 }

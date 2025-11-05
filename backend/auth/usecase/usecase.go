@@ -14,6 +14,7 @@ type AuthUsecase struct {
 	Repository AuthRepository
 }
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type AuthRepository interface {
 	CreateSession(ctx context.Context, userID uint64) (string, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)

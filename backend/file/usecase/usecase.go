@@ -13,6 +13,7 @@ import (
 	"io"
 )
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type FileRepository interface {
 	UploadFileToMinIO(ctx context.Context, filename string, fileData []byte, contentType string) (string, error)
 	SaveFile(ctx context.Context, url, mimeType string, sizeBytes int64, width, height *int) (*models.File, error)

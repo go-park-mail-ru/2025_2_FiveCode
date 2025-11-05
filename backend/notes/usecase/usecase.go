@@ -8,6 +8,7 @@ import (
 	"fmt"
 )
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type NotesUsecase struct {
 	Repository NotesRepository
 }

@@ -10,9 +10,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 	"golang.org/x/crypto/bcrypt"
 )
 

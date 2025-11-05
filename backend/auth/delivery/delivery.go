@@ -19,9 +19,10 @@ type AuthDelivery struct {
 	Usecase         AuthUsecase
 }
 
+//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
 type AuthUsecase interface {
 	Login(ctx context.Context, email string, password string) (*models.User, string, error)
-	Register(ctx context.Context, email string, password string) (*models.User, string, error) // ← Добавить
+	Register(ctx context.Context, email string, password string) (*models.User, string, error)
 	Logout(ctx context.Context, sessionID string) error
 }
 

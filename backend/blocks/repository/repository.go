@@ -23,64 +23,100 @@ func NewBlocksRepository(store *store.Store) *BlocksRepository {
 	}
 }
 
-func (r *BlocksRepository) CreateBlock(ctx context.Context, noteID uint64, blockType models.BlockType, position float64) (*models.Block, error) {
+
+func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Uint64("note_id", noteID).Str("type", string(blockType)).Float64("position", position).Msg("executing CreateBlock")
+	log.Info().
+		Uint64("note_id", noteID).
+		Float64("position", position).
+		Uint64("user_id", userID).
+		Msg("CreateTextBlock: begin")
 
 	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
 	if err != nil {
-		log.Error().Err(err).Msg("CreateBlock: begin transaction failed")
+		log.Error().Err(err).Msg("CreateTextBlock: begin tx failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil {
-			log.Error().Err(err).Msg("CreateBlock: rollback failed")
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			log.Error().Err(err).Msg("CreateTextBlock: rollback failed")
 		}
 	}()
 
-	blockQuery := `
-		INSERT INTO block (note_id, type, position)
-		VALUES ($1, $2, $3)
-		RETURNING id, note_id, type, position, created_at, updated_at, last_edited_by
+	insertBlockQuery := `
+		INSERT INTO block (note_id, type, position, last_edited_by)
+		VALUES ($1, 'text', $2, $3)
+		RETURNING id
 	`
-	log.Info().Str("query", logger.SanitizeQuery(blockQuery)).Msg("Executing insert block query")
-
-	block := &models.Block{}
-	var lastEditedBy sql.NullInt64
-
-	err = tx.QueryRowContext(ctx, blockQuery, noteID, blockType, position).Scan(
-		&block.ID,
-		&block.NoteID,
-		&block.Type,
-		&block.Position,
-		&block.CreatedAt,
-		&block.UpdatedAt,
-		&lastEditedBy,
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to create block")
+	var blockID uint64
+	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(&blockID); err != nil {
+		log.Error().Err(err).Msg("CreateTextBlock: insert block failed")
 		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
-	if blockType == models.BlockTypeText {
-		textQuery := `
-			INSERT INTO block_text (block_id, text)
-			VALUES ($1, $2)
-		`
-		log.Info().Str("query", logger.SanitizeQuery(textQuery)).Msg("Executing insert block_text query")
-		_, err = tx.ExecContext(ctx, textQuery, block.ID, "")
-		if err != nil {
-			log.Error().Err(err).Msg("failed to create block_text")
-			return nil, fmt.Errorf("failed to create block_text: %w", err)
-		}
+	insertTextQuery := `
+		INSERT INTO block_text (block_id, text)
+		VALUES ($1, $2)
+	`
+	if _, err := tx.ExecContext(ctx, insertTextQuery, blockID, ""); err != nil {
+		log.Error().Err(err).Uint64("block_id", blockID).Msg("CreateTextBlock: insert block_text failed")
+		return nil, fmt.Errorf("failed to create block_text: %w", err)
 	}
 
-	if err = tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("failed to commit transaction")
+	if err := tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("CreateTextBlock: commit failed")
 		return nil, fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
-	return block, nil
+	return r.GetBlockByID(ctx, blockID)
+}
+
+func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().
+		Uint64("note_id", noteID).
+		Float64("position", position).
+		Uint64("file_id", fileID).
+		Uint64("user_id", userID).
+		Msg("CreateAttachmentBlock: begin")
+
+	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("CreateAttachmentBlock: begin tx failed")
+		return nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+			log.Error().Err(err).Msg("CreateAttachmentBlock: rollback failed")
+		}
+	}()
+
+	insertBlockQuery := `
+		INSERT INTO block (note_id, type, position, last_edited_by)
+		VALUES ($1, 'attachment', $2, $3)
+		RETURNING id
+	`
+	var blockID uint64
+	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(&blockID); err != nil {
+		log.Error().Err(err).Msg("CreateAttachmentBlock: insert block failed")
+		return nil, fmt.Errorf("failed to create block: %w", err)
+	}
+
+	insertAttachQuery := `
+		INSERT INTO block_attachment (block_id, file_id)
+		VALUES ($1, $2)
+	`
+	if _, err := tx.ExecContext(ctx, insertAttachQuery, blockID, fileID); err != nil {
+		log.Error().Err(err).Uint64("block_id", blockID).Msg("CreateAttachmentBlock: insert block_attachment failed")
+		return nil, fmt.Errorf("failed to create block_attachment: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("CreateAttachmentBlock: commit failed")
+		return nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return r.GetBlockByID(ctx, blockID)
 }
 
 func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
@@ -415,10 +451,12 @@ func (r *BlocksRepository) GetBlockNoteID(ctx context.Context, blockID uint64) (
 	return noteID, nil
 }
 
-func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]struct {
+type BlockPositionInfo struct {
 	ID       uint64
 	Position float64
-}, error) {
+}
+
+func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]BlockPositionInfo, error) {
 	log := logger.FromContext(ctx)
 
 	query := `
@@ -440,16 +478,10 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 		}
 	}()
 
-	var blocks []struct {
-		ID       uint64
-		Position float64
-	}
+	var blocks []BlockPositionInfo
 
 	for rows.Next() {
-		var block struct {
-			ID       uint64
-			Position float64
-		}
+		var block BlockPositionInfo
 		if err := rows.Scan(&block.ID, &block.Position); err != nil {
 			log.Error().Err(err).Msg("failed to scan block for position calc")
 			return nil, fmt.Errorf("failed to scan block: %w", err)

@@ -23,6 +23,7 @@ type UserDelivery struct {
 	Usecase UserUsecase
 }
 
+//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
 type UserUsecase interface {
 	GetUserBySession(ctx context.Context, session string) (*models.User, error)
 	UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error)

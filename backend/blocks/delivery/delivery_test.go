@@ -14,10 +14,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"go.uber.org/mock/gomock"
 )
 
 func setupContext(t *testing.T, userID uint64) context.Context {
@@ -27,26 +27,27 @@ func setupContext(t *testing.T, userID uint64) context.Context {
 	return middleware.WithUserID(ctx, userID)
 }
 
-func TestBlocksDelivery_CreateBlock(t *testing.T) {
+func TestBlocksDelivery_CreateTextBlock(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUsecase := mock.NewMockBlocksUsecase(ctrl)
 	delivery := NewBlocksDelivery(mockUsecase)
-
 	ctx := setupContext(t, 1)
 
-	body := CreateBlockRequest{
+	body := baseCreateBlockRequest{
+		Type:          models.BlockTypeText,
 		BeforeBlockID: nil,
 	}
 	bodyBytes, _ := json.Marshal(body)
 
-	mockUsecase.EXPECT().CreateBlock(gomock.Any(), uint64(1), uint64(1), nil).Return(&models.Block{
-		ID:        1,
-		NoteID:    1,
-		Type:      models.BlockTypeText,
-		Position:  1.0,
-		CreatedAt: time.Now(),
+	mockUsecase.EXPECT().CreateTextBlock(gomock.Any(), uint64(1), uint64(1), nil).Return(&models.BlockWithContent{
+		Block: models.Block{
+			ID:       1,
+			NoteID:   1,
+			Type:     models.BlockTypeText,
+			Position: 1.0,
+		},
 	}, nil)
 
 	req := httptest.NewRequest("POST", "/notes/1/blocks", bytes.NewBuffer(bodyBytes))
@@ -69,9 +70,8 @@ func TestBlocksDelivery_CreateBlock_NoUserID(t *testing.T) {
 	ctx := context.Background()
 	log := zerolog.Nop()
 	ctx = logger.ToContext(ctx, log)
-	// No user ID in context
 
-	body := CreateBlockRequest{BeforeBlockID: nil}
+	body := baseCreateBlockRequest{Type: models.BlockTypeText}
 	bodyBytes, _ := json.Marshal(body)
 
 	req := httptest.NewRequest("POST", "/notes/1/blocks", bytes.NewBuffer(bodyBytes))
@@ -84,19 +84,18 @@ func TestBlocksDelivery_CreateBlock_NoUserID(t *testing.T) {
 	assert.Equal(t, http.StatusUnauthorized, rr.Code)
 }
 
-func TestBlocksDelivery_CreateBlock_Error(t *testing.T) {
+func TestBlocksDelivery_CreateTextBlock_Error(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockUsecase := mock.NewMockBlocksUsecase(ctrl)
 	delivery := NewBlocksDelivery(mockUsecase)
-
 	ctx := setupContext(t, 1)
 
-	body := CreateBlockRequest{BeforeBlockID: nil}
+	body := baseCreateBlockRequest{Type: models.BlockTypeText}
 	bodyBytes, _ := json.Marshal(body)
 
-	mockUsecase.EXPECT().CreateBlock(gomock.Any(), uint64(1), uint64(1), nil).Return(nil, assert.AnError)
+	mockUsecase.EXPECT().CreateTextBlock(gomock.Any(), uint64(1), uint64(1), nil).Return(nil, assert.AnError)
 
 	req := httptest.NewRequest("POST", "/notes/1/blocks", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
@@ -180,7 +179,6 @@ func TestBlocksDelivery_GetBlock_NoUserID(t *testing.T) {
 	ctx := context.Background()
 	log := zerolog.Nop()
 	ctx = logger.ToContext(ctx, log)
-	// No user ID in context
 
 	req := httptest.NewRequest("GET", "/blocks/1", nil)
 	req = req.WithContext(ctx)
@@ -239,7 +237,7 @@ func TestBlocksDelivery_UpdateBlock(t *testing.T) {
 		Text: "Updated text",
 	}, nil)
 
-	req := httptest.NewRequest("PUT", "/blocks/1", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PATCH", "/blocks/1", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -259,12 +257,11 @@ func TestBlocksDelivery_UpdateBlock_NoUserID(t *testing.T) {
 	ctx := context.Background()
 	log := zerolog.Nop()
 	ctx = logger.ToContext(ctx, log)
-	// No user ID in context
 
 	body := UpdateBlockRequest{Text: "text", Formats: []BlockTextFormatInput{}}
 	bodyBytes, _ := json.Marshal(body)
 
-	req := httptest.NewRequest("PUT", "/blocks/1", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PATCH", "/blocks/1", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -305,7 +302,6 @@ func TestBlocksDelivery_DeleteBlock_NoUserID(t *testing.T) {
 	ctx := context.Background()
 	log := zerolog.Nop()
 	ctx = logger.ToContext(ctx, log)
-	// No user ID in context
 
 	req := httptest.NewRequest("DELETE", "/blocks/1", nil)
 	req = req.WithContext(ctx)
@@ -360,7 +356,7 @@ func TestBlocksDelivery_UpdateBlockPosition(t *testing.T) {
 		CreatedAt: time.Now(),
 	}, nil)
 
-	req := httptest.NewRequest("PATCH", "/blocks/1/position", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PUT", "/blocks/1/position", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -504,7 +500,7 @@ func TestBlocksDelivery_UpdateBlock_InvalidID(t *testing.T) {
 	body := UpdateBlockRequest{Text: "text"}
 	bodyBytes, _ := json.Marshal(body)
 
-	req := httptest.NewRequest("PUT", "/blocks/invalid", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PATCH", "/blocks/invalid", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "invalid"})
 	rr := httptest.NewRecorder()
@@ -523,7 +519,7 @@ func TestBlocksDelivery_UpdateBlock_InvalidBody(t *testing.T) {
 
 	ctx := setupContext(t, 1)
 
-	req := httptest.NewRequest("PUT", "/blocks/1", bytes.NewBufferString("invalid json"))
+	req := httptest.NewRequest("PATCH", "/blocks/1", bytes.NewBufferString("invalid json"))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -545,7 +541,7 @@ func TestBlocksDelivery_UpdateBlockPosition_InvalidID(t *testing.T) {
 	body := UpdateBlockPositionRequest{BeforeBlockID: nil}
 	bodyBytes, _ := json.Marshal(body)
 
-	req := httptest.NewRequest("PATCH", "/blocks/invalid/position", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PUT", "/blocks/invalid/position", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "invalid"})
 	rr := httptest.NewRecorder()
@@ -564,7 +560,7 @@ func TestBlocksDelivery_UpdateBlockPosition_InvalidBody(t *testing.T) {
 
 	ctx := setupContext(t, 1)
 
-	req := httptest.NewRequest("PATCH", "/blocks/1/position", bytes.NewBufferString("invalid json"))
+	req := httptest.NewRequest("PUT", "/blocks/1/position", bytes.NewBufferString("invalid json"))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -588,7 +584,7 @@ func TestBlocksDelivery_UpdateBlockPosition_Error(t *testing.T) {
 
 	mockUsecase.EXPECT().UpdateBlockPosition(gomock.Any(), uint64(1), uint64(1), nil).Return(nil, assert.AnError)
 
-	req := httptest.NewRequest("PATCH", "/blocks/1/position", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PUT", "/blocks/1/position", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -612,7 +608,7 @@ func TestBlocksDelivery_UpdateBlock_Error(t *testing.T) {
 
 	mockUsecase.EXPECT().UpdateBlock(gomock.Any(), uint64(1), uint64(1), "text", gomock.Any()).Return(nil, assert.AnError)
 
-	req := httptest.NewRequest("PUT", "/blocks/1", bytes.NewBuffer(bodyBytes))
+	req := httptest.NewRequest("PATCH", "/blocks/1", bytes.NewBuffer(bodyBytes))
 	req = req.WithContext(ctx)
 	req = mux.SetURLVars(req, map[string]string{"block_id": "1"})
 	rr := httptest.NewRecorder()
@@ -632,7 +628,6 @@ func TestBlocksDelivery_GetBlocks_NoUserID(t *testing.T) {
 	ctx := context.Background()
 	log := zerolog.Nop()
 	ctx = logger.ToContext(ctx, log)
-	// No user ID in context
 
 	req := httptest.NewRequest("GET", "/notes/1/blocks", nil)
 	req = req.WithContext(ctx)

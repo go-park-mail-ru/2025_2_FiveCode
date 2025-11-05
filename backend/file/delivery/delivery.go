@@ -23,6 +23,7 @@ type FileDelivery struct {
 	Usecase FileUsecase
 }
 
+//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
 type FileUsecase interface {
 	UploadFile(ctx context.Context, file io.Reader, filename, contentType string, size int64) (*models.File, error)
 	GetFile(ctx context.Context, fileID uint64) (*models.File, error)

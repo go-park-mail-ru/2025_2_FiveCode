@@ -9,6 +9,7 @@ import (
 	"golang.org/x/crypto/bcrypt"
 )
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type UserRepository interface {
 	UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	GetProfile(ctx context.Context) (*models.User, error)

@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/mux"
 )
 
+//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
 type NotesUsecase interface {
 	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
 	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)

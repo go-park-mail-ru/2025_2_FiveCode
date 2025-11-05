@@ -7,6 +7,8 @@ import (
 	"context"
 	"fmt"
 	"sort"
+
+	blocksRepository "backend/blocks/repository"
 )
 
 type BlocksUsecase struct {
@@ -14,18 +16,17 @@ type BlocksUsecase struct {
 	NotesRepo  NotesRepository
 }
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type BlocksRepository interface {
-	CreateBlock(ctx context.Context, noteID uint64, blockType models.BlockType, position float64) (*models.Block, error)
+	CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error)
+	CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error)
 	GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error)
 	GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error)
 	UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error)
 	UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models.Block, error)
 	DeleteBlock(ctx context.Context, blockID uint64) error
 	GetBlockNoteID(ctx context.Context, blockID uint64) (uint64, error)
-	GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]struct {
-		ID       uint64
-		Position float64
-	}, error)
+	GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]blocksRepository.BlockPositionInfo, error)
 }
 
 type NotesRepository interface {
@@ -39,9 +40,13 @@ func NewBlocksUsecase(blocksRepo BlocksRepository, notesRepo NotesRepository) *B
 	}
 }
 
-func (u *BlocksUsecase) CreateBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
-	log := logger.FromContext(ctx)
-	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("creating block")
+func (u *BlocksUsecase) CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx).With().
+		Uint64("user_id", userID).
+		Uint64("note_id", noteID).
+		Str("type", string(models.BlockTypeText)).
+		Logger()
+
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
 		return nil, err
 	}
@@ -52,10 +57,41 @@ func (u *BlocksUsecase) CreateBlock(ctx context.Context, userID, noteID uint64, 
 		return nil, fmt.Errorf("failed to calculate position: %w", err)
 	}
 
-	block, err := u.BlocksRepo.CreateBlock(ctx, noteID, models.BlockTypeText, position)
+	block, err := u.BlocksRepo.CreateTextBlock(ctx, noteID, position, userID)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create block in repository")
-		return nil, fmt.Errorf("failed to create block: %w", err)
+		log.Error().Err(err).Msg("failed to create text block")
+		return nil, fmt.Errorf("failed to create text block: %w", err)
+	}
+
+	return block, nil
+}
+
+func (u *BlocksUsecase) CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx).With().
+		Uint64("user_id", userID).
+		Uint64("note_id", noteID).
+		Str("type", string(models.BlockTypeAttachment)).
+		Uint64("file_id", fileID).
+		Logger()
+
+	if fileID == 0 {
+		return nil, fmt.Errorf("file_id is required")
+	}
+
+	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
+		return nil, err
+	}
+
+	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, 0)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to calculate position")
+		return nil, fmt.Errorf("failed to calculate position: %w", err)
+	}
+
+	block, err := u.BlocksRepo.CreateAttachmentBlock(ctx, noteID, position, fileID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create attachment block")
+		return nil, fmt.Errorf("failed to create attachment block: %w", err)
 	}
 
 	return block, nil
@@ -202,10 +238,7 @@ func (u *BlocksUsecase) calculatePosition(ctx context.Context, noteID uint64, be
 		return maxPos + 1.0, nil
 	}
 
-	var beforeBlock *struct {
-		ID       uint64
-		Position float64
-	}
+	var beforeBlock *blocksRepository.BlockPositionInfo
 	for i := range blocks {
 		if blocks[i].ID == *beforeBlockID {
 			beforeBlock = &blocks[i]
@@ -217,10 +250,7 @@ func (u *BlocksUsecase) calculatePosition(ctx context.Context, noteID uint64, be
 		return 0, fmt.Errorf("before_block not found")
 	}
 
-	var prevBlock *struct {
-		ID       uint64
-		Position float64
-	}
+	var prevBlock *blocksRepository.BlockPositionInfo
 	for i := range blocks {
 		if blocks[i].Position < beforeBlock.Position {
 			if prevBlock == nil || blocks[i].Position > prevBlock.Position {
