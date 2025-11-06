@@ -3,8 +3,7 @@ package store
 import (
 	"context"
 	"fmt"
-	"mime/multipart"
-	"os"
+	"strings"
 
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
@@ -13,10 +12,12 @@ import (
 const defaultBucketName = "notes-app"
 
 type MinioStorage struct {
-	client *minio.Client
+	client           *minio.Client
+	internalEndpoint string // 0.0.0.0:8001
+	publicEndpoint   string // http://89.208.210.115:8001
 }
 
-func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*MinioStorage, error) {
+func NewMinioStorage(endpoint, accessKey, secretKey, publicEndpoint string, secure bool) (*MinioStorage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: secure,
@@ -26,7 +27,9 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 	}
 
 	storage := &MinioStorage{
-		client: client,
+		client:           client,
+		internalEndpoint: endpoint,
+		publicEndpoint:   publicEndpoint,
 	}
 
 	ctx := context.Background()
@@ -64,27 +67,32 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 	return storage, nil
 }
 
-func (s *MinioStorage) LoadImg(bucketName, fileName string, file multipart.File, fileSize int64) error {
-	if bucketName == "" {
-		bucketName = os.Getenv("MINIO_BUCKET_NAME")
-	}
-	_, err := s.client.PutObject(context.Background(), bucketName, fileName, file, fileSize, minio.PutObjectOptions{})
-	return err
-}
-
-func (s *MinioStorage) DeleteImg(bucketName, fileName string) error {
-	if bucketName == "" {
-		bucketName = os.Getenv("MINIO_BUCKET_NAME")
-	}
-	return s.client.RemoveObject(context.Background(), bucketName, fileName, minio.RemoveObjectOptions{})
-}
-
-func (s *MinioStorage) GetFileURL(fileName string) string {
-	endpoint := s.client.EndpointURL().String()
-	return fmt.Sprintf("%s/%s/%s", endpoint, defaultBucketName, fileName)
-}
-
-// GetClient возвращает MinIO клиента (правильная сигнатура)
 func (s *MinioStorage) GetClient() *minio.Client {
 	return s.client
+}
+
+func (s *MinioStorage) TransformToPublicURL(internalURL string) string {
+	if internalURL == "" {
+		return ""
+	}
+
+	url := internalURL
+
+	normalizedInternal := strings.Replace(s.internalEndpoint, "http://", "", 1)
+	normalizedInternal = strings.Replace(normalizedInternal, "https://", "", 1)
+
+	normalizedPublic := strings.Replace(s.publicEndpoint, "http://", "", 1)
+	normalizedPublic = strings.Replace(normalizedPublic, "https://", "", 1)
+
+	url = strings.Replace(url, normalizedInternal, normalizedPublic, 1)
+
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		if strings.HasPrefix(s.publicEndpoint, "https://") {
+			url = "https://" + url
+		} else {
+			url = "http://" + url
+		}
+	}
+
+	return url
 }

@@ -17,14 +17,12 @@ import (
 )
 
 type FileRepository struct {
-	Store               *store.Store
-	MinioPublicEndpoint string
+	Store *store.Store
 }
 
-func NewFileRepository(store *store.Store, minioPublicEndpoint string) *FileRepository {
+func NewFileRepository(store *store.Store) *FileRepository {
 	return &FileRepository{
-		Store:               store,
-		MinioPublicEndpoint: minioPublicEndpoint,
+		Store: store,
 	}
 }
 
@@ -55,10 +53,16 @@ func (r *FileRepository) UploadFileToMinIO(ctx context.Context, filename string,
 		return "", fmt.Errorf("failed to upload file to MinIO: %w", err)
 	}
 
-	url := fmt.Sprintf("%s/%s/%s", r.MinioPublicEndpoint, bucketName, objectName)
+	endpoint := client.EndpointURL()
+	scheme := endpoint.Scheme
+	if scheme == "" {
+		scheme = "http"
+	}
 
-	log.Info().Str("url", url).Msg("file uploaded to MinIO successfully")
-	return url, nil
+	internalURL := fmt.Sprintf("%s://%s/%s/%s", scheme, endpoint.Host, bucketName, objectName)
+
+	log.Info().Str("url", internalURL).Msg("file uploaded to MinIO successfully")
+	return internalURL, nil
 }
 
 func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, sizeBytes int64, width, height *int) (*models.File, error) {

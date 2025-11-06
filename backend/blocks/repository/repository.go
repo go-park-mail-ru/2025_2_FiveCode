@@ -10,24 +10,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 )
 
 type BlocksRepository struct {
-	Store                 *store.Store
-	MinioInternalEndpoint string
-	MinioPublicEndpoint   string
+	Store *store.Store
 }
 
-func NewBlocksRepository(store *store.Store, minioInternalEndpoint, minioPublicEndpoint string) *BlocksRepository {
+func NewBlocksRepository(store *store.Store) *BlocksRepository {
 	return &BlocksRepository{
-		Store:                 store,
-		MinioInternalEndpoint: minioInternalEndpoint,
-		MinioPublicEndpoint:   minioPublicEndpoint,
+		Store: store,
 	}
 }
-
 
 func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
@@ -43,7 +37,7 @@ func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, p
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Error().Err(err).Msg("CreateTextBlock: rollback failed")
 		}
 	}()
@@ -171,9 +165,6 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 	}()
 
 	blocks := make([]models.BlockWithContent, 0)
-	internalEndpoint := strings.Replace(r.MinioInternalEndpoint, "http://", "", 1)
-	internalEndpoint = strings.Replace(internalEndpoint, "https://", "", 1)
-
 
 	for rows.Next() {
 		var block models.BlockWithContent
@@ -200,11 +191,11 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		if text.Valid {
 			block.Text = text.String
 		}
+
 		if fileURL.Valid {
-			url := fileURL.String
-			url = strings.Replace(url, "0.0.0.0:9000", internalEndpoint, 1)
-			url = strings.Replace(url, r.MinioInternalEndpoint, r.MinioPublicEndpoint, 1)
-			block.Text = url
+			internalURL := fileURL.String
+			publicURL := r.Store.Minio.TransformToPublicURL(internalURL)
+			block.Text = publicURL
 		}
 
 		if len(formatsJSON) > 0 {
@@ -266,14 +257,10 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 	}
 
 	if fileURL.Valid {
-		url := fileURL.String
-		internalEndpoint := strings.Replace(r.MinioInternalEndpoint, "http://", "", 1)
-		internalEndpoint = strings.Replace(internalEndpoint, "https://", "", 1)
-		url = strings.Replace(url, "0.0.0.0:9000", internalEndpoint, 1)
-		url = strings.Replace(url, r.MinioInternalEndpoint, r.MinioPublicEndpoint, 1)
-		block.Text = url
+		internalURL := fileURL.String
+		publicURL := r.Store.Minio.TransformToPublicURL(internalURL)
+		block.Text = publicURL
 	}
-
 
 	if block.Type == models.BlockTypeText {
 		formatsQuery := `
@@ -368,7 +355,6 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 			if _, err = tx.ExecContext(ctx, insertFormatQuery,
 				blockTextID, f.StartOffset, f.EndOffset, f.Bold, f.Italic, f.Underline, f.Strikethrough, link, f.Font, f.Size,
 			); err != nil {
-				r.Store.Mu.Unlock()
 				log.Error().Err(err).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: insert format failed")
 				return nil, fmt.Errorf("failed to insert format: %w", err)
 			}

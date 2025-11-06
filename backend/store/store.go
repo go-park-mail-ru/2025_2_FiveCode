@@ -61,6 +61,7 @@ func (s *Store) InitMinioStorage(conf *config.Config) error {
 		conf.Storages.Minio.Endpoint,
 		conf.Storages.Minio.AccessKey,
 		conf.Storages.Minio.SecretKey,
+		conf.Storages.Minio.PublicEndpoint,
 		conf.Storages.Minio.Secure,
 	)
 	if err != nil {

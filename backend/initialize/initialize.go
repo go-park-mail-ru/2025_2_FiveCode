@@ -83,11 +83,11 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	notesUC := notesUsecase.NewNotesUsecase(notesR)
 	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
 
-	blocksR := blocksRepository.NewBlocksRepository(s, conf.Storages.Minio.Endpoint, conf.Storages.Minio.PublicEndpoint)
+	blocksR := blocksRepository.NewBlocksRepository(s)
 	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR, notesR)
 	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
 
-	fileRepo := fileRepository.NewFileRepository(s, conf.Storages.Minio.PublicEndpoint)
+	fileRepo := fileRepository.NewFileRepository(s)
 	fileUC := fileUsecase.NewFileUsecase(fileRepo)
 	layers.FileDelivery = fileDelivery.NewFileDelivery(fileUC)
 
