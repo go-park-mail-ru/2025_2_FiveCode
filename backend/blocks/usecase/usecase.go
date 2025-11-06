@@ -20,10 +20,12 @@ type BlocksUsecase struct {
 type BlocksRepository interface {
 	CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error)
 	CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error)
+	CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error)
 	GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error)
 	GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error)
 	UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error)
 	UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models.Block, error)
+	UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.BlockWithContent, error)
 	DeleteBlock(ctx context.Context, blockID uint64) error
 	GetBlockNoteID(ctx context.Context, blockID uint64) (uint64, error)
 	GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]blocksRepository.BlockPositionInfo, error)
@@ -97,6 +99,63 @@ func (u *BlocksUsecase) CreateAttachmentBlock(ctx context.Context, userID, noteI
 	return block, nil
 }
 
+func (u *BlocksUsecase) CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("creating code block")
+    if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
+        return nil, err
+    }
+    position, err := u.calculatePosition(ctx, noteID, beforeBlockID, 0)
+    if err != nil {
+        log.Error().Err(err).Msg("failed to calculate position for code block")
+        return nil, fmt.Errorf("failed to calculate position for code block: %w", err)
+    }
+    return u.BlocksRepo.CreateCodeBlock(ctx, noteID, position, userID)
+}
+
+func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID, blockID uint64, text, language, codeText *string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
+    log := logger.FromContext(ctx)
+	log.Info().Uint64("user_id", userID).Uint64("block_id", blockID).Msg("updating block")
+    
+    noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
+    if err != nil {
+        log.Error().Err(err).Msg("failed to get block note id for update")
+        return nil, fmt.Errorf("failed to get block note id for update: %w", err)
+    }
+    if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
+        return nil, err
+    }
+
+    block, err := u.BlocksRepo.GetBlockByID(ctx, blockID)
+    if err != nil {
+        log.Error().Err(err).Msg("failed to get block for type check")
+        return nil, fmt.Errorf("failed to get block for type check: %w", err)
+    }
+
+    switch block.Type {
+    case models.BlockTypeCode:
+        lang := block.Language
+        if language != nil {
+            lang = *language
+        }
+        ct := block.CodeText
+        if codeText != nil {
+            ct = *codeText
+        }
+        return u.BlocksRepo.UpdateCodeBlock(ctx, blockID, lang, ct)
+    case models.BlockTypeText:
+        if text == nil {
+			log.Warn().Msg("UpdateBlock called for text block but text is nil")
+            return block, nil
+        }
+        optimizedFormats := optimizeFormats(*text, formats)
+        return u.BlocksRepo.UpdateBlockText(ctx, blockID, *text, optimizedFormats)
+    default:
+        log.Warn().Str("type", string(block.Type)).Msg("attempted to update block of unsupported type")
+        return block, nil
+    }
+}
+
 func (u *BlocksUsecase) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("getting blocks")
@@ -124,30 +183,6 @@ func (u *BlocksUsecase) GetBlock(ctx context.Context, userID, blockID uint64) (*
 
 	if err := u.checkNoteAccess(ctx, userID, block.NoteID); err != nil {
 		return nil, err
-	}
-
-	return block, nil
-}
-
-func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
-	log := logger.FromContext(ctx)
-	log.Info().Uint64("user_id", userID).Uint64("block_id", blockID).Msg("updating block")
-	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to get block note id")
-		return nil, fmt.Errorf("failed to get block note id: %w", err)
-	}
-
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
-	}
-
-	optimizedFormats := optimizeFormats(text, formats)
-
-	block, err := u.BlocksRepo.UpdateBlockText(ctx, blockID, text, optimizedFormats)
-	if err != nil {
-		log.Error().Err(err).Msg("failed to update block in repository")
-		return nil, fmt.Errorf("failed to update block: %w", err)
 	}
 
 	return block, nil

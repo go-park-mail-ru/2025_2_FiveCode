@@ -28,6 +28,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	profile.Use(mw.AuthMiddleware(s))
 	profile.HandleFunc("/profile", deliveries.UserDelivery.GetProfile).Methods("GET")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.UpdateProfile).Methods("PUT")
+	profile.HandleFunc("/profile", deliveries.UserDelivery.DeleteProfile).Methods("DELETE")
 
 	notes := api.PathPrefix("").Subrouter()
 	notes.Use(mw.AuthMiddleware(s))

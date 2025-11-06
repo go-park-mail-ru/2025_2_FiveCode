@@ -19,10 +19,11 @@ import (
 type BlocksUsecase interface {
 	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.BlockWithContent, error)
 	GetBlock(ctx context.Context, userID, blockID uint64) (*models.BlockWithContent, error)
-	UpdateBlock(ctx context.Context, userID, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error)
+	UpdateBlock(ctx context.Context, userID, blockID uint64, text, language, codeText *string, formats []models.BlockTextFormat) (*models.BlockWithContent, error)
 	DeleteBlock(ctx context.Context, userID, blockID uint64) error
 	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, afterBlockID *uint64) (*models.Block, error)
 	CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error)
+	CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error)
 	CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.BlockWithContent, error)
 }
 
@@ -82,9 +83,33 @@ func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		d.createTextBlock(w, r, userID, noteID, body)
 	case models.BlockTypeAttachment:
 		d.createAttachmentBlock(w, r, userID, noteID, body)
+	case models.BlockTypeCode:
+		d.createCodeBlock(w, r, userID, noteID, body)
 	default:
 		apiutils.WriteError(w, http.StatusBadRequest, "unsupported block type")
 	}
+}
+
+type createCodeBlockRequest struct {
+	baseCreateBlockRequest
+}
+
+func (d *BlocksDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
+	log := logger.FromContext(r.Context())
+	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("handling create code block request")
+	var req createCodeBlockRequest
+	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
+		log.Warn().Err(err).Msg("invalid payload for code block")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for code block")
+		return
+	}
+
+	block, err := d.Usecase.CreateCodeBlock(r.Context(), userID, noteID, req.BeforeBlockID)
+	if err != nil {
+		handleBlockError(w, r.Context(), err)
+		return
+	}
+	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
 type createTextBlockRequest struct {
@@ -185,8 +210,10 @@ func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateBlockRequest struct {
-	Text    string                 `json:"text"`
-	Formats []BlockTextFormatInput `json:"formats"`
+	Text     *string                `json:"text,omitempty"`
+	Formats  []BlockTextFormatInput `json:"formats,omitempty"`
+	Language *string                `json:"language,omitempty"`
+	CodeText *string                `json:"code_text,omitempty"`
 }
 
 type BlockTextFormatInput struct {
@@ -232,7 +259,7 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 
 	formats := convertToFormats(req.Formats)
 
-	block, err := d.Usecase.UpdateBlock(r.Context(), userID, blockID, req.Text, formats)
+	block, err := d.Usecase.UpdateBlock(r.Context(), userID, blockID, req.Text, req.Language, req.CodeText, formats)
 	if err != nil {
 		handleBlockError(w, r.Context(), err)
 		return

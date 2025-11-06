@@ -55,6 +55,9 @@ type BlockTextFormat struct {
 
 type BlockWithContent struct {
 	Block
-	Text    string            `json:"text,omitempty"`
-	Formats []BlockTextFormat `json:"formats,omitempty"`
+	Text     string            `json:"text,omitempty"`
+	Formats  []BlockTextFormat `json:"formats,omitempty"`
+	Language string            `json:"language,omitempty"`
+	CodeText string            `json:"code_text,omitempty"`
+	URL      string            `json:"url,omitempty"`
 }

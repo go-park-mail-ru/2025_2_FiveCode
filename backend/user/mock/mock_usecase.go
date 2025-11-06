@@ -35,6 +35,20 @@ func (m *MockUserRepository) EXPECT() *MockUserRepositoryMockRecorder {
 	return m.recorder
 }
 
+// DeleteUser mocks base method.
+func (m *MockUserRepository) DeleteUser(ctx context.Context, userID uint64) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteUser", ctx, userID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteUser indicates an expected call of DeleteUser.
+func (mr *MockUserRepositoryMockRecorder) DeleteUser(ctx, userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteUser", reflect.TypeOf((*MockUserRepository)(nil).DeleteUser), ctx, userID)
+}
+
 // GetProfile mocks base method.
 func (m *MockUserRepository) GetProfile(ctx context.Context) (*models.User, error) {
 	m.ctrl.T.Helper()
@@ -101,6 +115,20 @@ func NewMockAuthRepository(ctrl *gomock.Controller) *MockAuthRepository {
 // EXPECT returns an object that allows the caller to indicate expected use.
 func (m *MockAuthRepository) EXPECT() *MockAuthRepositoryMockRecorder {
 	return m.recorder
+}
+
+// DeleteSession mocks base method.
+func (m *MockAuthRepository) DeleteSession(ctx context.Context, sessionID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteSession", ctx, sessionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteSession indicates an expected call of DeleteSession.
+func (mr *MockAuthRepositoryMockRecorder) DeleteSession(ctx, sessionID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteSession", reflect.TypeOf((*MockAuthRepository)(nil).DeleteSession), ctx, sessionID)
 }
 
 // GetUserIDBySession mocks base method.

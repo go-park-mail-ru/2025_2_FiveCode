@@ -50,6 +50,21 @@ func (mr *MockBlocksUsecaseMockRecorder) CreateAttachmentBlock(ctx, userID, note
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAttachmentBlock", reflect.TypeOf((*MockBlocksUsecase)(nil).CreateAttachmentBlock), ctx, userID, noteID, beforeBlockID, fileID)
 }
 
+// CreateCodeBlock mocks base method.
+func (m *MockBlocksUsecase) CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCodeBlock", ctx, userID, noteID, beforeBlockID)
+	ret0, _ := ret[0].(*models.BlockWithContent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateCodeBlock indicates an expected call of CreateCodeBlock.
+func (mr *MockBlocksUsecaseMockRecorder) CreateCodeBlock(ctx, userID, noteID, beforeBlockID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCodeBlock", reflect.TypeOf((*MockBlocksUsecase)(nil).CreateCodeBlock), ctx, userID, noteID, beforeBlockID)
+}
+
 // CreateTextBlock mocks base method.
 func (m *MockBlocksUsecase) CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error) {
 	m.ctrl.T.Helper()
@@ -110,18 +125,18 @@ func (mr *MockBlocksUsecaseMockRecorder) GetBlocks(ctx, userID, noteID interface
 }
 
 // UpdateBlock mocks base method.
-func (m *MockBlocksUsecase) UpdateBlock(ctx context.Context, userID, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
+func (m *MockBlocksUsecase) UpdateBlock(ctx context.Context, userID, blockID uint64, text, language, codeText *string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
 	m.ctrl.T.Helper()
-	ret := m.ctrl.Call(m, "UpdateBlock", ctx, userID, blockID, text, formats)
+	ret := m.ctrl.Call(m, "UpdateBlock", ctx, userID, blockID, text, language, codeText, formats)
 	ret0, _ := ret[0].(*models.BlockWithContent)
 	ret1, _ := ret[1].(error)
 	return ret0, ret1
 }
 
 // UpdateBlock indicates an expected call of UpdateBlock.
-func (mr *MockBlocksUsecaseMockRecorder) UpdateBlock(ctx, userID, blockID, text, formats interface{}) *gomock.Call {
+func (mr *MockBlocksUsecaseMockRecorder) UpdateBlock(ctx, userID, blockID, text, language, codeText, formats interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBlock", reflect.TypeOf((*MockBlocksUsecase)(nil).UpdateBlock), ctx, userID, blockID, text, formats)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBlock", reflect.TypeOf((*MockBlocksUsecase)(nil).UpdateBlock), ctx, userID, blockID, text, language, codeText, formats)
 }
 
 // UpdateBlockPosition mocks base method.

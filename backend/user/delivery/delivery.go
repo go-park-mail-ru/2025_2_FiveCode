@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/pkg/errors"
 )
@@ -28,7 +29,7 @@ type UserUsecase interface {
 	GetUserBySession(ctx context.Context, session string) (*models.User, error)
 	UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	GetProfile(ctx context.Context) (*models.User, error)
-	DeleteProfile(ctx context.Context) error
+	DeleteProfile(ctx context.Context, sessionID string) error
 }
 
 func NewUserDelivery(u UserUsecase) *UserDelivery {
@@ -153,7 +154,14 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 func (d *UserDelivery) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 
-	err := d.Usecase.DeleteProfile(r.Context())
+	cookie, err := r.Cookie("session_id")
+	if err != nil {
+		log.Error().Err(err).Msg("error getting session cookie for deletion")
+		apiutils.WriteError(w, http.StatusBadRequest, "no session cookie")
+		return
+	}
+
+	err = d.Usecase.DeleteProfile(r.Context(), cookie.Value)
 	if err != nil {
 		if errors.Is(err, namederrors.ErrNotFound) {
 			log.Warn().Err(err).Msg("user not found for profile deletion")
@@ -164,6 +172,9 @@ func (d *UserDelivery) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteError(w, http.StatusInternalServerError, "error deleting profile")
 		return
 	}
+
+	cookie.Expires = time.Now().AddDate(0, 0, -1)
+	http.SetCookie(w, cookie)
 
 	log.Info().Msg("profile deleted successfully")
 	w.WriteHeader(http.StatusNoContent)

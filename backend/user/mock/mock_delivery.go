@@ -35,6 +35,20 @@ func (m *MockUserUsecase) EXPECT() *MockUserUsecaseMockRecorder {
 	return m.recorder
 }
 
+// DeleteProfile mocks base method.
+func (m *MockUserUsecase) DeleteProfile(ctx context.Context, sessionID string) error {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "DeleteProfile", ctx, sessionID)
+	ret0, _ := ret[0].(error)
+	return ret0
+}
+
+// DeleteProfile indicates an expected call of DeleteProfile.
+func (mr *MockUserUsecaseMockRecorder) DeleteProfile(ctx, sessionID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "DeleteProfile", reflect.TypeOf((*MockUserUsecase)(nil).DeleteProfile), ctx, sessionID)
+}
+
 // GetProfile mocks base method.
 func (m *MockUserUsecase) GetProfile(ctx context.Context) (*models.User, error) {
 	m.ctrl.T.Helper()

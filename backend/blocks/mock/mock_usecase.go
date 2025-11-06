@@ -51,6 +51,21 @@ func (mr *MockBlocksRepositoryMockRecorder) CreateAttachmentBlock(ctx, noteID, p
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateAttachmentBlock", reflect.TypeOf((*MockBlocksRepository)(nil).CreateAttachmentBlock), ctx, noteID, position, fileID, userID)
 }
 
+// CreateCodeBlock mocks base method.
+func (m *MockBlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "CreateCodeBlock", ctx, noteID, position, userID)
+	ret0, _ := ret[0].(*models.BlockWithContent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// CreateCodeBlock indicates an expected call of CreateCodeBlock.
+func (mr *MockBlocksRepositoryMockRecorder) CreateCodeBlock(ctx, noteID, position, userID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "CreateCodeBlock", reflect.TypeOf((*MockBlocksRepository)(nil).CreateCodeBlock), ctx, noteID, position, userID)
+}
+
 // CreateTextBlock mocks base method.
 func (m *MockBlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
 	m.ctrl.T.Helper()
@@ -168,6 +183,21 @@ func (m *MockBlocksRepository) UpdateBlockText(ctx context.Context, blockID uint
 func (mr *MockBlocksRepositoryMockRecorder) UpdateBlockText(ctx, blockID, text, formats interface{}) *gomock.Call {
 	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateBlockText", reflect.TypeOf((*MockBlocksRepository)(nil).UpdateBlockText), ctx, blockID, text, formats)
+}
+
+// UpdateCodeBlock mocks base method.
+func (m *MockBlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.BlockWithContent, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "UpdateCodeBlock", ctx, blockID, language, codeText)
+	ret0, _ := ret[0].(*models.BlockWithContent)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// UpdateCodeBlock indicates an expected call of UpdateCodeBlock.
+func (mr *MockBlocksRepositoryMockRecorder) UpdateCodeBlock(ctx, blockID, language, codeText interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "UpdateCodeBlock", reflect.TypeOf((*MockBlocksRepository)(nil).UpdateCodeBlock), ctx, blockID, language, codeText)
 }
 
 // MockNotesRepository is a mock of NotesRepository interface.

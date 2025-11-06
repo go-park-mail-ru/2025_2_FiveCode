@@ -118,38 +118,110 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 	return r.GetBlockByID(ctx, blockID)
 }
 
+func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("note_id", noteID).Float64("position", position).Msg("Executing CreateCodeBlock transaction")
+	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("CreateCodeBlock: failed to begin transaction")
+		return nil, fmt.Errorf("CreateCodeBlock: failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	insertBlockQuery := `
+		INSERT INTO block (note_id, type, position, last_edited_by)
+		VALUES ($1, 'code', $2, $3)
+		RETURNING id
+	`
+	var blockID uint64
+	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(&blockID); err != nil {
+		log.Error().Err(err).Msg("CreateCodeBlock: failed to create block")
+		return nil, fmt.Errorf("CreateCodeBlock: failed to create block: %w", err)
+	}
+
+	insertCodeQuery := `
+		INSERT INTO block_code (block_id, language, code_text)
+		VALUES ($1, $2, $3)
+	`
+	if _, err := tx.ExecContext(ctx, insertCodeQuery, blockID, "javascript", ""); err != nil {
+		log.Error().Err(err).Msg("CreateCodeBlock: failed to create block_code")
+		return nil, fmt.Errorf("CreateCodeCode: failed to create block_code: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("CreateCodeBlock: failed to commit transaction")
+		return nil, fmt.Errorf("CreateCodeBlock: failed to commit transaction: %w", err)
+	}
+
+	return r.GetBlockByID(ctx, blockID)
+}
+
+func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.BlockWithContent, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Uint64("block_id", blockID).Msg("Executing UpdateCodeBlock transaction")
+	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	if err != nil {
+		log.Error().Err(err).Msg("UpdateCodeBlock: failed to begin transaction")
+		return nil, fmt.Errorf("UpdateCodeBlock: failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	updateBlockQuery := `UPDATE block SET updated_at = $1 WHERE id = $2`
+	if _, err = tx.ExecContext(ctx, updateBlockQuery, time.Now().UTC(), blockID); err != nil {
+		log.Error().Err(err).Msg("UpdateCodeBlock: failed to update block timestamp")
+		return nil, fmt.Errorf("UpdateCodeBlock: failed to update block timestamp: %w", err)
+	}
+
+	updateCodeQuery := `
+        INSERT INTO block_code (block_id, language, code_text)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (block_id) DO UPDATE 
+        SET language = EXCLUDED.language, code_text = EXCLUDED.code_text, updated_at = NOW()
+	`
+	if _, err := tx.ExecContext(ctx, updateCodeQuery, blockID, language, codeText); err != nil {
+		log.Error().Err(err).Msg("UpdateCodeBlock: failed to update/insert block_code")
+		return nil, fmt.Errorf("UpdateCodeBlock: failed to update/insert block_code: %w", err)
+	}
+
+	if err = tx.Commit(); err != nil {
+		log.Error().Err(err).Msg("UpdateCodeBlock: failed to commit transaction")
+		return nil, fmt.Errorf("UpdateCodeBlock: failed to commit transaction: %w", err)
+	}
+	return r.GetBlockByID(ctx, blockID)
+}
+
 func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
+	log.Info().Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
 
 	query := `
-		SELECT b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
-		       bt.text,
-		       f.url as file_url,
-		       COALESCE(
-		           json_agg(
-		               json_build_object(
-		                   'id', btf.id,
-		                   'start_offset', btf.start_offset,
-		                   'end_offset', btf.end_offset,
-		                   'bold', btf.bold,
-		                   'italic', btf.italic,
-		                   'underline', btf.underline,
-		                   'strikethrough', btf.strikethrough,
-		                   'link', btf.link,
-		                   'font', btf.font,
-		                   'size', btf.size
-		               ) ORDER BY btf.start_offset
-		           ) FILTER (WHERE btf.id IS NOT NULL),
-		           '[]'
-		       ) as formats
+		SELECT 
+		    b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
+		    CASE 
+		        WHEN b.type = 'text' THEN bt.text
+		        WHEN b.type = 'code' THEN bc.code_text
+		        WHEN b.type = 'attachment' THEN f.url
+		        ELSE '' 
+		    END as content,
+		    bc.language,
+		    COALESCE(
+		        (SELECT json_agg(
+		            json_build_object(
+		                'id', btf.id, 'start_offset', btf.start_offset, 'end_offset', btf.end_offset,
+		                'bold', btf.bold, 'italic', btf.italic, 'underline', btf.underline, 
+		                'strikethrough', btf.strikethrough, 'link', btf.link, 'font', btf.font, 'size', btf.size
+		            ) ORDER BY btf.start_offset
+		        ) FROM block_text_format btf WHERE btf.block_text_id = bt.id),
+		        '[]'::json
+		    ) as formats
 		FROM block b
 		LEFT JOIN block_text bt ON b.id = bt.block_id
-		LEFT JOIN block_text_format btf ON bt.id = btf.block_text_id
+		LEFT JOIN block_code bc ON b.id = bc.block_id
 		LEFT JOIN block_attachment ba ON b.id = ba.block_id
 		LEFT JOIN file f ON ba.file_id = f.id
 		WHERE b.note_id = $1
-		GROUP BY b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at, bt.text, f.url
-		ORDER BY b.position ASC
+		GROUP BY b.id, bt.id, bc.block_id, f.id
+		ORDER BY b.position ASC;
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
 
@@ -158,79 +230,81 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		log.Error().Err(err).Msg("failed to query blocks")
 		return nil, fmt.Errorf("failed to query blocks: %w", err)
 	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close rows")
-		}
-	}()
+	defer rows.Close()
 
-	blocks := make([]models.BlockWithContent, 0)
-
+	var blocks []models.BlockWithContent
 	for rows.Next() {
 		var block models.BlockWithContent
-		var text sql.NullString
-		var fileURL sql.NullString
+		var content sql.NullString
+		var language sql.NullString
 		var formatsJSON []byte
 
-		err := rows.Scan(
-			&block.ID,
-			&block.NoteID,
-			&block.Type,
-			&block.Position,
-			&block.CreatedAt,
-			&block.UpdatedAt,
-			&text,
-			&fileURL,
-			&formatsJSON,
-		)
-		if err != nil {
+		if err := rows.Scan(&block.ID, &block.NoteID, &block.Type, &block.Position, &block.CreatedAt, &block.UpdatedAt, &content, &language, &formatsJSON); err != nil {
 			log.Error().Err(err).Msg("failed to scan block")
 			return nil, fmt.Errorf("failed to scan block: %w", err)
 		}
-
-		if text.Valid {
-			block.Text = text.String
-		}
-
-		if fileURL.Valid {
-			internalURL := fileURL.String
-			publicURL := r.Store.Minio.TransformToPublicURL(internalURL)
-			block.Text = publicURL
-		}
-
-		if len(formatsJSON) > 0 {
-			var formats []models.BlockTextFormat
-			if err := json.Unmarshal(formatsJSON, &formats); err != nil {
-				log.Warn().Err(err).Msg("failed to unmarshal formats")
+		if content.Valid {
+			if block.Type == "attachment" {
+				block.Text = r.Store.Minio.TransformToPublicURL(content.String)
 			} else {
-				block.Formats = formats
+				block.Text = content.String
 			}
 		}
-
+		if language.Valid {
+			block.Language = language.String
+		}
+		if err := json.Unmarshal(formatsJSON, &block.Formats); err != nil {
+			log.Warn().Err(err).Bytes("json", formatsJSON).Msg("failed to unmarshal formats")
+			block.Formats = []models.BlockTextFormat{}
+		}
+		
 		blocks = append(blocks, block)
 	}
-
+	if err := rows.Err(); err != nil {
+		log.Error().Err(err).Msg("error iterating through block rows")
+		return nil, fmt.Errorf("error iterating through block rows: %w", err)
+	}
 	return blocks, nil
 }
 
 func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
+	log.Info().Uint64("block_id", blockID).Msg("Executing GetBlockByID query")
 
 	query := `
-		SELECT b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
-		       bt.text,
-		       f.url as file_url
+		SELECT 
+		    b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
+		    CASE 
+		        WHEN b.type = 'text' THEN bt.text
+		        WHEN b.type = 'code' THEN bc.code_text
+		        WHEN b.type = 'attachment' THEN f.url
+		        ELSE '' 
+		    END as content,
+		    bc.language,
+		    COALESCE(
+		        (SELECT json_agg(
+		            json_build_object(
+		                'id', btf.id, 'start_offset', btf.start_offset, 'end_offset', btf.end_offset,
+		                'bold', btf.bold, 'italic', btf.italic, 'underline', btf.underline, 
+		                'strikethrough', btf.strikethrough, 'link', btf.link, 'font', btf.font, 'size', btf.size
+		            ) ORDER BY btf.start_offset
+		        ) FROM block_text_format btf WHERE btf.block_text_id = bt.id),
+		        '[]'::json
+		    ) as formats
 		FROM block b
 		LEFT JOIN block_text bt ON b.id = bt.block_id
+		LEFT JOIN block_code bc ON b.id = bc.block_id
 		LEFT JOIN block_attachment ba ON b.id = ba.block_id
 		LEFT JOIN file f ON ba.file_id = f.id
 		WHERE b.id = $1
+		GROUP BY b.id, bt.id, bc.block_id, f.id
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockByID query")
 
 	block := &models.BlockWithContent{}
-	var text sql.NullString
-	var fileURL sql.NullString
+	var content sql.NullString
+	var language sql.NullString
+	var formatsJSON []byte
 
 	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, blockID).Scan(
 		&block.ID,
@@ -239,8 +313,9 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 		&block.Position,
 		&block.CreatedAt,
 		&block.UpdatedAt,
-		&text,
-		&fileURL,
+		&content,
+		&language,
+		&formatsJSON,
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
@@ -252,53 +327,19 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 		return nil, fmt.Errorf("failed to get block: %w", err)
 	}
 
-	if text.Valid {
-		block.Text = text.String
+	if content.Valid {
+		if block.Type == "attachment" {
+			block.Text = r.Store.Minio.TransformToPublicURL(content.String)
+		} else {
+			block.Text = content.String
+		}
 	}
-
-	if fileURL.Valid {
-		internalURL := fileURL.String
-		publicURL := r.Store.Minio.TransformToPublicURL(internalURL)
-		block.Text = publicURL
+	if language.Valid {
+		block.Language = language.String
 	}
-
-	if block.Type == models.BlockTypeText {
-		formatsQuery := `
-			SELECT btf.id, btf.block_text_id, btf.start_offset, btf.end_offset,
-			       btf.bold, btf.italic, btf.underline, btf.strikethrough,
-			       btf.link, btf.font, btf.size
-			FROM block_text_format btf
-			JOIN block_text bt ON btf.block_text_id = bt.id
-			WHERE bt.block_id = $1
-			ORDER BY btf.start_offset
-		`
-		rows, err := r.Store.Postgres.DB.QueryContext(ctx, formatsQuery, blockID)
-		if err != nil {
-			return nil, fmt.Errorf("failed to query formats: %w", err)
-		}
-		defer rows.Close()
-
-		formats := make([]models.BlockTextFormat, 0)
-		for rows.Next() {
-			var format models.BlockTextFormat
-			var link sql.NullString
-			err := rows.Scan(
-				&format.ID, &format.BlockTextID, &format.StartOffset, &format.EndOffset,
-				&format.Bold, &format.Italic, &format.Underline, &format.Strikethrough,
-				&link, &format.Font, &format.Size,
-			)
-			if err != nil {
-				return nil, fmt.Errorf("failed to scan format: %w", err)
-			}
-			if link.Valid {
-				format.Link = &link.String
-			}
-			formats = append(formats, format)
-		}
-		if err := rows.Err(); err != nil {
-			return nil, fmt.Errorf("error iterating formats: %w", err)
-		}
-		block.Formats = formats
+	if err := json.Unmarshal(formatsJSON, &block.Formats); err != nil {
+		log.Warn().Err(err).Bytes("json", formatsJSON).Msg("failed to unmarshal formats")
+		block.Formats = []models.BlockTextFormat{}
 	}
 
 	return block, nil

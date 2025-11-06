@@ -20,6 +20,7 @@ type UserRepository interface {
 
 type AuthRepository interface {
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
+	DeleteSession(ctx context.Context, sessionID string) error
 }
 
 type UserUsecase struct {
@@ -89,7 +90,7 @@ func (uc *UserUsecase) GetProfile(ctx context.Context) (*models.User, error) {
 	return user, nil
 }
 
-func (uc *UserUsecase) DeleteProfile(ctx context.Context) error {
+func (uc *UserUsecase) DeleteProfile(ctx context.Context, sessionID string) error {
 	log := logger.FromContext(ctx)
 	log.Info().Msg("deleting user profile")
 
@@ -103,6 +104,10 @@ func (uc *UserUsecase) DeleteProfile(ctx context.Context) error {
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete user in repository")
 		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	if err := uc.AuthRepo.DeleteSession(ctx, sessionID); err != nil {
+		log.Error().Err(err).Msg("failed to delete session after user deletion")
 	}
 
 	return nil
