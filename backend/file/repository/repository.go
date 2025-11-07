@@ -142,8 +142,6 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 	file := &models.File{}
 	var width, height sql.NullInt32
 
-	file.URL = apiutils.TransformMinioURL(file.URL)
-
 	err := r.db.QueryRowContext(ctx, query, fileID).Scan(
 		&file.ID,
 		&file.URL,
@@ -172,6 +170,8 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 		h := int(height.Int32)
 		file.Height = &h
 	}
+
+	file.URL = apiutils.TransformMinioURL(file.URL)
 
 	return file, nil
 }
