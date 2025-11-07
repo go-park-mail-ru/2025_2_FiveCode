@@ -4,39 +4,85 @@ import (
 	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"backend/store"
 	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
 )
 
 type AuthRepository struct {
-	Store *store.Store
+	db    *sql.DB
+	redis *redis.Client
 }
 
-func NewAuthRepository(store *store.Store) *AuthRepository {
-	return &AuthRepository{Store: store}
+func NewAuthRepository(db *sql.DB, redisClient *redis.Client) *AuthRepository {
+	return &AuthRepository{
+		db:    db,
+		redis: redisClient,
+	}
 }
 
 func (r *AuthRepository) CreateSession(ctx context.Context, userID uint64) (string, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Uint64("user_id", userID).Msg("creating session via redis store")
-	return r.Store.Redis.CreateSession(ctx, userID, 30*24*time.Hour)
-}
+	log.Info().Uint64("user_id", userID).Msg("creating session in redis")
 
-func (r *AuthRepository) DeleteSession(ctx context.Context, sessionID string) error {
-	log := logger.FromContext(ctx)
-	log.Info().Str("session_id", sessionID).Msg("deleting session via redis store")
-	return r.Store.Redis.DeleteSession(ctx, sessionID)
+	sessionID := uuid.NewString()
+	key := "session:" + sessionID
+	duration := 30 * 24 * time.Hour
+
+	err := r.redis.Set(ctx, key, userID, duration).Err()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to set session in redis")
+		return "", err
+	}
+
+	return sessionID, nil
 }
 
 func (r *AuthRepository) GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Str("session_id", sessionID).Msg("getting user id by session via redis store")
-	return r.Store.Redis.GetUserIDBySession(ctx, sessionID)
+	log.Info().Str("session_id", sessionID).Msg("getting user id by session from redis")
+
+	key := "session:" + sessionID
+
+	val, err := r.redis.Get(ctx, key).Result()
+	if errors.Is(err, redis.Nil) {
+		log.Warn().Str("key", key).Msg("session not found in redis")
+		return 0, namederrors.ErrInvalidSession
+	}
+	if err != nil {
+		log.Error().Err(err).Str("key", key).Msg("failed to get session from redis")
+		return 0, err
+	}
+
+	var userID uint64
+	_, err = fmt.Sscanf(val, "%d", &userID)
+	if err != nil {
+		log.Error().Err(err).Str("value", val).Msg("failed to parse userID from redis session value")
+		return 0, fmt.Errorf("failed to parse userID from session: %w", err)
+	}
+
+	return userID, nil
+}
+
+func (r *AuthRepository) DeleteSession(ctx context.Context, sessionID string) error {
+	log := logger.FromContext(ctx)
+	log.Info().Str("session_id", sessionID).Msg("deleting session from redis")
+
+	key := "session:" + sessionID
+
+	err := r.redis.Del(ctx, key).Err()
+	if err != nil {
+		log.Error().Err(err).Str("key", key).Msg("failed to delete session from redis")
+		return err
+	}
+
+	return nil
 }
 
 func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
@@ -49,7 +95,7 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	var avatarFileID sql.NullInt64
 	var updatedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, email).Scan(
+	err := r.db.QueryRowContext(ctx, query, email).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,
@@ -95,7 +141,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	var avatarFileID sql.NullInt64
 	var updatedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, email, passwordHash, username).Scan(
+	err := r.db.QueryRowContext(ctx, query, email, passwordHash, username).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,
@@ -136,7 +182,7 @@ func (r *AuthRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 	var avatarFileID sql.NullInt64
 	var updatedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, userID).Scan(
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,

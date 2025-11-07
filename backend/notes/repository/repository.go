@@ -4,7 +4,6 @@ import (
 	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"backend/store"
 	"context"
 	"database/sql"
 	"errors"
@@ -13,12 +12,12 @@ import (
 )
 
 type NotesRepository struct {
-	Store *store.Store
+	db *sql.DB
 }
 
-func NewNotesRepository(store *store.Store) *NotesRepository {
+func NewNotesRepository(db *sql.DB) *NotesRepository {
 	return &NotesRepository{
-		Store: store,
+		db: db,
 	}
 }
 
@@ -26,7 +25,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("Executing CreateNote transaction")
 
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to begin transaction")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -40,7 +39,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		          is_archived, is_shared, created_at, updated_at, deleted_at
 	`
 	defaultTitle := "New Note"
-	
+
 	note := &models.Note{}
 	var parentNoteID, iconFileID sql.NullInt64
 	var deletedAt sql.NullTime
@@ -117,7 +116,7 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("user_id", userID).Msg("Executing GetNotes query")
 
-	rows, err := r.Store.Postgres.DB.QueryContext(ctx, query, userID)
+	rows, err := r.db.QueryContext(ctx, query, userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to list notes")
 		return nil, fmt.Errorf("failed to list notes: %w", err)
@@ -188,7 +187,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64, userID
 	var parentNoteID, iconFileID sql.NullInt64
 	var deletedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, noteID, userID).Scan(
+	err := r.db.QueryRowContext(ctx, query, noteID, userID).Scan(
 		&note.ID,
 		&note.OwnerID,
 		&parentNoteID,
@@ -229,7 +228,7 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 	checkQuery := `SELECT 1 FROM note WHERE id = $1 AND deleted_at IS NULL`
 	log.Info().Str("query", logger.SanitizeQuery(checkQuery)).Uint64("note_id", noteID).Msg("Executing check note existence query")
 	var exists int
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, checkQuery, noteID).Scan(&exists)
+	err := r.db.QueryRowContext(ctx, checkQuery, noteID).Scan(&exists)
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Warn().Err(err).Uint64("note_id", noteID).Msg("note not found for update")
 		return nil, namederrors.ErrNotFound
@@ -265,7 +264,7 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 	note := &models.Note{}
 	var parentNoteID, iconFileID sql.NullInt64
 
-	err = r.Store.Postgres.DB.QueryRowContext(ctx, query, args...).Scan(
+	err = r.db.QueryRowContext(ctx, query, args...).Scan(
 		&note.ID,
 		&note.OwnerID,
 		&parentNoteID,
@@ -299,7 +298,7 @@ func (r *NotesRepository) DeleteNote(ctx context.Context, noteID uint64) error {
 	query := `DELETE FROM note WHERE id = $1`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing DeleteNote query")
 
-	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, noteID)
+	result, err := r.db.ExecContext(ctx, query, noteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete note")
 		return fmt.Errorf("failed to delete note: %w", err)
@@ -323,7 +322,7 @@ func (r *NotesRepository) AddFavorite(ctx context.Context, userID, noteID uint64
 	log := logger.FromContext(ctx)
 	query := `INSERT INTO favorite (user_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("user_id", userID).Uint64("note_id", noteID).Msg("Executing AddFavorite query")
-	_, err := r.Store.Postgres.DB.ExecContext(ctx, query, userID, noteID)
+	_, err := r.db.ExecContext(ctx, query, userID, noteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to add favorite")
 		return fmt.Errorf("failed to add favorite: %w", err)
@@ -335,10 +334,29 @@ func (r *NotesRepository) RemoveFavorite(ctx context.Context, userID, noteID uin
 	log := logger.FromContext(ctx)
 	query := `DELETE FROM favorite WHERE user_id = $1 AND note_id = $2`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("user_id", userID).Uint64("note_id", noteID).Msg("Executing RemoveFavorite query")
-	_, err := r.Store.Postgres.DB.ExecContext(ctx, query, userID, noteID)
+	_, err := r.db.ExecContext(ctx, query, userID, noteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to remove favorite")
 		return fmt.Errorf("failed to remove favorite: %w", err)
 	}
 	return nil
+}
+
+func (r *NotesRepository) CheckNoteOwnership(ctx context.Context, noteID uint64, userID uint64) (bool, error) {
+	log := logger.FromContext(ctx)
+
+	query := `SELECT owner_id FROM note WHERE id = $1 AND deleted_at IS NULL`
+
+	var ownerID uint64
+	err := r.db.QueryRowContext(ctx, query, noteID).Scan(&ownerID)
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Uint64("note_id", noteID).Msg("note not found")
+		return false, namederrors.ErrNotFound
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note ownership")
+		return false, fmt.Errorf("failed to check note ownership: %w", err)
+	}
+
+	return ownerID == userID, nil
 }

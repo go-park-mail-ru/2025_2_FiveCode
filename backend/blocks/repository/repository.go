@@ -230,7 +230,11 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		log.Error().Err(err).Msg("failed to query blocks")
 		return nil, fmt.Errorf("failed to query blocks: %w", err)
 	}
-	defer rows.Close()
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
 
 	var blocks []models.BlockWithContent
 	for rows.Next() {
@@ -257,7 +261,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 			log.Warn().Err(err).Bytes("json", formatsJSON).Msg("failed to unmarshal formats")
 			block.Formats = []models.BlockTextFormat{}
 		}
-		
+
 		blocks = append(blocks, block)
 	}
 	if err := rows.Err(); err != nil {

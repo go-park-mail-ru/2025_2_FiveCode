@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/asaskevich/govalidator"
@@ -90,4 +91,37 @@ func StrictUnmarshal(data []byte, v any) error {
 	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	return dec.Decode(v)
+}
+
+func TransformMinioURL(internalURL string) string {
+	if internalURL == "" {
+		return ""
+	}
+
+	internalEndpoint := os.Getenv("MINIO_ENDPOINT")
+	publicEndpoint := os.Getenv("MINIO_PUBLIC_ENDPOINT")
+
+	if internalEndpoint == "" || publicEndpoint == "" {
+		return internalURL
+	}
+
+	url := internalURL
+
+	normalizedInternal := strings.Replace(internalEndpoint, "http://", "", 1)
+	normalizedInternal = strings.Replace(normalizedInternal, "https://", "", 1)
+
+	normalizedPublic := strings.Replace(publicEndpoint, "http://", "", 1)
+	normalizedPublic = strings.Replace(normalizedPublic, "https://", "", 1)
+
+	url = strings.Replace(url, normalizedInternal, normalizedPublic, 1)
+
+	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
+		if strings.HasPrefix(publicEndpoint, "https://") {
+			url = "https://" + url
+		} else {
+			url = "http://" + url
+		}
+	}
+
+	return url
 }

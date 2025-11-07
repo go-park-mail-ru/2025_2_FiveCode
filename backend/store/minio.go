@@ -3,8 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"strings"
-
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -12,12 +10,10 @@ import (
 const defaultBucketName = "notes-app"
 
 type MinioStorage struct {
-	client           *minio.Client
-	internalEndpoint string // 0.0.0.0:8001
-	publicEndpoint   string // http://89.208.210.115:8001
+	Client *minio.Client
 }
 
-func NewMinioStorage(endpoint, accessKey, secretKey, publicEndpoint string, secure bool) (*MinioStorage, error) {
+func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*MinioStorage, error) {
 	client, err := minio.New(endpoint, &minio.Options{
 		Creds:  credentials.NewStaticV4(accessKey, secretKey, ""),
 		Secure: secure,
@@ -27,9 +23,7 @@ func NewMinioStorage(endpoint, accessKey, secretKey, publicEndpoint string, secu
 	}
 
 	storage := &MinioStorage{
-		client:           client,
-		internalEndpoint: endpoint,
-		publicEndpoint:   publicEndpoint,
+		Client: client,
 	}
 
 	ctx := context.Background()
@@ -65,34 +59,4 @@ func NewMinioStorage(endpoint, accessKey, secretKey, publicEndpoint string, secu
 	}
 
 	return storage, nil
-}
-
-func (s *MinioStorage) GetClient() *minio.Client {
-	return s.client
-}
-
-func (s *MinioStorage) TransformToPublicURL(internalURL string) string {
-	if internalURL == "" {
-		return ""
-	}
-
-	url := internalURL
-
-	normalizedInternal := strings.Replace(s.internalEndpoint, "http://", "", 1)
-	normalizedInternal = strings.Replace(normalizedInternal, "https://", "", 1)
-
-	normalizedPublic := strings.Replace(s.publicEndpoint, "http://", "", 1)
-	normalizedPublic = strings.Replace(normalizedPublic, "https://", "", 1)
-
-	url = strings.Replace(url, normalizedInternal, normalizedPublic, 1)
-
-	if !strings.HasPrefix(url, "http://") && !strings.HasPrefix(url, "https://") {
-		if strings.HasPrefix(s.publicEndpoint, "https://") {
-			url = "https://" + url
-		} else {
-			url = "http://" + url
-		}
-	}
-
-	return url
 }

@@ -4,7 +4,6 @@ import (
 	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"backend/store"
 	"bytes"
 	"context"
 	"database/sql"
@@ -17,31 +16,28 @@ import (
 )
 
 type FileRepository struct {
-	Store *store.Store
+	db          *sql.DB
+	minioClient *minio.Client
 }
 
-func NewFileRepository(store *store.Store) *FileRepository {
+func NewFileRepository(db *sql.DB, minioClient *minio.Client) *FileRepository {
 	return &FileRepository{
-		Store: store,
+		db:          db,
+		minioClient: minioClient,
 	}
 }
 
 func (r *FileRepository) UploadFileToMinIO(ctx context.Context, filename string, fileData []byte, contentType string) (string, error) {
 	log := logger.FromContext(ctx)
 
-	if r.Store.Minio == nil {
-		return "", fmt.Errorf("minio storage not initialized")
-	}
-
 	objectName := fmt.Sprintf("%s-%s", uuid.New().String(), filename)
 	bucketName := "notes-app"
 
-	client := r.Store.Minio.GetClient()
 	log.Info().Str("bucket", bucketName).Str("object", objectName).Msg("uploading file to MinIO")
 
 	reader := bytes.NewReader(fileData)
 
-	_, err := client.PutObject(ctx, bucketName, objectName,
+	_, err := r.minioClient.PutObject(ctx, bucketName, objectName,
 		reader,
 		int64(len(fileData)),
 		minio.PutObjectOptions{
@@ -53,7 +49,7 @@ func (r *FileRepository) UploadFileToMinIO(ctx context.Context, filename string,
 		return "", fmt.Errorf("failed to upload file to MinIO: %w", err)
 	}
 
-	endpoint := client.EndpointURL()
+	endpoint := r.minioClient.EndpointURL()
 	scheme := endpoint.Scheme
 	if scheme == "" {
 		scheme = "http"
@@ -63,6 +59,29 @@ func (r *FileRepository) UploadFileToMinIO(ctx context.Context, filename string,
 
 	log.Info().Str("url", internalURL).Msg("file uploaded to MinIO successfully")
 	return internalURL, nil
+}
+
+func (r *FileRepository) DeleteFileFromMinIO(ctx context.Context, url string) error {
+	log := logger.FromContext(ctx)
+
+	objectName, err := extractObjectNameFromURL(url)
+	if err != nil {
+		log.Error().Err(err).Str("url", url).Msg("failed to extract object name from URL")
+		return fmt.Errorf("invalid file URL: %w", err)
+	}
+
+	bucketName := "notes-app"
+
+	log.Info().Str("bucket", bucketName).Str("object", objectName).Msg("deleting file from MinIO")
+
+	err = r.minioClient.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{})
+	if err != nil {
+		log.Error().Err(err).Msg("failed to delete file from MinIO")
+		return fmt.Errorf("failed to delete file from MinIO: %w", err)
+	}
+
+	log.Info().Str("object", objectName).Msg("file deleted from MinIO successfully")
+	return nil
 }
 
 func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, sizeBytes int64, width, height *int) (*models.File, error) {
@@ -78,7 +97,7 @@ func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, siz
 	file := &models.File{}
 	var widthResult, heightResult sql.NullInt32
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, url, mimeType, sizeBytes, width, height).Scan(
+	err := r.db.QueryRowContext(ctx, query, url, mimeType, sizeBytes, width, height).Scan(
 		&file.ID,
 		&file.URL,
 		&file.MimeType,
@@ -120,7 +139,7 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 	file := &models.File{}
 	var width, height sql.NullInt32
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, fileID).Scan(
+	err := r.db.QueryRowContext(ctx, query, fileID).Scan(
 		&file.ID,
 		&file.URL,
 		&file.MimeType,
@@ -158,7 +177,7 @@ func (r *FileRepository) DeleteFile(ctx context.Context, fileID uint64) error {
 
 	query := `DELETE FROM file WHERE id = $1`
 
-	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, fileID)
+	result, err := r.db.ExecContext(ctx, query, fileID)
 	if err != nil {
 		log.Error().Err(err).Uint64("file_id", fileID).Msg("failed to delete file")
 		return fmt.Errorf("failed to delete file: %w", err)
@@ -175,34 +194,6 @@ func (r *FileRepository) DeleteFile(ctx context.Context, fileID uint64) error {
 	}
 
 	log.Info().Uint64("file_id", fileID).Msg("file deleted successfully")
-	return nil
-}
-
-func (r *FileRepository) DeleteFileFromMinIO(ctx context.Context, url string) error {
-	log := logger.FromContext(ctx)
-
-	if r.Store.Minio == nil {
-		return fmt.Errorf("minio storage not initialized")
-	}
-
-	objectName, err := extractObjectNameFromURL(url)
-	if err != nil {
-		log.Error().Err(err).Str("url", url).Msg("failed to extract object name from URL")
-		return fmt.Errorf("invalid file URL: %w", err)
-	}
-
-	bucketName := "notes-app"
-	client := r.Store.Minio.GetClient()
-
-	log.Info().Str("bucket", bucketName).Str("object", objectName).Msg("deleting file from MinIO")
-
-	err = client.RemoveObject(ctx, bucketName, objectName, minio.RemoveObjectOptions{})
-	if err != nil {
-		log.Error().Err(err).Msg("failed to delete file from MinIO")
-		return fmt.Errorf("failed to delete file from MinIO: %w", err)
-	}
-
-	log.Info().Str("object", objectName).Msg("file deleted from MinIO successfully")
 	return nil
 }
 
