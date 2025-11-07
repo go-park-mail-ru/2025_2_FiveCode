@@ -3,8 +3,8 @@ package apiutils
 import (
 	"bytes"
 	"encoding/json"
+	"github.com/spf13/viper"
 	"net/http"
-	"os"
 	"strings"
 
 	"github.com/asaskevich/govalidator"
@@ -98,8 +98,8 @@ func TransformMinioURL(internalURL string) string {
 		return ""
 	}
 
-	internalEndpoint := os.Getenv("MINIO_ENDPOINT")
-	publicEndpoint := os.Getenv("MINIO_PUBLIC_ENDPOINT")
+	internalEndpoint := viper.GetString("MINIO_ENDPOINT")
+	publicEndpoint := viper.GetString("MINIO_PUBLIC_ENDPOINT")
 
 	if internalEndpoint == "" || publicEndpoint == "" {
 		return internalURL
