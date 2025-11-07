@@ -30,7 +30,11 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		log.Error().Err(err).Msg("failed to begin transaction")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Error().Err(err).Msg("failed to rollback transaction")
+		}
+	}()
 
 	noteQuery := `
 		INSERT INTO note (owner_id, title, is_archived, is_shared)
