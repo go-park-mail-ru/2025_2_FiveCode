@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"backend/apiutils"
 	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
@@ -138,6 +139,8 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 
 	file := &models.File{}
 	var width, height sql.NullInt32
+
+	file.URL = apiutils.TransformMinioURL(file.URL)
 
 	err := r.db.QueryRowContext(ctx, query, fileID).Scan(
 		&file.ID,
