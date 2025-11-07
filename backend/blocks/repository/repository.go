@@ -1,10 +1,10 @@
 package repository
 
 import (
+	"backend/apiutils"
 	"backend/logger"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"backend/store"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -14,13 +14,11 @@ import (
 )
 
 type BlocksRepository struct {
-	Store *store.Store
+	db *sql.DB
 }
 
-func NewBlocksRepository(store *store.Store) *BlocksRepository {
-	return &BlocksRepository{
-		Store: store,
-	}
+func NewBlocksRepository(db *sql.DB) *BlocksRepository {
+	return &BlocksRepository{db: db}
 }
 
 func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
@@ -31,7 +29,7 @@ func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, p
 		Uint64("user_id", userID).
 		Msg("CreateTextBlock: begin")
 
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("CreateTextBlock: begin tx failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -79,7 +77,7 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 		Uint64("user_id", userID).
 		Msg("CreateAttachmentBlock: begin")
 
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("CreateAttachmentBlock: begin tx failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -121,12 +119,16 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("note_id", noteID).Float64("position", position).Msg("Executing CreateCodeBlock transaction")
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("CreateCodeBlock: failed to begin transaction")
 		return nil, fmt.Errorf("CreateCodeBlock: failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Error().Err(err).Msg("UpdateCodeBlock: rollback failed")
+		}
+	}()
 
 	insertBlockQuery := `
 		INSERT INTO block (note_id, type, position, last_edited_by)
@@ -159,12 +161,16 @@ func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, p
 func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("block_id", blockID).Msg("Executing UpdateCodeBlock transaction")
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("UpdateCodeBlock: failed to begin transaction")
 		return nil, fmt.Errorf("UpdateCodeBlock: failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
+			log.Error().Err(err).Msg("UpdateCodeBlock: rollback failed")
+		}
+	}()
 
 	updateBlockQuery := `UPDATE block SET updated_at = $1 WHERE id = $2`
 	if _, err = tx.ExecContext(ctx, updateBlockQuery, time.Now().UTC(), blockID); err != nil {
@@ -225,7 +231,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
 
-	rows, err := r.Store.Postgres.DB.QueryContext(ctx, query, noteID)
+	rows, err := r.db.QueryContext(ctx, query, noteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query blocks")
 		return nil, fmt.Errorf("failed to query blocks: %w", err)
@@ -249,7 +255,7 @@ func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64)
 		}
 		if content.Valid {
 			if block.Type == "attachment" {
-				block.Text = r.Store.Minio.TransformToPublicURL(content.String)
+				block.Text = apiutils.TransformMinioURL(content.String)
 			} else {
 				block.Text = content.String
 			}
@@ -310,7 +316,7 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 	var language sql.NullString
 	var formatsJSON []byte
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, blockID).Scan(
+	err := r.db.QueryRowContext(ctx, query, blockID).Scan(
 		&block.ID,
 		&block.NoteID,
 		&block.Type,
@@ -333,7 +339,7 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 
 	if content.Valid {
 		if block.Type == "attachment" {
-			block.Text = r.Store.Minio.TransformToPublicURL(content.String)
+			block.Text = apiutils.TransformMinioURL(content.String)
 		} else {
 			block.Text = content.String
 		}
@@ -352,7 +358,7 @@ func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*m
 func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
 	log := logger.FromContext(ctx)
 
-	tx, err := r.Store.Postgres.DB.BeginTx(ctx, nil)
+	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: begin tx failed")
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
@@ -431,7 +437,7 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Float64("position", position).Msg("Executing UpdateBlockPosition query")
 
 	block := &models.Block{}
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, position, time.Now().UTC(), blockID).Scan(
+	err := r.db.QueryRowContext(ctx, query, position, time.Now().UTC(), blockID).Scan(
 		&block.ID,
 		&block.NoteID,
 		&block.Type,
@@ -458,7 +464,7 @@ func (r *BlocksRepository) DeleteBlock(ctx context.Context, blockID uint64) erro
 	query := `DELETE FROM block WHERE id = $1`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing DeleteBlock query")
 
-	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, blockID)
+	result, err := r.db.ExecContext(ctx, query, blockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete block")
 		return fmt.Errorf("failed to delete block: %w", err)
@@ -485,7 +491,7 @@ func (r *BlocksRepository) GetBlockNoteID(ctx context.Context, blockID uint64) (
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockNoteID query")
 
 	var noteID uint64
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, blockID).Scan(&noteID)
+	err := r.db.QueryRowContext(ctx, query, blockID).Scan(&noteID)
 
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Warn().Err(err).Uint64("block_id", blockID).Msg("block not found, cannot get note_id")
@@ -515,7 +521,7 @@ func (r *BlocksRepository) GetBlocksByNoteIDForPositionCalc(ctx context.Context,
 	`
 	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteIDForPositionCalc query")
 
-	rows, err := r.Store.Postgres.DB.QueryContext(ctx, query, noteID, excludeBlockID)
+	rows, err := r.db.QueryContext(ctx, query, noteID, excludeBlockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to query blocks for position calc")
 		return nil, fmt.Errorf("failed to query blocks for position calc: %w", err)
