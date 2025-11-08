@@ -42,7 +42,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
 		          is_archived, is_shared, created_at, updated_at, deleted_at
 	`
-	defaultTitle := "New Note"
+	defaultTitle := "Новая заметка"
 
 	note := &models.Note{}
 	var parentNoteID, iconFileID sql.NullInt64
