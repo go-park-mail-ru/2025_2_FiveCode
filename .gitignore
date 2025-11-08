@@ -6,3 +6,4 @@ cover
 *.sh
 *.txt
 *.out
+backend-goose

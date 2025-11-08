@@ -123,6 +123,8 @@ func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, siz
 		file.Height = &h
 	}
 
+	file.URL = apiutils.TransformMinioURL(file.URL)
+
 	log.Info().Uint64("file_id", file.ID).Msg("file metadata saved successfully")
 	return file, nil
 }
@@ -139,8 +141,6 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 
 	file := &models.File{}
 	var width, height sql.NullInt32
-
-	file.URL = apiutils.TransformMinioURL(file.URL)
 
 	err := r.db.QueryRowContext(ctx, query, fileID).Scan(
 		&file.ID,
@@ -170,6 +170,8 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 		h := int(height.Int32)
 		file.Height = &h
 	}
+
+	file.URL = apiutils.TransformMinioURL(file.URL)
 
 	return file, nil
 }
