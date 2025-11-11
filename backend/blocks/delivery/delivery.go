@@ -8,6 +8,7 @@ import (
 	namederrors "backend/named_errors"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -38,28 +39,11 @@ func NewBlocksDelivery(usecase BlocksUsecase) *BlocksDelivery {
 	}
 }
 
-// CreateBlockRequest представляет запрос на создание блока
-// @Description Request for creating a new block
 type baseCreateBlockRequest struct {
 	Type          string  `json:"type"`
 	BeforeBlockID *uint64 `json:"before_block_id,omitempty"`
 }
 
-// CreateBlock godoc
-// @Summary      Create a new block
-// @Description  Create a new block (text, code, or attachment) in a note
-// @Tags         blocks
-// @Accept       json
-// @Produce      json
-// @Param        note_id   path      int                      true  "Note ID"
-// @Param        request   body      CreateBlockRequest       true  "Block data"
-// @Success      201       {object}  models.Block
-// @Failure      400       {object}  ErrorResponse
-// @Failure      401       {object}  ErrorResponse
-// @Failure      403       {object}  ErrorResponse
-// @Failure      500       {object}  ErrorResponse
-// @Security     BearerAuth
-// @Router       /notes/{note_id}/blocks [post]
 func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
@@ -184,20 +168,6 @@ func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Re
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
-// GetBlocks godoc
-// @Summary      Get all blocks for a note
-// @Description  Get all blocks for a specific note, sorted by position
-// @Tags         blocks
-// @Accept       json
-// @Produce      json
-// @Param        note_id   path      int  true  "Note ID"
-// @Success      200       {object}  GetBlocksResponse
-// @Failure      400       {object}  ErrorResponse
-// @Failure      401       {object}  ErrorResponse
-// @Failure      403       {object}  ErrorResponse
-// @Failure      404       {object}  ErrorResponse
-// @Security     BearerAuth
-// @Router       /notes/{note_id}/blocks [get]
 func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
@@ -228,20 +198,6 @@ func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// GetBlock godoc
-// @Summary      Get a single block
-// @Description  Get a single block by ID
-// @Tags         blocks
-// @Accept       json
-// @Produce      json
-// @Param        block_id  path      int  true  "Block ID"
-// @Success      200       {object}  models.Block
-// @Failure      400       {object}  ErrorResponse
-// @Failure      401       {object}  ErrorResponse
-// @Failure      403       {object}  ErrorResponse
-// @Failure      404       {object}  ErrorResponse
-// @Security     BearerAuth
-// @Router       /blocks/{block_id} [get]
 func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
@@ -269,28 +225,11 @@ func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
-// UpdateBlockDeliveryRequest представляет запрос на обновление блока
-// @Description Request for updating a block
 type UpdateBlockDeliveryRequest struct {
 	Type    string          `json:"type"`
 	Content json.RawMessage `json:"content"`
 }
 
-// UpdateBlock godoc
-// @Summary      Update a block
-// @Description  Update a block's content. Type must match the actual block type.
-// @Tags         blocks
-// @Accept       json
-// @Produce      json
-// @Param        block_id  path      int                          true  "Block ID"
-// @Param        request   body      UpdateBlockDeliveryRequest   true  "Block update data"
-// @Success      200       {object}  models.Block
-// @Failure      400       {object}  ErrorResponse
-// @Failure      401       {object}  ErrorResponse
-// @Failure      403       {object}  ErrorResponse
-// @Failure      404       {object}  ErrorResponse
-// @Security     BearerAuth
-// @Router       /blocks/{block_id} [patch]
 func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
@@ -338,20 +277,6 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
-// DeleteBlock godoc
-// @Summary      Delete a block
-// @Description  Delete a block by ID
-// @Tags         blocks
-// @Accept       json
-// @Produce      json
-// @Param        block_id  path      int  true  "Block ID"
-// @Success      204       "No Content"
-// @Failure      400       {object}  ErrorResponse
-// @Failure      401       {object}  ErrorResponse
-// @Failure      403       {object}  ErrorResponse
-// @Failure      404       {object}  ErrorResponse
-// @Security     BearerAuth
-// @Router       /blocks/{block_id} [delete]
 func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
@@ -379,27 +304,10 @@ func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// UpdateBlockPositionRequest представляет запрос на изменение позиции блока
-// @Description Request for updating block position
 type UpdateBlockPositionRequest struct {
 	BeforeBlockID *uint64 `json:"before_block_id"`
 }
 
-// UpdateBlockPosition godoc
-// @Summary      Update block position
-// @Description  Move a block to a different position in the note
-// @Tags         blocks
-// @Accept       json
-// @Produce      json
-// @Param        block_id  path      int                          true  "Block ID"
-// @Param        request   body      UpdateBlockPositionRequest   true  "Position data"
-// @Success      200       {object}  models.Block
-// @Failure      400       {object}  ErrorResponse
-// @Failure      401       {object}  ErrorResponse
-// @Failure      403       {object}  ErrorResponse
-// @Failure      404       {object}  ErrorResponse
-// @Security     BearerAuth
-// @Router       /blocks/{block_id}/position [put]
 func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
@@ -442,11 +350,11 @@ func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Requ
 
 func handleBlockError(w http.ResponseWriter, ctx context.Context, err error) {
 	log := logger.FromContext(ctx)
-	switch err {
-	case namederrors.ErrNotFound:
+	switch {
+	case errors.Is(err, namederrors.ErrNotFound):
 		log.Warn().Err(err).Msg("block or note not found")
 		apiutils.WriteError(w, http.StatusNotFound, "block or note not found")
-	case namederrors.ErrNoAccess:
+	case errors.Is(err, namederrors.ErrNoAccess):
 		log.Warn().Err(err).Msg("access to note denied")
 		apiutils.WriteError(w, http.StatusForbidden, "no access to this note")
 	default:
