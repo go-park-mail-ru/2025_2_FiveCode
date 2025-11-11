@@ -123,7 +123,7 @@ func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, siz
 		file.Height = &h
 	}
 
-	file.URL = apiutils.TransformMinioURL(file.URL)
+	file.URL = r.Store.Minio.TransformToPublicURL(file.URL)
 
 	log.Info().Uint64("file_id", file.ID).Msg("file metadata saved successfully")
 	return file, nil
