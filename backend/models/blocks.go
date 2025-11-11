@@ -1,34 +1,39 @@
 package models
 
-import (
+/*import (
 	"time"
 )
 
+// Константы типов блоков
 const (
 	BlockTypeText       = "text"
 	BlockTypeCode       = "code"
 	BlockTypeAttachment = "attachment"
 )
 
+// BaseBlock - общие поля для всех блоков
 type BaseBlock struct {
 	ID        uint64    `json:"id"`
 	NoteID    uint64    `json:"note_id"`
-	Type      string    `json:"type"`
+	Type      string    `json:"type"` // "text", "code", "attachment"
 	Position  float64   `json:"position"`
 	CreatedAt time.Time `json:"created_at"`
 	UpdatedAt time.Time `json:"updated_at"`
 }
 
+// TextContent - контент текстового блока
 type TextContent struct {
 	Text    string            `json:"text"`
 	Formats []BlockTextFormat `json:"formats"`
 }
 
+// CodeContent - контент code блока
 type CodeContent struct {
 	Code     string `json:"code"`
 	Language string `json:"language"`
 }
 
+// AttachmentContent - контент attachment блока
 type AttachmentContent struct {
 	URL       string  `json:"url"`
 	Caption   *string `json:"caption,omitempty"`
@@ -69,8 +74,7 @@ type BlockTextFormat struct {
 }
 
 type UpdateBlockRequest struct {
-	BlockID uint64      `json:"-"`
-	Type    string      `json:"type"`
+	BlockID uint64      `json:"block_id"`
 	Content interface{} `json:"content"`
 }
 
@@ -83,3 +87,4 @@ type UpdateCodeContent struct {
 	Code     string `json:"code"`
 	Language string `json:"language"`
 }
+*/
