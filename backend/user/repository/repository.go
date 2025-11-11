@@ -5,7 +5,6 @@ import (
 	"backend/middleware"
 	"backend/models"
 	namederrors "backend/named_errors"
-	"backend/store"
 	"context"
 	"database/sql"
 	"errors"
@@ -15,12 +14,12 @@ import (
 )
 
 type UserRepository struct {
-	Store *store.Store
+	db *sql.DB
 }
 
-func NewUserRepository(store *store.Store) *UserRepository {
+func NewUserRepository(db *sql.DB) *UserRepository {
 	return &UserRepository{
-		Store: store,
+		db: db,
 	}
 }
 
@@ -74,7 +73,7 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, username *string, pa
 	var avatarFileIDResult sql.NullInt64
 	var updatedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, args...).Scan(
+	err := r.db.QueryRowContext(ctx, query, args...).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,
@@ -133,7 +132,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 	var avatarFileID sql.NullInt64
 	var updatedAt sql.NullTime
 
-	err := r.Store.Postgres.DB.QueryRowContext(ctx, query, userID).Scan(
+	err := r.db.QueryRowContext(ctx, query, userID).Scan(
 		&user.ID,
 		&user.Email,
 		&user.Password,
@@ -169,7 +168,7 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID uint64) error {
 
 	query := `DELETE FROM "user" WHERE id = $1`
 
-	result, err := r.Store.Postgres.DB.ExecContext(ctx, query, userID)
+	result, err := r.db.ExecContext(ctx, query, userID)
 	if err != nil {
 		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to delete user")
 		return fmt.Errorf("failed to delete user: %w", err)
