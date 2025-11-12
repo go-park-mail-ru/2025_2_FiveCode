@@ -7,18 +7,13 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"io"
 	"strings"
-	"sync"
 	"time"
 
-	"github.com/google/uuid"
-	"github.com/minio/minio-go/v7"
 	"golang.org/x/crypto/bcrypt"
 )
 
 type Store struct {
-	Mu       sync.RWMutex
 	Minio    *MinioStorage
 	Postgres *PostgresDB
 	Redis    *RedisDB
@@ -140,29 +135,4 @@ func (s *Store) InitFillStore(ctx context.Context) error {
 
 func NewStore() *Store {
 	return &Store{}
-}
-
-func (s *Store) UploadFileToMinIO(ctx context.Context, filename string, file io.Reader, size int64, contentType string) (string, error) {
-	log := logger.FromContext(ctx)
-	if s.Minio == nil {
-		return "", errors.New("minio storage not initialized")
-	}
-
-	objectName := fmt.Sprintf("%s-%s", uuid.New().String(), filename)
-	bucketName := "notes-app"
-
-	client := s.Minio.client
-	log.Info().Str("bucket", bucketName).Str("object", objectName).Msg("uploading file to minio")
-	_, err := client.PutObject(ctx, bucketName, objectName, file, size, minio.PutObjectOptions{
-		ContentType: contentType,
-	})
-	if err != nil {
-		log.Error().Err(err).Msg("failed to upload file to MinIO")
-		return "", fmt.Errorf("failed to upload file to MinIO: %w", err)
-	}
-
-	endpoint := client.EndpointURL()
-	scheme := endpoint.Scheme
-	url := fmt.Sprintf("%s://%s/%s/%s", scheme, endpoint.Host, bucketName, objectName)
-	return url, nil
 }

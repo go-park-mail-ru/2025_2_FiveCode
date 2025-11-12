@@ -33,6 +33,7 @@ type UserDeliveryInterface interface {
 	GetProfile(w http.ResponseWriter, r *http.Request)
 	GetProfileBySession(w http.ResponseWriter, r *http.Request)
 	UpdateProfile(w http.ResponseWriter, r *http.Request)
+	DeleteProfile(w http.ResponseWriter, r *http.Request)
 }
 
 type NotesDeliveryInterface interface {
@@ -71,23 +72,23 @@ type Deliveries struct {
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	layers := &Deliveries{}
 
-	authR := authRepository.NewAuthRepository(s)
+	authR := authRepository.NewAuthRepository(s.Postgres.DB, s.Redis.Client)
 	authUC := authUsecase.NewAuthUsecase(authR, []byte(conf.Auth.CSRF.SecretKey))
 	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
-	userR := userRepository.NewUserRepository(s)
+	userR := userRepository.NewUserRepository(s.Postgres.DB)
 	userUC := userUsecase.NewUserUsecase(userR, authR)
 	layers.UserDelivery = userDelivery.NewUserDelivery(userUC)
 
-	notesR := notesRepository.NewNotesRepository(s)
+	notesR := notesRepository.NewNotesRepository(s.Postgres.DB)
 	notesUC := notesUsecase.NewNotesUsecase(notesR)
 	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
 
-	blocksR := blocksRepository.NewBlocksRepository(s)
+	blocksR := blocksRepository.NewBlocksRepository(s.Postgres.DB)
 	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR, notesR)
 	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
 
-	fileRepo := fileRepository.NewFileRepository(s)
+	fileRepo := fileRepository.NewFileRepository(s.Postgres.DB, s.Minio.Client)
 	fileUC := fileUsecase.NewFileUsecase(fileRepo)
 	layers.FileDelivery = fileDelivery.NewFileDelivery(fileUC)
 

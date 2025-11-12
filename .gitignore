@@ -5,3 +5,5 @@ cover
 .vscode
 *.sh
 *.txt
+*.out
+backend-goose

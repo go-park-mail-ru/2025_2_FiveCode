@@ -3,9 +3,6 @@ package store
 import (
 	"context"
 	"fmt"
-	"mime/multipart"
-	"os"
-
 	"github.com/minio/minio-go/v7"
 	"github.com/minio/minio-go/v7/pkg/credentials"
 )
@@ -13,7 +10,7 @@ import (
 const defaultBucketName = "notes-app"
 
 type MinioStorage struct {
-	client *minio.Client
+	Client *minio.Client
 }
 
 func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*MinioStorage, error) {
@@ -26,7 +23,7 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 	}
 
 	storage := &MinioStorage{
-		client: client,
+		Client: client,
 	}
 
 	ctx := context.Background()
@@ -62,29 +59,4 @@ func NewMinioStorage(endpoint, accessKey, secretKey string, secure bool) (*Minio
 	}
 
 	return storage, nil
-}
-
-func (s *MinioStorage) LoadImg(bucketName, fileName string, file multipart.File, fileSize int64) error {
-	if bucketName == "" {
-		bucketName = os.Getenv("MINIO_BUCKET_NAME")
-	}
-	_, err := s.client.PutObject(context.Background(), bucketName, fileName, file, fileSize, minio.PutObjectOptions{})
-	return err
-}
-
-func (s *MinioStorage) DeleteImg(bucketName, fileName string) error {
-	if bucketName == "" {
-		bucketName = os.Getenv("MINIO_BUCKET_NAME")
-	}
-	return s.client.RemoveObject(context.Background(), bucketName, fileName, minio.RemoveObjectOptions{})
-}
-
-func (s *MinioStorage) GetFileURL(fileName string) string {
-	endpoint := s.client.EndpointURL().String()
-	return fmt.Sprintf("%s/%s/%s", endpoint, defaultBucketName, fileName)
-}
-
-// GetClient возвращает MinIO клиента (правильная сигнатура)
-func (s *MinioStorage) GetClient() *minio.Client {
-	return s.client
 }

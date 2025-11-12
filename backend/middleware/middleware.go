@@ -8,6 +8,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"fmt"
+	"github.com/redis/go-redis/v9"
 	"io"
 	"net"
 	"net/http"
@@ -40,6 +42,7 @@ var allowed = map[string]bool{
 	"http://localhost:8030":      true,
 	"http://127.0.0.1:8030":      true,
 	"http://89.208.210.115:8030": true,
+	"http://89.208.210.115:8001": true,
 }
 
 func CORS(next http.Handler) http.Handler {
@@ -162,9 +165,21 @@ func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 				return
 			}
 
-			userID, err := s.Redis.GetUserIDBySession(r.Context(), session.Value)
-			if err != nil {
+			key := "session:" + session.Value
+			val, err := s.Redis.Client.Get(r.Context(), key).Result()
+			if errors.Is(err, redis.Nil) {
 				apiutils.WriteError(w, http.StatusUnauthorized, "invalid session")
+				return
+			}
+			if err != nil {
+				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+				return
+			}
+
+			var userID uint64
+			_, err = fmt.Sscanf(val, "%d", &userID)
+			if err != nil {
+				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
 				return
 			}
 
