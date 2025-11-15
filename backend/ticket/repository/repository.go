@@ -205,6 +205,11 @@ func (r *TicketRepository) UpdateTicket(ctx context.Context, ticketID uint64, us
 		return nil, err
 	}
 
+	if ticket.Status != models.TicketStatusOpen {
+		log.Warn().Msg("cannot update ticket with status other than open")
+		return nil, errors.New("cannot update ticket with status other than open")
+	}
+
 	return &ticket, nil
 }
 

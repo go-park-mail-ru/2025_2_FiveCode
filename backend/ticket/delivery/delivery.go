@@ -53,10 +53,10 @@ func (d *TicketDelivery) GetAllTicketsByUserId(w http.ResponseWriter, r *http.Re
 	apiutils.WriteJSON(w, http.StatusOK, tickets)
 }
 
-func (s *TicketDelivery) GetAllTickets(w http.ResponseWriter, r *http.Request) {
+func (d *TicketDelivery) GetAllTickets(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 
-	tickets, err := s.Usecase.GetAllTickets(r.Context())
+	tickets, err := d.Usecase.GetAllTickets(r.Context())
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get all tickets")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get all tickets")
@@ -67,7 +67,7 @@ func (s *TicketDelivery) GetAllTickets(w http.ResponseWriter, r *http.Request) {
 }
 
 type UpdateTicketRequest struct {
-	Title      *string `json:"tittle"`
+	Title       *string `json:"tittle"`
 	Description *string `json:"description"`
 }
 
@@ -175,7 +175,7 @@ type UpdateStatusRequest struct {
 	Status string `json:"status"`
 }
 
-func (s *TicketDelivery) UpdateTicketStatus(w http.ResponseWriter, r *http.Request) {
+func (d *TicketDelivery) UpdateTicketStatus(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 
 	vars := mux.Vars(r)
@@ -199,7 +199,7 @@ func (s *TicketDelivery) UpdateTicketStatus(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	updatedTicket, err := s.Usecase.UpdateTicketStatus(r.Context(), ticketID, req.Status)
+	updatedTicket, err := d.Usecase.UpdateTicketStatus(r.Context(), ticketID, req.Status)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update ticket status")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to update ticket status")
