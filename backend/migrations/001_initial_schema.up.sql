@@ -173,7 +173,7 @@ CREATE TABLE ticket
     status      TEXT      NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
     title       TEXT      NOT NULL,
     description TEXT      NOT NULL,
-    file_id     INTEGER   NOT NULL REFERENCES file (id) ON DELETE CASCADE,
+    file_id     INTEGER   REFERENCES file (id) ON DELETE CASCADE,
     created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );

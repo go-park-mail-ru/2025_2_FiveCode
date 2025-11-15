@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -76,13 +77,13 @@ func (s *Store) InitFillStore(ctx context.Context) error {
 	}{
 		{
 			Email:    "admin@example.com",
-			Password: "admin123123",
+			Password: "password",
 			Username: "admin",
 			IsAdmin:  true,
 		},
 		{
 			Email:    "user@example.com",
-			Password: "user123123",
+			Password: "password",
 			Username: "user",
 			IsAdmin:  false,
 		},

@@ -6,7 +6,6 @@ import (
 	"backend/models"
 	"context"
 	"fmt"
-	"strings"
 )
 
 type TicketRepository interface {

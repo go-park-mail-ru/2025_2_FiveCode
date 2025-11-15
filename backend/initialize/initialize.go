@@ -110,5 +110,6 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	ticketRepo := ticketRepository.NewTicketRepository(s.Postgres.DB)
 	ticketUC := ticketUsecase.NewTicketUsecase(ticketRepo)
 	layers.TicketDelivery = ticketDelivery.NewTicketDelivery(ticketUC)
+
 	return layers
 }
