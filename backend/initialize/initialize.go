@@ -15,12 +15,21 @@ import (
 	notesRepository "backend/notes/repository"
 	notesUsecase "backend/notes/usecase"
 	"backend/store"
+	ticketDelivery "backend/ticket/delivery"
+	ticketRepository "backend/ticket/repository"
+	ticketUsecase "backend/ticket/usecase"
 	userDelivery "backend/user/delivery"
 	userRepository "backend/user/repository"
 	userUsecase "backend/user/usecase"
 	"net/http"
 	"time"
 )
+
+type TicketDeliveryInterface interface {
+	GetAllTicketsByUserId(w http.ResponseWriter, r *http.Request)
+	UpdateTicket(w http.ResponseWriter, r *http.Request)
+	GetTicketById(w http.ResponseWriter, r *http.Request)
+}
 
 type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
@@ -66,6 +75,7 @@ type Deliveries struct {
 	NotesDelivery  NotesDeliveryInterface
 	BlocksDelivery BlocksDeliveryInterface
 	FileDelivery   FileDeliveryInterface
+	TicketDelivery TicketDeliveryInterface
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
@@ -91,5 +101,8 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	fileUC := fileUsecase.NewFileUsecase(fileRepo)
 	layers.FileDelivery = fileDelivery.NewFileDelivery(fileUC)
 
+	ticketRepo := ticketRepository.NewTicketRepository(s.Postgres.DB)
+	ticketUC := ticketUsecase.NewTicketUsecase(ticketRepo)
+	layers.TicketDelivery = ticketDelivery.NewTicketDelivery(ticketUC)
 	return layers
 }

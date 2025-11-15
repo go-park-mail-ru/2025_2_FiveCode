@@ -33,3 +33,11 @@ func (u *TicketUsecase) GetAllTicketsByUserId(ctx context.Context, userID uint64
 
 	return tickets, nil
 }
+
+func (u *TicketUsecase) UpdateTicket(ctx context.Context, userID uint64, ticket *models.Ticket) ([]models.Ticket, error) {
+	return nil, nil
+}
+
+func (u *TicketUsecase) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
+	return nil, nil
+}
