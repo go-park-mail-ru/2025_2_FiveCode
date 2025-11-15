@@ -89,7 +89,7 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 	log := logger.FromContext(ctx)
 	log.Info().Str("email", email).Msg("getting user by email from PostgreSQL")
 
-	query := `SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at FROM "user" WHERE email = $1`
+	query := `SELECT id, email, password_hash, username, avatar_file_id, is_admin, created_at, updated_at FROM "user" WHERE email = $1`
 
 	user := &models.User{}
 	var avatarFileID sql.NullInt64
@@ -101,6 +101,7 @@ func (r *AuthRepository) GetUserByEmail(ctx context.Context, email string) (*mod
 		&user.Password,
 		&user.Username,
 		&avatarFileID,
+		&user.IsAdmin,
 		&user.CreatedAt,
 		&updatedAt,
 	)

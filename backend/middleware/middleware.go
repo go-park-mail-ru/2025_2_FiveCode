@@ -219,3 +219,35 @@ func UserAccessMiddleware() mux.MiddlewareFunc {
 		})
 	}
 }
+
+func AdminMiddleware(s *store.Store) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromContext(r.Context())
+
+			userID, ok := GetUserID(r.Context())
+			if !ok {
+				log.Error().Msg("user not authenticated")
+				apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+				return
+			}
+
+			query := `SELECT is_admin FROM "user" WHERE id = $1`
+			var isAdmin bool
+			err := s.Postgres.DB.QueryRowContext(r.Context(), query, userID).Scan(&isAdmin)
+			if err != nil {
+				log.Error().Err(err).Uint64("user_id", userID).Msg("failed to check admin status")
+				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+				return
+			}
+
+			if !isAdmin {
+				log.Warn().Uint64("user_id", userID).Msg("access denied: user is not admin")
+				apiutils.WriteError(w, http.StatusForbidden, "access denied: admin privileges required")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
