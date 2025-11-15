@@ -35,7 +35,7 @@ func NewTicketDelivery(u TicketUsecase) *TicketDelivery {
 	}
 }
 
-func (s *TicketDelivery) GetAllTicketsByUserId(w http.ResponseWriter, r *http.Request) {
+func (d *TicketDelivery) GetAllTicketsByUserId(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -44,7 +44,7 @@ func (s *TicketDelivery) GetAllTicketsByUserId(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	tickets, err := s.Usecase.GetAllTicketsByUserId(r.Context(), userID)
+	tickets, err := d.Usecase.GetAllTicketsByUserId(r.Context(), userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get all tickets")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get all tickets")
@@ -71,7 +71,7 @@ type UpdateTicketRequest struct {
 	Description *string `json:"description"`
 }
 
-func (s *TicketDelivery) UpdateTicket(w http.ResponseWriter, r *http.Request) {
+func (d *TicketDelivery) UpdateTicket(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
@@ -95,7 +95,7 @@ func (s *TicketDelivery) UpdateTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	updatedTicket, err := s.Usecase.UpdateTicket(r.Context(), ticketID, userID, req.Title, req.Description)
+	updatedTicket, err := d.Usecase.UpdateTicket(r.Context(), ticketID, userID, req.Title, req.Description)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update ticket")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to update ticket")
@@ -103,8 +103,25 @@ func (s *TicketDelivery) UpdateTicket(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, updatedTicket)
 }
 
-func (s *TicketDelivery) GetTicketById(w http.ResponseWriter, r *http.Request) {
+func (d *TicketDelivery) GetTicketById(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		log.Error().Msg("user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
+		return
+	}
+
+	vars := mux.Vars(r)
+	ticketID, _ := strconv.ParseUint(vars["ticket_id"], 10, 64)
+
+	ticket, err := d.Usecase.GetTicketById(r.Context(), userID, ticketID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get ticket")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get ticket")
+	}
+	apiutils.WriteJSON(w, http.StatusOK, ticket)
 }
 
 func (d *TicketDelivery) GetStatistics(w http.ResponseWriter, r *http.Request) {
