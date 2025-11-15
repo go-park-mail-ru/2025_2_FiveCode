@@ -25,6 +25,12 @@ import (
 	"time"
 )
 
+type TicketDeliveryInterface interface {
+	GetAllTicketsByUserId(w http.ResponseWriter, r *http.Request)
+	UpdateTicket(w http.ResponseWriter, r *http.Request)
+	GetTicketById(w http.ResponseWriter, r *http.Request)
+}
+
 type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
@@ -103,6 +109,5 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	ticketRepo := ticketRepository.NewTicketRepository(s.Postgres.DB)
 	ticketUC := ticketUsecase.NewTicketUsecase(ticketRepo)
 	layers.TicketDelivery = ticketDelivery.NewTicketDelivery(ticketUC)
-
 	return layers
 }
