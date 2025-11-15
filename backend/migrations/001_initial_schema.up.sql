@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS "user"
     username       TEXT        NOT NULL UNIQUE CHECK (LENGTH(username) >= 1 AND LENGTH(username) <= 40 AND
                                                       username ~ '^[a-zA-Z0-9_]+$'),
     avatar_file_id INTEGER     REFERENCES file (id) ON DELETE SET NULL,
+    is_admin       BOOL                 DEFAULT FALSE,
     created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -177,6 +178,15 @@ CREATE TABLE ticket
     updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS ticket_message
+(
+    id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    ticket_id   INTEGER     NOT NULL REFERENCES ticket (id) ON DELETE CASCADE,
+    sender_id   INTEGER REFERENCES "user" (id) ON DELETE SET NULL,
+    sender_type TEXT        NOT NULL CHECK (sender_type IN ('user', 'admin')),
+    body        TEXT        NOT NULL,
+    created_at  TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
 
 -- функция установки текущего времени на поля created_at и updated_at
 CREATE OR REPLACE FUNCTION set_timestamps()

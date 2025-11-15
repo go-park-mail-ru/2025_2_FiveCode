@@ -7,7 +7,6 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -68,65 +67,90 @@ func (s *Store) InitMinioStorage(conf *config.Config) error {
 
 func (s *Store) InitFillStore(ctx context.Context) error {
 	log := logger.FromContext(ctx)
-	email := "user@example.com"
-	password := "password"
 
-	var userID uint64
-	var exists bool
-	checkQuery := `SELECT id FROM "user" WHERE email = $1`
-	err := s.Postgres.DB.QueryRowContext(ctx, checkQuery, email).Scan(&userID)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Info().Str("email", email).Msg("default user not found, creating...")
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("failed to hash password: %w", err)
-		}
-
-		username := strings.Split(email, "@")[0]
-		insertQuery := `
-            INSERT INTO "user" (email, password_hash, username)
-            VALUES ($1, $2, $3)
-            RETURNING id
-        `
-		err = s.Postgres.DB.QueryRowContext(ctx, insertQuery, email, string(hashedPassword), username).Scan(&userID)
-		if err != nil {
-			return fmt.Errorf("failed to create user in PostgreSQL: %w", err)
-		}
-		exists = false
-		log.Info().Uint64("user_id", userID).Msg("default user created in database")
-	} else if err != nil {
-		return fmt.Errorf("failed to check user existence: %w", err)
-	} else {
-		log.Info().Str("email", email).Msg("default user already exists in database")
-		exists = true
+	users := []struct {
+		Email    string
+		Password string
+		Username string
+		IsAdmin  bool
+	}{
+		{
+			Email:    "admin@example.com",
+			Password: "admin123123",
+			Username: "admin",
+			IsAdmin:  true,
+		},
+		{
+			Email:    "user@example.com",
+			Password: "user123123",
+			Username: "user",
+			IsAdmin:  false,
+		},
 	}
 
-	if !exists {
-		log.Info().Msg("creating default notes for new user")
-		notes := []struct {
-			Title     string
-			IsShared  bool
-			CreatedAt time.Time
-			UpdatedAt time.Time
-		}{
-			{"University Lectures", false, time.Now().Add(-30 * 24 * time.Hour), time.Now().Add(-5 * 24 * time.Hour)},
-			{"Project Ideas", true, time.Now().Add(-20 * 24 * time.Hour), time.Now().Add(-2 * 24 * time.Hour)},
-			{"Shopping List", false, time.Now().Add(-7 * 24 * time.Hour), time.Now().Add(-6 * time.Hour)},
-			{"Random Note", false, time.Now().Add(-10 * 24 * time.Hour), time.Now().Add(-8 * 24 * time.Hour)},
+	var regularUserID uint64
+
+	for _, userData := range users {
+		var userID uint64
+		var exists bool
+		checkQuery := `SELECT id FROM "user" WHERE email = $1`
+		err := s.Postgres.DB.QueryRowContext(ctx, checkQuery, userData.Email).Scan(&userID)
+
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Info().Str("email", userData.Email).Bool("is_admin", userData.IsAdmin).Msg("user not found, creating...")
+			hashedPassword, err := bcrypt.GenerateFromPassword([]byte(userData.Password), bcrypt.DefaultCost)
+			if err != nil {
+				return fmt.Errorf("failed to hash password for %s: %w", userData.Email, err)
+			}
+
+			insertQuery := `
+                INSERT INTO "user" (email, password_hash, username, is_admin)
+                VALUES ($1, $2, $3, $4)
+                RETURNING id
+            `
+			err = s.Postgres.DB.QueryRowContext(ctx, insertQuery, userData.Email, string(hashedPassword), userData.Username, userData.IsAdmin).Scan(&userID)
+			if err != nil {
+				return fmt.Errorf("failed to create user %s in PostgreSQL: %w", userData.Email, err)
+			}
+			exists = false
+			log.Info().Uint64("user_id", userID).Str("email", userData.Email).Bool("is_admin", userData.IsAdmin).Msg("user created in database")
+		} else if err != nil {
+			return fmt.Errorf("failed to check user existence for %s: %w", userData.Email, err)
+		} else {
+			log.Info().Str("email", userData.Email).Msg("user already exists in database")
+			exists = true
 		}
 
-		for _, note := range notes {
-			insertNoteQuery := `
-                INSERT INTO note (owner_id, title, is_archived, is_shared, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-            `
-			_, err = s.Postgres.DB.ExecContext(ctx, insertNoteQuery, userID, note.Title, false, note.IsShared, note.CreatedAt, note.UpdatedAt)
-			if err != nil {
-				return fmt.Errorf("failed to create note '%s': %w", note.Title, err)
+		if !userData.IsAdmin {
+			regularUserID = userID
+
+			if !exists {
+				log.Info().Msg("creating default notes for regular user")
+				notes := []struct {
+					Title     string
+					IsShared  bool
+					CreatedAt time.Time
+					UpdatedAt time.Time
+				}{
+					{"University Lectures", false, time.Now().Add(-30 * 24 * time.Hour), time.Now().Add(-5 * 24 * time.Hour)},
+					{"Project Ideas", true, time.Now().Add(-20 * 24 * time.Hour), time.Now().Add(-2 * 24 * time.Hour)},
+					{"Shopping List", false, time.Now().Add(-7 * 24 * time.Hour), time.Now().Add(-6 * time.Hour)},
+					{"Random Note", false, time.Now().Add(-10 * 24 * time.Hour), time.Now().Add(-8 * 24 * time.Hour)},
+				}
+
+				for _, note := range notes {
+					insertNoteQuery := `
+                    INSERT INTO note (owner_id, title, is_archived, is_shared, created_at, updated_at)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                `
+					_, err = s.Postgres.DB.ExecContext(ctx, insertNoteQuery, regularUserID, note.Title, false, note.IsShared, note.CreatedAt, note.UpdatedAt)
+					if err != nil {
+						return fmt.Errorf("failed to create note '%s': %w", note.Title, err)
+					}
+				}
+				log.Info().Int("count", len(notes)).Msg("default notes created for regular user")
 			}
 		}
-		log.Info().Int("count", len(notes)).Msg("default notes created")
 	}
 
 	log.Info().Msg("InitFillStore completed successfully")

@@ -22,7 +22,10 @@ import (
 
 type ctxKey string
 
-const UserIDKey ctxKey = "userID"
+const (
+	UserIDKey  ctxKey = "userID"
+	IsAdminKey ctxKey = "isAdmin"
+)
 
 func WithUserID(ctx context.Context, id uint64) context.Context {
 	return context.WithValue(ctx, UserIDKey, id)
@@ -35,6 +38,19 @@ func GetUserID(ctx context.Context) (uint64, bool) {
 	}
 	id, ok := value.(uint64)
 	return id, ok
+}
+
+func WithIsAdmin(ctx context.Context, isAdmin bool) context.Context {
+	return context.WithValue(ctx, IsAdminKey, isAdmin)
+}
+
+func GetIsAdmin(ctx context.Context) (bool, bool) {
+	value := ctx.Value(IsAdminKey)
+	if value == nil {
+		return false, false
+	}
+	isAdmin, ok := value.(bool)
+	return isAdmin, ok
 }
 
 var allowed = map[string]bool{
@@ -182,7 +198,14 @@ func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 				return
 			}
 
-			ctx := WithUserID(r.Context(), userID)
+			var isAdmin bool
+			err = s.Postgres.DB.QueryRowContext(r.Context(), `SELECT is_admin FROM "user" WHERE id = $1`, userID).Scan(&isAdmin)
+			if err != nil {
+				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+				return
+			}
+
+			ctx := WithIsAdmin(WithUserID(r.Context(), userID), isAdmin)
 			next.ServeHTTP(w, r.WithContext(ctx))
 		})
 	}
@@ -212,6 +235,36 @@ func UserAccessMiddleware() mux.MiddlewareFunc {
 
 			if userID != requestedUserID {
 				apiutils.WriteError(w, http.StatusForbidden, "access denied")
+				return
+			}
+
+			next.ServeHTTP(w, r)
+		})
+	}
+}
+
+func AdminMiddleware(s *store.Store) mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromContext(r.Context())
+
+			userID, ok := GetUserID(r.Context())
+			if !ok {
+				log.Error().Msg("user not authenticated")
+				apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
+				return
+			}
+
+			isAdmin, ok := GetIsAdmin(r.Context())
+			if !ok {
+				log.Error().Uint64("user_id", userID).Msg("admin flag missing in context")
+				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+				return
+			}
+
+			if !isAdmin {
+				log.Warn().Uint64("user_id", userID).Msg("access denied: user is not admin")
+				apiutils.WriteError(w, http.StatusForbidden, "access denied: admin privileges required")
 				return
 			}
 

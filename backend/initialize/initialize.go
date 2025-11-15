@@ -25,6 +25,18 @@ import (
 	"time"
 )
 
+type TicketDeliveryInterface interface {
+	GetAllTicketsByUserId(w http.ResponseWriter, r *http.Request)
+	UpdateTicket(w http.ResponseWriter, r *http.Request)
+	GetTicketById(w http.ResponseWriter, r *http.Request)
+	CreateTicket(w http.ResponseWriter, r *http.Request)
+	GetStatistics(w http.ResponseWriter, r *http.Request)
+	GetAllTickets(w http.ResponseWriter, r *http.Request)
+	UpdateTicketStatus(w http.ResponseWriter, r *http.Request)
+	CreateTicketMessage(w http.ResponseWriter, r *http.Request)
+	GetTicketMessages(w http.ResponseWriter, r *http.Request)
+}
+
 type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
@@ -63,11 +75,6 @@ type FileDeliveryInterface interface {
 	DeleteFile(w http.ResponseWriter, r *http.Request)
 }
 
-type TicketDeliveryInterface interface {
-	GetStatistics(w http.ResponseWriter, r *http.Request)
-	CreateTicket(w http.ResponseWriter, r *http.Request)
-}
-
 type Deliveries struct {
 	AuthDelivery   AuthDeliveryInterface
 	UserDelivery   UserDeliveryInterface
@@ -103,6 +110,5 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	ticketRepo := ticketRepository.NewTicketRepository(s.Postgres.DB)
 	ticketUC := ticketUsecase.NewTicketUsecase(ticketRepo)
 	layers.TicketDelivery = ticketDelivery.NewTicketDelivery(ticketUC)
-
 	return layers
 }
