@@ -15,12 +15,12 @@ import (
 	notesRepository "backend/notes/repository"
 	notesUsecase "backend/notes/usecase"
 	"backend/store"
-	userDelivery "backend/user/delivery"
-	userRepository "backend/user/repository"
-	userUsecase "backend/user/usecase"
 	ticketDelivery "backend/ticket/delivery"
 	ticketRepository "backend/ticket/repository"
 	ticketUsecase "backend/ticket/usecase"
+	userDelivery "backend/user/delivery"
+	userRepository "backend/user/repository"
+	userUsecase "backend/user/usecase"
 	"net/http"
 	"time"
 )
@@ -65,6 +65,7 @@ type FileDeliveryInterface interface {
 
 type TicketDeliveryInterface interface {
 	GetStatistics(w http.ResponseWriter, r *http.Request)
+	CreateTicket(w http.ResponseWriter, r *http.Request)
 }
 
 type Deliveries struct {

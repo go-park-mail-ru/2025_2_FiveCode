@@ -22,6 +22,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	api.HandleFunc("/register", deliveries.AuthDelivery.Register).Methods("POST")
 	api.HandleFunc("/logout", deliveries.AuthDelivery.Logout).Methods("POST")
 	api.HandleFunc("/session", deliveries.UserDelivery.GetProfileBySession).Methods("GET")
+	api.HandleFunc("/tickets", deliveries.TicketDelivery.CreateTicket).Methods("POST")
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	profile := api.PathPrefix("").Subrouter()
