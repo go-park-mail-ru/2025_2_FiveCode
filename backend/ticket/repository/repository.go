@@ -9,8 +9,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-
-	"github.com/rs/zerolog/log"
 )
 
 type TicketRepository struct {
@@ -265,23 +263,24 @@ func (r *TicketRepository) GetTicketById(ctx context.Context, userID uint64, tic
 }
 
 func (r *TicketRepository) GetStatistics(ctx context.Context) (dto.Statistics, error) {
+	log := logger.FromContext(ctx)
 	stats := dto.Statistics{}
 
-	query := `
-		SELECT
-			category,
-			COUNT(*) AS total_tickets,
-			COUNT(*) FILTER (WHERE status = 'open') AS open_tickets,
-			COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress_tickets,
-			COUNT(*) FILTER (WHERE status = 'closed') AS closed_tickets
-		FROM
-			ticket
-		GROUP BY
-			category
-		ORDER BY
-			category`
+	categoryQuery := `
+       SELECT
+          category,
+          COUNT(*) AS total_tickets,
+          COUNT(*) FILTER (WHERE status = 'open') AS open_tickets,
+          COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress_tickets,
+          COUNT(*) FILTER (WHERE status = 'closed') AS closed_tickets
+       FROM
+          ticket
+       GROUP BY
+          category
+       ORDER BY
+          category`
 
-	rows, err := r.db.QueryContext(ctx, query)
+	rows, err := r.db.QueryContext(ctx, categoryQuery)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to execute statistics query")
 		return dto.Statistics{}, fmt.Errorf("failed to get statistics: %w", err)
@@ -310,6 +309,31 @@ func (r *TicketRepository) GetStatistics(ctx context.Context) (dto.Statistics, e
 		log.Error().Err(err).Msg("error during statistics rows iteration")
 		return dto.Statistics{}, fmt.Errorf("error during statistics rows iteration: %w", err)
 	}
+
+	totalQuery := `
+       SELECT
+          COUNT(*) AS total_tickets,
+          COUNT(*) FILTER (WHERE status = 'open') AS open_tickets,
+          COUNT(*) FILTER (WHERE status = 'in_progress') AS in_progress_tickets,
+          COUNT(*) FILTER (WHERE status = 'closed') AS closed_tickets
+       FROM
+          ticket`
+
+	var totalStat dto.StatisticForCategory
+	totalStat.Category = "total"
+
+	err = r.db.QueryRowContext(ctx, totalQuery).Scan(
+		&totalStat.TotalTickets,
+		&totalStat.OpenTickets,
+		&totalStat.InProgressTickets,
+		&totalStat.ClosedTickets,
+	)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get total statistics")
+		return dto.Statistics{}, fmt.Errorf("failed to get total statistics: %w", err)
+	}
+
+	stats.Statistics = append([]dto.StatisticForCategory{totalStat}, stats.Statistics...)
 
 	return stats, nil
 }
