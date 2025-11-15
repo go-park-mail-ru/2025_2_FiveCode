@@ -54,5 +54,11 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.GetFile).Methods("GET")
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.DeleteFile).Methods("DELETE")
 
+	ticketProtectRouter := r.PathPrefix("/api/").Subrouter()
+	ticketProtectRouter.Use(mw.AuthMiddleware(s))
+	ticketProtectRouter.HandleFunc("/tickets", deliveries.TicketDelivery.GetAllTicketsByUserId).Methods("GET")
+	ticketProtectRouter.HandleFunc("/tickets/{ticket_id}", deliveries.TicketDelivery.UpdateTicket).Methods("PUT")
+	ticketProtectRouter.HandleFunc("/tickets/{ticket_id}", deliveries.TicketDelivery.GetTicketById).Methods("GET")
+
 	return mw.CORS(r)
 }
