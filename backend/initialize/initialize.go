@@ -31,6 +31,8 @@ type TicketDeliveryInterface interface {
 	GetTicketById(w http.ResponseWriter, r *http.Request)
 	CreateTicket(w http.ResponseWriter, r *http.Request)
 	GetStatistics(w http.ResponseWriter, r *http.Request)
+	GetAllTickets(w http.ResponseWriter, r *http.Request)
+	UpdateTicketStatus(w http.ResponseWriter, r *http.Request)
 }
 
 type AuthDeliveryInterface interface {

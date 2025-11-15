@@ -82,6 +82,63 @@ func (r *TicketRepository) GetAllTicketsByUserId(ctx context.Context, userID uin
 	return tickets, nil
 }
 
+func (r *TicketRepository) GetAllTickets(ctx context.Context) ([]models.Ticket, error) {
+	log := logger.FromContext(ctx)
+
+	query := `
+		SELECT t.id, t.email, t.full_name, t.category, t.status, t.title, t.description, t.file_id, t.created_at, t.updated_at
+		FROM ticket t
+		ORDER BY t.created_at DESC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query tickets")
+		return nil, err
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
+
+	var tickets []models.Ticket
+
+	for rows.Next() {
+		var ticket models.Ticket
+
+		err := rows.Scan(
+			&ticket.ID,
+			&ticket.Email,
+			&ticket.FullName,
+			&ticket.Category,
+			&ticket.Status,
+			&ticket.Title,
+			&ticket.Description,
+			&ticket.FileID,
+			&ticket.CreatedAt,
+			&ticket.UpdatedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to scan ticket")
+			return nil, err
+		}
+
+		tickets = append(tickets, ticket)
+	}
+
+	if err = rows.Err(); err != nil {
+		log.Error().Err(err).Msg("failed to scan tickets")
+		return nil, err
+	}
+
+	if len(tickets) == 0 {
+		return []models.Ticket{}, nil
+	}
+
+	return tickets, nil
+}
+
 func (r *TicketRepository) UpdateTicket(ctx context.Context, ticketID uint64, userID uint64, tittle, desc *string) (*models.Ticket, error) {
 	log := logger.FromContext(ctx)
 
@@ -244,4 +301,40 @@ func (r *TicketRepository) CreateTicket(ctx context.Context, ticket *models.Tick
 	}
 
 	return created, nil
+}
+
+func (r *TicketRepository) UpdateTicketStatus(ctx context.Context, ticketID uint64, status string) (*models.Ticket, error) {
+	log := logger.FromContext(ctx)
+
+	query := `
+		UPDATE ticket
+		SET status = $1, updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2
+		RETURNING id, email, full_name, category, status, title, description, file_id, created_at, updated_at
+	`
+
+	var ticket models.Ticket
+	err := r.db.QueryRowContext(ctx, query, status, ticketID).Scan(
+		&ticket.ID,
+		&ticket.Email,
+		&ticket.FullName,
+		&ticket.Category,
+		&ticket.Status,
+		&ticket.Title,
+		&ticket.Description,
+		&ticket.FileID,
+		&ticket.CreatedAt,
+		&ticket.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Warn().Err(err).Uint64("ticket_id", ticketID).Msg("ticket not found for status update")
+			return nil, fmt.Errorf("ticket with id %d not found", ticketID)
+		}
+		log.Error().Err(err).Msg("failed to update ticket status")
+		return nil, err
+	}
+
+	return &ticket, nil
 }

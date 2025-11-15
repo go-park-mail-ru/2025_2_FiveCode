@@ -14,6 +14,8 @@ type TicketRepository interface {
 	GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error)
 	GetStatistics(ctx context.Context) (dto.Statistics, error)
 	CreateTicket(ctx context.Context, ticket *models.Ticket) (*models.Ticket, error)
+	GetAllTickets(ctx context.Context) ([]models.Ticket, error)
+	UpdateTicketStatus(ctx context.Context, ticketID uint64, status string) (*models.Ticket, error)
 }
 
 type TicketUsecase struct {
@@ -29,6 +31,17 @@ func NewTicketUsecase(r TicketRepository) *TicketUsecase {
 func (u *TicketUsecase) GetAllTicketsByUserId(ctx context.Context, userID uint64) ([]models.Ticket, error) {
 	log := logger.FromContext(ctx)
 	tickets, err := u.Repository.GetAllTicketsByUserId(ctx, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting all tickets")
+		return nil, fmt.Errorf("error getting all tickets: %w", err)
+	}
+
+	return tickets, nil
+}
+
+func (u *TicketUsecase) GetAllTickets(ctx context.Context) ([]models.Ticket, error) {
+	log := logger.FromContext(ctx)
+	tickets, err := u.Repository.GetAllTickets(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting all tickets")
 		return nil, fmt.Errorf("error getting all tickets: %w", err)
@@ -77,4 +90,16 @@ func (u *TicketUsecase) CreateTicket(ctx context.Context, ticket *models.Ticket)
 	}
 
 	return createdTicket, nil
+}
+
+func (u *TicketUsecase) UpdateTicketStatus(ctx context.Context, ticketID uint64, status string) (*models.Ticket, error) {
+	log := logger.FromContext(ctx)
+
+	ticket, err := u.Repository.UpdateTicketStatus(ctx, ticketID, status)
+	if err != nil {
+		log.Error().Err(err).Msg("error updating ticket status in repository")
+		return nil, fmt.Errorf("error updating ticket status: %w", err)
+	}
+
+	return ticket, nil
 }

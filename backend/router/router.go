@@ -58,6 +58,8 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	admin := api.PathPrefix("/admin").Subrouter()
 	admin.Use(mw.AuthMiddleware(s))
 	admin.HandleFunc("/statistics", deliveries.TicketDelivery.GetStatistics).Methods("GET")
+	admin.HandleFunc("/tickets", deliveries.TicketDelivery.GetAllTickets).Methods("GET")
+	admin.HandleFunc("/tickets/{ticket_id}", deliveries.TicketDelivery.UpdateTicketStatus).Methods("PUT")
 	
 	ticketProtectRouter := r.PathPrefix("/api/").Subrouter()
 	ticketProtectRouter.Use(mw.AuthMiddleware(s))
