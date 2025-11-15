@@ -167,6 +167,7 @@ CREATE TABLE ticket
 (
     id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     email       TEXT      NOT NULL,
+    full_name   TEXT      NOT NULL,
     category    TEXT      NOT NULL CHECK (category IN ('bug', 'suggestion', 'complaint', 'other')),
     status      TEXT      NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
     title       TEXT      NOT NULL,
