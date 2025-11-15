@@ -8,13 +8,6 @@ import (
 	"fmt"
 )
 
-import (
-	"backend/logger"
-	"backend/models"
-	"context"
-	"fmt"
-)
-
 type TicketRepository interface {
 	GetAllTicketsByUserId(ctx context.Context, userID uint64) ([]models.Ticket, error)
 	UpdateTicket(ctx context.Context, ticketID uint64, userID uint64, tittle, desc *string) (*models.Ticket, error)

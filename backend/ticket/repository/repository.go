@@ -6,7 +6,9 @@ import (
 	"backend/models"
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/rs/zerolog/log"
 )
@@ -154,7 +156,6 @@ func (r *TicketRepository) UpdateTicket(ctx context.Context, ticketID uint64, us
 func (r *TicketRepository) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
 	return nil, nil
 }
-
 
 func (r *TicketRepository) GetStatistics(ctx context.Context) (dto.Statistics, error) {
 	stats := dto.Statistics{}

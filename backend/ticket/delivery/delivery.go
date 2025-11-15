@@ -2,24 +2,17 @@ package delivery
 
 import (
 	"backend/apiutils"
+	"backend/dto"
 	"backend/logger"
 	"backend/middleware"
 	"backend/models"
 	"context"
 	"encoding/json"
-	"github.com/gorilla/mux"
-	"net/http"
-	"strconv"
-)
-
-import (
-	"backend/apiutils"
-	"backend/dto"
-	"backend/logger"
-	"backend/models"
-	"context"
 	"io"
 	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 type TicketUsecase interface {
