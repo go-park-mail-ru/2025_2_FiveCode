@@ -163,6 +163,19 @@ CREATE TABLE IF NOT EXISTS note_tag
     PRIMARY KEY (note_id, tag_id)
 );
 
+CREATE TABLE ticket
+(
+    id          INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    email       TEXT      NOT NULL,
+    category    TEXT      NOT NULL CHECK (category IN ('bug', 'suggestion', 'complaint', 'other')),
+    status      TEXT      NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'in_progress', 'closed')),
+    title       TEXT      NOT NULL,
+    description TEXT      NOT NULL,
+    file_id     INTEGER   NOT NULL REFERENCES file (id) ON DELETE CASCADE,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
 
 -- функция установки текущего времени на поля created_at и updated_at
 CREATE OR REPLACE FUNCTION set_timestamps()
