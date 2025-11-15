@@ -6,6 +6,7 @@ import (
 	"backend/models"
 	"context"
 	"fmt"
+	"strings"
 )
 
 type TicketRepository interface {
@@ -42,9 +43,9 @@ func (uc *TicketUsecase) GetAllTicketsByUserId(ctx context.Context, userID uint6
 	return tickets, nil
 }
 
-func (u *TicketUsecase) GetAllTickets(ctx context.Context) ([]models.Ticket, error) {
+func (uc *TicketUsecase) GetAllTickets(ctx context.Context) ([]models.Ticket, error) {
 	log := logger.FromContext(ctx)
-	tickets, err := u.Repository.GetAllTickets(ctx)
+	tickets, err := uc.Repository.GetAllTickets(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting all tickets")
 		return nil, fmt.Errorf("error getting all tickets: %w", err)
@@ -113,10 +114,10 @@ func (uc *TicketUsecase) CreateTicket(ctx context.Context, ticket *models.Ticket
 	return createdTicket, nil
 }
 
-func (u *TicketUsecase) UpdateTicketStatus(ctx context.Context, ticketID uint64, status string) (*models.Ticket, error) {
+func (uc *TicketUsecase) UpdateTicketStatus(ctx context.Context, ticketID uint64, status string) (*models.Ticket, error) {
 	log := logger.FromContext(ctx)
 
-	ticket, err := u.Repository.UpdateTicketStatus(ctx, ticketID, status)
+	ticket, err := uc.Repository.UpdateTicketStatus(ctx, ticketID, status)
 	if err != nil {
 		log.Error().Err(err).Msg("error updating ticket status in repository")
 		return nil, fmt.Errorf("error updating ticket status: %w", err)
