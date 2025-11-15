@@ -26,9 +26,9 @@ func NewTicketUsecase(r TicketRepository) *TicketUsecase {
 	}
 }
 
-func (u *TicketUsecase) GetAllTicketsByUserId(ctx context.Context, userID uint64) ([]models.Ticket, error) {
+func (uc *TicketUsecase) GetAllTicketsByUserId(ctx context.Context, userID uint64) ([]models.Ticket, error) {
 	log := logger.FromContext(ctx)
-	tickets, err := u.Repository.GetAllTicketsByUserId(ctx, userID)
+	tickets, err := uc.Repository.GetAllTicketsByUserId(ctx, userID)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting all tickets")
 		return nil, fmt.Errorf("error getting all tickets: %w", err)
@@ -37,9 +37,9 @@ func (u *TicketUsecase) GetAllTicketsByUserId(ctx context.Context, userID uint64
 	return tickets, nil
 }
 
-func (u *TicketUsecase) UpdateTicket(ctx context.Context, ticketID uint64, userID uint64, tittle, desc *string) (*models.Ticket, error) {
+func (uc *TicketUsecase) UpdateTicket(ctx context.Context, ticketID uint64, userID uint64, tittle, desc *string) (*models.Ticket, error) {
 	log := logger.FromContext(ctx)
-	tickets, err := u.Repository.UpdateTicket(ctx, ticketID, userID, tittle, desc)
+	tickets, err := uc.Repository.UpdateTicket(ctx, ticketID, userID, tittle, desc)
 	if err != nil {
 		log.Error().Err(err).Msg("error updating ticket")
 		return nil, fmt.Errorf("error updating ticket: %w", err)
@@ -48,9 +48,9 @@ func (u *TicketUsecase) UpdateTicket(ctx context.Context, ticketID uint64, userI
 	return tickets, nil
 }
 
-func (u *TicketUsecase) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
+func (uc *TicketUsecase) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
 	log := logger.FromContext(ctx)
-	ticket, err := u.Repository.GetTicketById(ctx, userID, ticketID)
+	ticket, err := uc.Repository.GetTicketById(ctx, userID, ticketID)
 	if err != nil {
 		log.Error().Err(err).Msg("error getting ticket")
 		return nil, fmt.Errorf("error getting ticket: %w", err)
@@ -72,12 +72,12 @@ func (uc *TicketUsecase) GetStatistics(ctx context.Context) (dto.Statistics, err
 	return stats, nil
 }
 
-func (u *TicketUsecase) CreateTicket(ctx context.Context, ticket *models.Ticket) (*models.Ticket, error) {
+func (uc *TicketUsecase) CreateTicket(ctx context.Context, ticket *models.Ticket) (*models.Ticket, error) {
 	log := logger.FromContext(ctx)
 
 	ticket.Status = models.TicketStatusOpen
 
-	createdTicket, err := u.Repository.CreateTicket(ctx, ticket)
+	createdTicket, err := uc.Repository.CreateTicket(ctx, ticket)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create ticket")
 		return nil, fmt.Errorf("failed to create ticket: %w", err)
