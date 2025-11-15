@@ -46,5 +46,12 @@ func (u *TicketUsecase) UpdateTicket(ctx context.Context, ticketID uint64, userI
 }
 
 func (u *TicketUsecase) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
-	return nil, nil
+	log := logger.FromContext(ctx)
+	ticket, err := u.Repository.GetTicketById(ctx, userID, ticketID)
+	if err != nil {
+		log.Error().Err(err).Msg("error getting ticket")
+		return nil, fmt.Errorf("error getting ticket: %w", err)
+	}
+
+	return ticket, nil
 }

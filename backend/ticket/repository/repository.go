@@ -151,5 +151,55 @@ func (r *TicketRepository) UpdateTicket(ctx context.Context, ticketID uint64, us
 }
 
 func (r *TicketRepository) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
-	return nil, nil
+	log := logger.FromContext(ctx)
+
+	var userEmail string
+	emailQuery := `SELECT email FROM "user" WHERE id = $1`
+	err := r.db.QueryRowContext(ctx, emailQuery, userID).Scan(&userEmail)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Error().Err(err).Msg("user not found")
+			return nil, fmt.Errorf("user not found")
+		}
+		log.Error().Err(err).Msg("failed to get user email")
+		return nil, err
+	}
+
+	query := `
+		SELECT id, email, full_name, category, status, title, description, file_id, created_at, updated_at
+		FROM ticket
+		WHERE id = $1 AND email = $2
+	`
+
+	var ticket models.Ticket
+	var fileID sql.NullInt64
+
+	err = r.db.QueryRowContext(ctx, query, ticketID, userEmail).Scan(
+		&ticket.ID,
+		&ticket.Email,
+		&ticket.FullName,
+		&ticket.Category,
+		&ticket.Status,
+		&ticket.Title,
+		&ticket.Description,
+		&fileID,
+		&ticket.CreatedAt,
+		&ticket.UpdatedAt,
+	)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Warn().Err(err).Msg("ticket not found or access denied")
+			return nil, fmt.Errorf("ticket not found or access denied")
+		}
+		log.Error().Err(err).Msg("failed to get ticket")
+		return nil, err
+	}
+
+	if fileID.Valid {
+		fid := uint64(fileID.Int64)
+		ticket.FileID = &fid
+	}
+
+	return &ticket, nil
 }

@@ -79,5 +79,22 @@ func (s *TicketDelivery) UpdateTicket(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *TicketDelivery) GetTicketById(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
 
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		log.Error().Msg("user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
+		return
+	}
+
+	vars := mux.Vars(r)
+	ticketID, _ := strconv.ParseUint(vars["ticket_id"], 10, 64)
+
+	ticket, err := s.Usecase.GetTicketById(r.Context(), userID, ticketID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get ticket")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get ticket")
+	}
+	apiutils.WriteJSON(w, http.StatusOK, ticket)
 }
