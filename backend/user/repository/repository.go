@@ -123,7 +123,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 	log.Info().Uint64("user_id", userID).Msg("getting user by id from PostgreSQL")
 
 	query := `
-		SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at
+		SELECT id, email, password_hash, username, avatar_file_id, is_admin, created_at, updated_at
 		FROM "user"
 		WHERE id = $1
 	`
@@ -138,6 +138,7 @@ func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*model
 		&user.Password,
 		&user.Username,
 		&avatarFileID,
+		&user.IsAdmin,
 		&user.CreatedAt,
 		&updatedAt,
 	)

@@ -257,28 +257,44 @@ func (r *TicketRepository) UpdateTicket(ctx context.Context, ticketID uint64, us
 func (r *TicketRepository) GetTicketById(ctx context.Context, userID uint64, ticketID uint64) (*models.Ticket, error) {
 	log := logger.FromContext(ctx)
 
+	var isAdmin bool
 	var userEmail string
-	emailQuery := `SELECT email FROM "user" WHERE id = $1`
-	err := r.db.QueryRowContext(ctx, emailQuery, userID).Scan(&userEmail)
+	userQuery := `SELECT is_admin, email FROM "user" WHERE id = $1`
+	err := r.db.QueryRowContext(ctx, userQuery, userID).Scan(&isAdmin, &userEmail)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			log.Error().Err(err).Msg("user not found")
 			return nil, fmt.Errorf("user not found")
 		}
-		log.Error().Err(err).Msg("failed to get user email")
+		log.Error().Err(err).Msg("failed to get user info")
 		return nil, err
 	}
 
-	query := `
-		SELECT id, email, full_name, category, status, title, description, file_id, created_at, updated_at
-		FROM ticket
-		WHERE id = $1 AND email = $2
-	`
+	var query string
+	var args []interface{}
+
+	if isAdmin {
+		log.Info().Uint64("ticket_id", ticketID).Msg("admin user detected, fetching ticket by id")
+		query = `
+            SELECT id, email, full_name, category, status, title, description, file_id, created_at, updated_at
+            FROM ticket
+            WHERE id = $1
+        `
+		args = append(args, ticketID)
+	} else {
+		log.Info().Uint64("user_id", userID).Uint64("ticket_id", ticketID).Msg("regular user detected, fetching ticket by id and owner")
+		query = `
+            SELECT id, email, full_name, category, status, title, description, file_id, created_at, updated_at
+            FROM ticket
+            WHERE id = $1 AND email = $2
+        `
+		args = append(args, ticketID, userEmail)
+	}
 
 	var ticket models.Ticket
 	var fileID sql.NullInt64
 
-	err = r.db.QueryRowContext(ctx, query, ticketID, userEmail).Scan(
+	err = r.db.QueryRowContext(ctx, query, args...).Scan(
 		&ticket.ID,
 		&ticket.Email,
 		&ticket.FullName,

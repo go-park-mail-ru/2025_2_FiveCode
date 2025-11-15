@@ -76,13 +76,13 @@ func (s *Store) InitFillStore(ctx context.Context) error {
 	}{
 		{
 			Email:    "admin@example.com",
-			Password: "password",
+			Password: "password123",
 			Username: "admin",
 			IsAdmin:  true,
 		},
 		{
 			Email:    "user@example.com",
-			Password: "password",
+			Password: "password123",
 			Username: "user",
 			IsAdmin:  false,
 		},

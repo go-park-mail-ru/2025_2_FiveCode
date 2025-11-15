@@ -135,7 +135,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 	query := `
 		INSERT INTO "user" (email, password_hash, username)
 		VALUES ($1, $2, $3)
-		RETURNING id, email, password_hash, username, avatar_file_id, created_at, updated_at
+		RETURNING id, email, password_hash, username, avatar_file_id, is_admin, created_at, updated_at
 	`
 
 	user := &models.User{}
@@ -148,6 +148,7 @@ func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash str
 		&user.Password,
 		&user.Username,
 		&avatarFileID,
+		&user.IsAdmin,
 		&user.CreatedAt,
 		&updatedAt,
 	)
