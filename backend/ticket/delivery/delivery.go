@@ -12,3 +12,7 @@ func NewTicketDelivery(u TicketUsecase) *TicketDelivery {
 		Usecase: u,
 	}
 }
+
+func (d *TicketDelivery) GetStatistics() {
+	// Implementation will go here
+}
