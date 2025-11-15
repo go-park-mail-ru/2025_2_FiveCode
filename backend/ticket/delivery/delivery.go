@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"backend/apiutils"
+	"backend/dto"
 	"backend/logger"
 	"backend/models"
 	"context"
@@ -10,8 +11,8 @@ import (
 )
 
 type TicketUsecase interface {
-	GetStatistics(ctx context.Context) (models.Statistics, error)
-	CreateTicket(ctx context.Context, input TicketCreateInput) (*models.Ticket, error)
+	GetStatistics(ctx context.Context) (dto.Statistics, error)
+	CreateTicket(ctx context.Context, input CreateTicketInput) (*models.Ticket, error)
 }
 
 type TicketDelivery struct {
@@ -38,7 +39,7 @@ func (d *TicketDelivery) GetStatistics(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, stats)
 }
 
-type TicketCreateInput struct {
+type CreateTicketInput struct {
 	Email       string `json:"email" valid:"required,email"`
 	FullName    string `json:"full_name" valid:"required"`
 	Category    string `json:"category" valid:"required,in(bug|suggestion|complaint|other)"`
@@ -63,7 +64,7 @@ func (d *TicketDelivery) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req TicketCreateInput
+	var req CreateTicketInput
 	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
 		log.Warn().Err(err).Msg("invalid json for ticket creation")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid json")

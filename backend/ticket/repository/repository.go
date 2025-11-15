@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"backend/dto"
 	"backend/logger"
 	"backend/models"
 	"context"
@@ -20,8 +21,8 @@ func NewTicketRepository(db *sql.DB) *TicketRepository {
 	}
 }
 
-func (r *TicketRepository) GetStatistics(ctx context.Context) (models.Statistics, error) {
-	stats := models.Statistics{}
+func (r *TicketRepository) GetStatistics(ctx context.Context) (dto.Statistics, error) {
+	stats := dto.Statistics{}
 
 	query := `
 		SELECT
@@ -40,13 +41,13 @@ func (r *TicketRepository) GetStatistics(ctx context.Context) (models.Statistics
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to execute statistics query")
-		return models.Statistics{}, fmt.Errorf("failed to get statistics: %w", err)
+		return dto.Statistics{}, fmt.Errorf("failed to get statistics: %w", err)
 	}
 	defer rows.Close()
 
 	for rows.Next() {
-		var stat models.StatisticForCategory
-		
+		var stat dto.StatisticForCategory
+
 		err := rows.Scan(
 			&stat.Category,
 			&stat.TotalTickets,
@@ -56,7 +57,7 @@ func (r *TicketRepository) GetStatistics(ctx context.Context) (models.Statistics
 		)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to scan statistics row")
-			return models.Statistics{}, fmt.Errorf("failed to scan statistics row: %w", err)
+			return dto.Statistics{}, fmt.Errorf("failed to scan statistics row: %w", err)
 		}
 
 		stats.Statistics = append(stats.Statistics, stat)
@@ -64,7 +65,7 @@ func (r *TicketRepository) GetStatistics(ctx context.Context) (models.Statistics
 
 	if err = rows.Err(); err != nil {
 		log.Error().Err(err).Msg("error during statistics rows iteration")
-		return models.Statistics{}, fmt.Errorf("error during statistics rows iteration: %w", err)
+		return dto.Statistics{}, fmt.Errorf("error during statistics rows iteration: %w", err)
 	}
 
 	return stats, nil

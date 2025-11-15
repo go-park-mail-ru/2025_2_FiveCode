@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"backend/dto"
 	"backend/logger"
 	"backend/models"
 	"context"
@@ -8,7 +9,7 @@ import (
 )
 
 type TicketRepository interface {
-	GetStatistics(ctx context.Context) (models.Statistics, error)
+	GetStatistics(ctx context.Context) (dto.Statistics, error)
 	CreateTicket(ctx context.Context, ticket *models.Ticket) (*models.Ticket, error)
 }
 
@@ -31,14 +32,14 @@ func NewTicketUsecase(r TicketRepository) *TicketUsecase {
 	}
 }
 
-func (uc *TicketUsecase) GetStatistics(ctx context.Context) (models.Statistics, error) {
+func (uc *TicketUsecase) GetStatistics(ctx context.Context) (dto.Statistics, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Msg("getting statistics")
 
 	stats, err := uc.Repository.GetStatistics(ctx)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get statistics from repository")
-		return models.Statistics{}, fmt.Errorf("failed to get statistics: %w", err)
+		return dto.Statistics{}, fmt.Errorf("failed to get statistics: %w", err)
 	}
 
 	return stats, nil

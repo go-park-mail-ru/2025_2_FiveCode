@@ -1,4 +1,4 @@
-package models
+package dto
 
 type StatisticForCategory struct {
 	Category          string `json:"category"`
@@ -10,11 +10,4 @@ type StatisticForCategory struct {
 
 type Statistics struct {
 	Statistics []StatisticForCategory `json:"statistics"`
-}
-
-var StatisticsCategory = []string{
-	TicketCategoryBug,
-	TicketCategorySuggestion,
-	TicketCategoryComplaint,
-	TicketCategoryOther,
 }
