@@ -10,7 +10,8 @@ import (
 )
 
 type TicketUsecase interface {
-	CreateTicket(ctx context.Context, input TicketCreateInput) (*models.Ticket, error)
+	GetStatistics(ctx context.Context) (models.Statistics, error)
+	CreateTicket(ctx context.Context, ticket *models.Ticket) (*models.Ticket, error)
 }
 
 type TicketDelivery struct {
@@ -23,13 +24,18 @@ func NewTicketDelivery(u TicketUsecase) *TicketDelivery {
 	}
 }
 
-type TicketCreateInput struct {
-	Email       string `json:"email" valid:"required,email"`
-	FullName    string `json:"full_name" valid:"required"`
-	Category    string `json:"category" valid:"required,in(bug|suggestion|complaint|other)"`
-	Title       string `json:"title" valid:"required"`
-	Description string `json:"description" valid:"required"`
-	FileID      uint64 `json:"file_id"`
+func (d *TicketDelivery) GetStatistics(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	log.Info().Msg("GetStatistics called")
+	stats, err := d.Usecase.GetStatistics(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get statistics")
+		http.Error(w, "Internal Server Error", http.StatusInternalServerError)
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, stats)
 }
 
 func (d *TicketDelivery) CreateTicket(w http.ResponseWriter, r *http.Request) {
@@ -48,14 +54,14 @@ func (d *TicketDelivery) CreateTicket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var req TicketCreateInput
+	var req models.Ticket
 	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
 		log.Warn().Err(err).Msg("invalid json for ticket creation")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid json")
 		return
 	}
 
-	ticket, err := d.Usecase.CreateTicket(r.Context(), req)
+	ticket, err := d.Usecase.CreateTicket(r.Context(), &req)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create ticket")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to create ticket")

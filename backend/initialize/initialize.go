@@ -64,6 +64,7 @@ type FileDeliveryInterface interface {
 }
 
 type TicketDeliveryInterface interface {
+	GetStatistics(w http.ResponseWriter, r *http.Request)
 	CreateTicket(w http.ResponseWriter, r *http.Request)
 }
 
