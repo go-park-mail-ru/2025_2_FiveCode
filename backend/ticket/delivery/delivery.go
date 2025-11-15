@@ -3,12 +3,13 @@ package delivery
 import (
 	"backend/apiutils"
 	"backend/logger"
+	"backend/models"
 	"context"
 	"net/http"
 )
 
 type TicketUsecase interface {
-	GetStatistics(ctx context.Context) (StatisticsResponse, error)
+	GetStatistics(ctx context.Context) (models.Statistics, error)
 }
 
 type TicketDelivery struct {
@@ -19,18 +20,6 @@ func NewTicketDelivery(u TicketUsecase) *TicketDelivery {
 	return &TicketDelivery{
 		Usecase: u,
 	}
-}
-
-type StatisticsForCategory struct {
-	Category 	 string `json:"category"`
-	TotalTickets     int `json:"total_tickets"`
-	OpenTickets      int `json:"open_tickets"`
-	ClosedTickets    int `json:"closed_tickets"`
-	InProgressTickets int `json:"in_progress_tickets"`
-}
-
-type StatisticsResponse struct {
-	Statistics []StatisticsForCategory `json:"statistics"`
 }
 
 func (d *TicketDelivery) GetStatistics(w http.ResponseWriter, r *http.Request) {

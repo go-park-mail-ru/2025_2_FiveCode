@@ -54,5 +54,9 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries) http.Handler {
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.GetFile).Methods("GET")
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.DeleteFile).Methods("DELETE")
 
+	admin := api.PathPrefix("/admin").Subrouter()
+	admin.Use(mw.AuthMiddleware(s))
+	admin.HandleFunc("/statistics", deliveries.TicketDelivery.GetStatistics).Methods("GET")
+
 	return mw.CORS(r)
 }
