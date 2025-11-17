@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/lib/pq"
 	"time"
 )
 
@@ -21,7 +22,7 @@ func NewBlocksRepository(db *sql.DB) *BlocksRepository {
 	return &BlocksRepository{db: db}
 }
 
-func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
 	log.Info().
 		Uint64("note_id", noteID).
@@ -68,7 +69,7 @@ func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, p
 	return r.GetBlockByID(ctx, blockID)
 }
 
-func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
 	log.Info().
 		Uint64("note_id", noteID).
@@ -83,7 +84,7 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
+		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
 			log.Error().Err(err).Msg("CreateAttachmentBlock: rollback failed")
 		}
 	}()
@@ -116,7 +117,7 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 	return r.GetBlockByID(ctx, blockID)
 }
 
-func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("note_id", noteID).Float64("position", position).Msg("Executing CreateCodeBlock transaction")
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -158,7 +159,7 @@ func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, p
 	return r.GetBlockByID(ctx, blockID)
 }
 
-func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.Block, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("block_id", blockID).Msg("Executing UpdateCodeBlock transaction")
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -196,166 +197,355 @@ func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, 
 	return r.GetBlockByID(ctx, blockID)
 }
 
-func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
+func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
+	log.Info().Uint64("block_id", blockID).Msg("GetBlockByID: start")
 
-	query := `
-		SELECT 
-		    b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
-		    CASE 
-		        WHEN b.type = 'text' THEN bt.text
-		        WHEN b.type = 'code' THEN bc.code_text
-		        WHEN b.type = 'attachment' THEN f.url
-		        ELSE '' 
-		    END as content,
-		    bc.language,
-		    COALESCE(
-		        (SELECT json_agg(
-		            json_build_object(
-		                'id', btf.id, 'start_offset', btf.start_offset, 'end_offset', btf.end_offset,
-		                'bold', btf.bold, 'italic', btf.italic, 'underline', btf.underline, 
-		                'strikethrough', btf.strikethrough, 'link', btf.link, 'font', btf.font, 'size', btf.size
-		            ) ORDER BY btf.start_offset
-		        ) FROM block_text_format btf WHERE btf.block_text_id = bt.id),
-		        '[]'::json
-		    ) as formats
-		FROM block b
-		LEFT JOIN block_text bt ON b.id = bt.block_id
-		LEFT JOIN block_code bc ON b.id = bc.block_id
-		LEFT JOIN block_attachment ba ON b.id = ba.block_id
-		LEFT JOIN file f ON ba.file_id = f.id
-		WHERE b.note_id = $1
-		GROUP BY b.id, bt.id, bc.block_id, f.id
-		ORDER BY b.position ASC;
-	`
-	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("note_id", noteID).Msg("Executing GetBlocksByNoteID query")
-
-	rows, err := r.db.QueryContext(ctx, query, noteID)
+	blocks, err := r.GetBlocksByIDs(ctx, []uint64{blockID})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to query blocks")
-		return nil, fmt.Errorf("failed to query blocks: %w", err)
+		return nil, err
 	}
-	defer func() {
-		if err := rows.Close(); err != nil {
-			log.Error().Err(err).Msg("failed to close rows")
-		}
-	}()
 
-	var blocks []models.BlockWithContent
-	for rows.Next() {
-		var block models.BlockWithContent
-		var content sql.NullString
-		var language sql.NullString
-		var formatsJSON []byte
+	if len(blocks) == 0 {
+		log.Warn().Uint64("block_id", blockID).Msg("block not found")
+		return nil, namederrors.ErrNotFound
+	}
 
-		if err := rows.Scan(&block.ID, &block.NoteID, &block.Type, &block.Position, &block.CreatedAt, &block.UpdatedAt, &content, &language, &formatsJSON); err != nil {
-			log.Error().Err(err).Msg("failed to scan block")
-			return nil, fmt.Errorf("failed to scan block: %w", err)
+	return &blocks[0], nil
+}
+
+func (r *BlocksRepository) GetBlocksByIDs(ctx context.Context, blockIDs []uint64) ([]models.Block, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Int("count", len(blockIDs)).Msg("GetBlocksByIDs: start")
+
+	if len(blockIDs) == 0 {
+		return []models.Block{}, nil
+	}
+
+	baseBlocks, err := r.getBaseBlocksByIDs(ctx, blockIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	if len(baseBlocks) == 0 {
+		return []models.Block{}, nil
+	}
+
+	var textBlockIDs, codeBlockIDs, attachmentBlockIDs []uint64
+	blockMap := make(map[uint64]models.BaseBlock)
+
+	for _, base := range baseBlocks {
+		blockMap[base.ID] = base
+		switch base.Type {
+		case models.BlockTypeText:
+			textBlockIDs = append(textBlockIDs, base.ID)
+		case models.BlockTypeCode:
+			codeBlockIDs = append(codeBlockIDs, base.ID)
+		case models.BlockTypeAttachment:
+			attachmentBlockIDs = append(attachmentBlockIDs, base.ID)
 		}
-		if content.Valid {
-			if block.Type == "attachment" {
-				block.Text = apiutils.TransformMinioURL(content.String)
-			} else {
-				block.Text = content.String
+	}
+
+	textContents, err := r.getTextContentsBatch(ctx, textBlockIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	codeContents, err := r.getCodeContentsBatch(ctx, codeBlockIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	attachmentContents, err := r.getAttachmentContentsBatch(ctx, attachmentBlockIDs)
+	if err != nil {
+		return nil, err
+	}
+
+	blocks := make([]models.Block, 0, len(baseBlocks))
+	for _, base := range baseBlocks {
+		block := models.Block{BaseBlock: base}
+
+		switch base.Type {
+		case models.BlockTypeText:
+			if content, ok := textContents[base.ID]; ok {
+				block.Content = content
 			}
-		}
-		if language.Valid {
-			block.Language = language.String
-		}
-		if err := json.Unmarshal(formatsJSON, &block.Formats); err != nil {
-			log.Warn().Err(err).Bytes("json", formatsJSON).Msg("failed to unmarshal formats")
-			block.Formats = []models.BlockTextFormat{}
+		case models.BlockTypeCode:
+			if content, ok := codeContents[base.ID]; ok {
+				block.Content = content
+			}
+		case models.BlockTypeAttachment:
+			if content, ok := attachmentContents[base.ID]; ok {
+				block.Content = content
+			}
 		}
 
 		blocks = append(blocks, block)
 	}
-	if err := rows.Err(); err != nil {
-		log.Error().Err(err).Msg("error iterating through block rows")
-		return nil, fmt.Errorf("error iterating through block rows: %w", err)
-	}
+
 	return blocks, nil
 }
 
-func (r *BlocksRepository) GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.Block, error) {
 	log := logger.FromContext(ctx)
-	log.Info().Uint64("block_id", blockID).Msg("Executing GetBlockByID query")
+	log.Info().Uint64("note_id", noteID).Msg("GetBlocksByNoteID: start")
+
+	query := `
+		SELECT id
+		FROM block
+		WHERE note_id = $1
+		ORDER BY position ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, noteID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query block IDs")
+		return nil, fmt.Errorf("failed to query block IDs: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("GetBlocksByNoteID: failed to close rows")
+		}
+	}()
+
+	var blockIDs []uint64
+	for rows.Next() {
+		var id uint64
+		if err := rows.Scan(&id); err != nil {
+			log.Error().Err(err).Msg("failed to scan block ID")
+			return nil, fmt.Errorf("failed to scan block ID: %w", err)
+		}
+		blockIDs = append(blockIDs, id)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating block IDs: %w", err)
+	}
+
+	return r.GetBlocksByIDs(ctx, blockIDs)
+}
+
+func (r *BlocksRepository) getBaseBlocksByIDs(ctx context.Context, blockIDs []uint64) ([]models.BaseBlock, error) {
+	if len(blockIDs) == 0 {
+		return []models.BaseBlock{}, nil
+	}
+
+	log := logger.FromContext(ctx)
+
+	query := `
+		SELECT id, note_id, type, position, created_at, updated_at
+		FROM block
+		WHERE id = ANY($1)
+		ORDER BY position ASC
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(blockIDs))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query base blocks")
+		return nil, fmt.Errorf("failed to query base blocks: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("getBaseBlocksByIDs: failed to close rows")
+		}
+	}()
+
+	var blocks []models.BaseBlock
+	for rows.Next() {
+		var block models.BaseBlock
+		if err := rows.Scan(&block.ID, &block.NoteID, &block.Type, &block.Position, &block.CreatedAt, &block.UpdatedAt); err != nil {
+			log.Error().Err(err).Msg("failed to scan base block")
+			return nil, fmt.Errorf("failed to scan base block: %w", err)
+		}
+		blocks = append(blocks, block)
+	}
+
+	return blocks, rows.Err()
+}
+
+func (r *BlocksRepository) getTextContentsBatch(ctx context.Context, blockIDs []uint64) (map[uint64]models.TextContent, error) {
+	if len(blockIDs) == 0 {
+		return make(map[uint64]models.TextContent), nil
+	}
+
+	log := logger.FromContext(ctx)
 
 	query := `
 		SELECT 
-		    b.id, b.note_id, b.type, b.position, b.created_at, b.updated_at,
-		    CASE 
-		        WHEN b.type = 'text' THEN bt.text
-		        WHEN b.type = 'code' THEN bc.code_text
-		        WHEN b.type = 'attachment' THEN f.url
-		        ELSE '' 
-		    END as content,
-		    bc.language,
+		    bt.block_id,
+		    bt.text,
 		    COALESCE(
 		        (SELECT json_agg(
 		            json_build_object(
-		                'id', btf.id, 'start_offset', btf.start_offset, 'end_offset', btf.end_offset,
-		                'bold', btf.bold, 'italic', btf.italic, 'underline', btf.underline, 
-		                'strikethrough', btf.strikethrough, 'link', btf.link, 'font', btf.font, 'size', btf.size
+		                'id', btf.id,
+		                'start_offset', btf.start_offset,
+		                'end_offset', btf.end_offset,
+		                'bold', btf.bold,
+		                'italic', btf.italic,
+		                'underline', btf.underline,
+		                'strikethrough', btf.strikethrough,
+		                'link', btf.link,
+		                'font', btf.font,
+		                'size', btf.size
 		            ) ORDER BY btf.start_offset
 		        ) FROM block_text_format btf WHERE btf.block_text_id = bt.id),
 		        '[]'::json
 		    ) as formats
-		FROM block b
-		LEFT JOIN block_text bt ON b.id = bt.block_id
-		LEFT JOIN block_code bc ON b.id = bc.block_id
-		LEFT JOIN block_attachment ba ON b.id = ba.block_id
-		LEFT JOIN file f ON ba.file_id = f.id
-		WHERE b.id = $1
-		GROUP BY b.id, bt.id, bc.block_id, f.id
+		FROM block_text bt
+		WHERE bt.block_id = ANY($1)
 	`
-	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Msg("Executing GetBlockByID query")
 
-	block := &models.BlockWithContent{}
-	var content sql.NullString
-	var language sql.NullString
-	var formatsJSON []byte
-
-	err := r.db.QueryRowContext(ctx, query, blockID).Scan(
-		&block.ID,
-		&block.NoteID,
-		&block.Type,
-		&block.Position,
-		&block.CreatedAt,
-		&block.UpdatedAt,
-		&content,
-		&language,
-		&formatsJSON,
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Warn().Err(err).Uint64("block_id", blockID).Msg("block not found")
-		return nil, namederrors.ErrNotFound
-	}
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(blockIDs))
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get block")
-		return nil, fmt.Errorf("failed to get block: %w", err)
+		log.Error().Err(err).Msg("failed to query text contents")
+		return nil, fmt.Errorf("failed to query text contents: %w", err)
 	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("getTextContentsBatch: failed to close rows")
+		}
+	}()
 
-	if content.Valid {
-		if block.Type == "attachment" {
-			block.Text = apiutils.TransformMinioURL(content.String)
-		} else {
-			block.Text = content.String
+	contents := make(map[uint64]models.TextContent)
+	for rows.Next() {
+		var blockID uint64
+		var text string
+		var formatsJSON []byte
+
+		if err := rows.Scan(&blockID, &text, &formatsJSON); err != nil {
+			log.Error().Err(err).Msg("failed to scan text content")
+			return nil, fmt.Errorf("failed to scan text content: %w", err)
+		}
+
+		var formats []models.BlockTextFormat
+		if err := json.Unmarshal(formatsJSON, &formats); err != nil {
+			log.Warn().Err(err).Msg("failed to unmarshal formats")
+			formats = []models.BlockTextFormat{}
+		}
+
+		contents[blockID] = models.TextContent{
+			Text:    text,
+			Formats: formats,
 		}
 	}
-	if language.Valid {
-		block.Language = language.String
-	}
-	if err := json.Unmarshal(formatsJSON, &block.Formats); err != nil {
-		log.Warn().Err(err).Bytes("json", formatsJSON).Msg("failed to unmarshal formats")
-		block.Formats = []models.BlockTextFormat{}
-	}
 
-	return block, nil
+	return contents, rows.Err()
 }
 
-func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.BlockWithContent, error) {
+func (r *BlocksRepository) getCodeContentsBatch(ctx context.Context, blockIDs []uint64) (map[uint64]models.CodeContent, error) {
+	if len(blockIDs) == 0 {
+		return make(map[uint64]models.CodeContent), nil
+	}
+
+	log := logger.FromContext(ctx)
+
+	query := `
+		SELECT block_id, code_text, language
+		FROM block_code
+		WHERE block_id = ANY($1)
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(blockIDs))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query code contents")
+		return nil, fmt.Errorf("failed to query code contents: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("getCodeContentsBatch: failed to close rows")
+		}
+	}()
+
+	contents := make(map[uint64]models.CodeContent)
+	for rows.Next() {
+		var blockID uint64
+		var code, language string
+
+		if err := rows.Scan(&blockID, &code, &language); err != nil {
+			log.Error().Err(err).Msg("failed to scan code content")
+			return nil, fmt.Errorf("failed to scan code content: %w", err)
+		}
+
+		contents[blockID] = models.CodeContent{
+			Code:     code,
+			Language: language,
+		}
+	}
+
+	return contents, rows.Err()
+}
+
+func (r *BlocksRepository) getAttachmentContentsBatch(ctx context.Context, blockIDs []uint64) (map[uint64]models.AttachmentContent, error) {
+	if len(blockIDs) == 0 {
+		return make(map[uint64]models.AttachmentContent), nil
+	}
+
+	log := logger.FromContext(ctx)
+
+	query := `
+		SELECT 
+		    ba.block_id,
+		    f.url,
+		    f.mime_type,
+		    f.size_bytes,
+		    f.width,
+		    f.height,
+		    ba.caption
+		FROM block_attachment ba
+		JOIN file f ON ba.file_id = f.id
+		WHERE ba.block_id = ANY($1)
+	`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(blockIDs))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to query attachment contents")
+		return nil, fmt.Errorf("failed to query attachment contents: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("getAttachmentContentsBatch: failed to close rows")
+		}
+	}()
+
+	contents := make(map[uint64]models.AttachmentContent)
+	for rows.Next() {
+		var blockID uint64
+		var url, mimeType string
+		var sizeBytes int
+		var width, height sql.NullInt64
+		var caption sql.NullString
+
+		if err := rows.Scan(&blockID, &url, &mimeType, &sizeBytes, &width, &height, &caption); err != nil {
+			log.Error().Err(err).Msg("failed to scan attachment content")
+			return nil, fmt.Errorf("failed to scan attachment content: %w", err)
+		}
+
+		content := models.AttachmentContent{
+			URL:       apiutils.TransformMinioURL(url),
+			MimeType:  mimeType,
+			SizeBytes: sizeBytes,
+		}
+
+		if caption.Valid {
+			captionStr := caption.String
+			content.Caption = &captionStr
+		}
+		if width.Valid {
+			widthInt := int(width.Int64)
+			content.Width = &widthInt
+		}
+		if height.Valid {
+			heightInt := int(height.Int64)
+			content.Height = &heightInt
+		}
+
+		contents[blockID] = content
+	}
+
+	return contents, rows.Err()
+}
+
+func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.Block, error) {
 	log := logger.FromContext(ctx)
 
 	tx, err := r.db.BeginTx(ctx, nil)
@@ -429,33 +619,29 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
 	log := logger.FromContext(ctx)
 
 	query := `
-		UPDATE block
-		SET position = $1, updated_at = $2
-		WHERE id = $3
-		RETURNING id, note_id, type, position, created_at, updated_at
-	`
-	log.Info().Str("query", logger.SanitizeQuery(query)).Uint64("block_id", blockID).Float64("position", position).Msg("Executing UpdateBlockPosition query")
+        UPDATE block
+        SET position = $1, updated_at = $2
+        WHERE id = $3
+    `
 
-	block := &models.Block{}
-	err := r.db.QueryRowContext(ctx, query, position, time.Now().UTC(), blockID).Scan(
-		&block.ID,
-		&block.NoteID,
-		&block.Type,
-		&block.Position,
-		&block.CreatedAt,
-		&block.UpdatedAt,
-	)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Warn().Err(err).Uint64("block_id", blockID).Msg("block not found for position update")
-		return nil, namederrors.ErrNotFound
-	}
+	result, err := r.db.ExecContext(ctx, query, position, time.Now().UTC(), blockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update block position")
 		return nil, fmt.Errorf("failed to update block position: %w", err)
 	}
 
-	return block, nil
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return nil, fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		log.Warn().Uint64("block_id", blockID).Msg("block not found for position update")
+		return nil, namederrors.ErrNotFound
+	}
+
+	return r.GetBlockByID(ctx, blockID)
 }
 
 func (r *BlocksRepository) DeleteBlock(ctx context.Context, blockID uint64) error {

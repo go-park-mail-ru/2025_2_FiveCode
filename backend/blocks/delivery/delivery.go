@@ -8,6 +8,8 @@ import (
 	namederrors "backend/named_errors"
 	"context"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -17,14 +19,14 @@ import (
 
 //go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
 type BlocksUsecase interface {
-	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.BlockWithContent, error)
-	GetBlock(ctx context.Context, userID, blockID uint64) (*models.BlockWithContent, error)
-	UpdateBlock(ctx context.Context, userID, blockID uint64, text, language, codeText *string, formats []models.BlockTextFormat) (*models.BlockWithContent, error)
+	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error)
+	GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error)
+	UpdateBlock(ctx context.Context, userID uint64, req *models.UpdateBlockRequest) (*models.Block, error)
+	CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error)
+	CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error)
+	CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error)
 	DeleteBlock(ctx context.Context, userID, blockID uint64) error
-	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, afterBlockID *uint64) (*models.Block, error)
-	CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error)
-	CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.BlockWithContent, error)
-	CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.BlockWithContent, error)
+	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error)
 }
 
 type BlocksDelivery struct {
@@ -38,8 +40,8 @@ func NewBlocksDelivery(usecase BlocksUsecase) *BlocksDelivery {
 }
 
 type baseCreateBlockRequest struct {
-	Type          models.BlockType `json:"type"`
-	BeforeBlockID *uint64          `json:"before_block_id,omitempty"`
+	Type          string  `json:"type"`
+	BeforeBlockID *uint64 `json:"before_block_id,omitempty"`
 }
 
 func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
@@ -52,12 +54,14 @@ func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
 		return
 	}
+
 	userID, ok := middleware.GetUserID(r.Context())
 	if !ok {
 		log.Error().Msg("user not authenticated")
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
+
 	defer func() {
 		if err := r.Body.Close(); err != nil {
 			log.Error().Err(err).Msg("failed to close body")
@@ -97,6 +101,7 @@ type createCodeBlockRequest struct {
 func (d *BlocksDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
 	log := logger.FromContext(r.Context())
 	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("handling create code block request")
+
 	var req createCodeBlockRequest
 	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
 		log.Warn().Err(err).Msg("invalid payload for code block")
@@ -117,9 +122,12 @@ type createTextBlockRequest struct {
 }
 
 func (d *BlocksDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
+	log := logger.FromContext(r.Context())
+
 	var req createTextBlockRequest
 	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
-		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for text")
+		log.Warn().Err(err).Msg("invalid payload for text block")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for text block")
 		return
 	}
 
@@ -137,15 +145,21 @@ type createAttachmentBlockRequest struct {
 }
 
 func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
+	log := logger.FromContext(r.Context())
+
 	var req createAttachmentBlockRequest
 	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
-		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for attachment")
+		log.Warn().Err(err).Msg("invalid payload for attachment block")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid payload for attachment block")
 		return
 	}
+
 	if req.FileID == 0 {
+		log.Warn().Msg("file_id is required for attachment block")
 		apiutils.WriteError(w, http.StatusBadRequest, "file_id is required")
 		return
 	}
+
 	block, err := d.Usecase.CreateAttachmentBlock(r.Context(), userID, noteID, req.BeforeBlockID, req.FileID)
 	if err != nil {
 		handleBlockError(w, r.Context(), err)
@@ -157,6 +171,7 @@ func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Re
 func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
+
 	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
 	if err != nil {
 		log.Warn().Err(err).Str("note_id", vars["note_id"]).Msg("invalid note id")
@@ -186,6 +201,7 @@ func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
+
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
 		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
@@ -209,28 +225,15 @@ func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
-type UpdateBlockRequest struct {
-	Text     *string                `json:"text,omitempty"`
-	Formats  []BlockTextFormatInput `json:"formats,omitempty"`
-	Language *string                `json:"language,omitempty"`
-	CodeText *string                `json:"code_text,omitempty"`
-}
-
-type BlockTextFormatInput struct {
-	StartOffset   int     `json:"start_offset"`
-	EndOffset     int     `json:"end_offset"`
-	Bold          *bool   `json:"bold,omitempty"`
-	Italic        *bool   `json:"italic,omitempty"`
-	Underline     *bool   `json:"underline,omitempty"`
-	Strikethrough *bool   `json:"strikethrough,omitempty"`
-	Link          *string `json:"link,omitempty"`
-	Font          *string `json:"font,omitempty"`
-	Size          *int    `json:"size,omitempty"`
+type UpdateBlockDeliveryRequest struct {
+	Type    string          `json:"type"`
+	Content json.RawMessage `json:"content"`
 }
 
 func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
+
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
 		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
@@ -250,16 +253,22 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
-	var req UpdateBlockRequest
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+
+	var deliveryReq UpdateBlockDeliveryRequest
+	if err := json.NewDecoder(r.Body).Decode(&deliveryReq); err != nil {
 		log.Warn().Err(err).Msg("invalid request body")
 		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
-	formats := convertToFormats(req.Formats)
+	usecaseReq, err := parseUpdateBlockRequest(blockID, deliveryReq)
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to parse request")
+		apiutils.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	}
 
-	block, err := d.Usecase.UpdateBlock(r.Context(), userID, blockID, req.Text, req.Language, req.CodeText, formats)
+	block, err := d.Usecase.UpdateBlock(r.Context(), userID, usecaseReq)
 	if err != nil {
 		handleBlockError(w, r.Context(), err)
 		return
@@ -271,6 +280,7 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
+
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
 		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
@@ -301,6 +311,7 @@ type UpdateBlockPositionRequest struct {
 func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
+
 	blockID, err := strconv.ParseUint(vars["block_id"], 10, 64)
 	if err != nil {
 		log.Warn().Err(err).Str("block_id", vars["block_id"]).Msg("invalid block id")
@@ -320,6 +331,7 @@ func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Requ
 			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
+
 	var req UpdateBlockPositionRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Warn().Err(err).Msg("invalid request body")
@@ -338,11 +350,11 @@ func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Requ
 
 func handleBlockError(w http.ResponseWriter, ctx context.Context, err error) {
 	log := logger.FromContext(ctx)
-	switch err {
-	case namederrors.ErrNotFound:
+	switch {
+	case errors.Is(err, namederrors.ErrNotFound):
 		log.Warn().Err(err).Msg("block or note not found")
 		apiutils.WriteError(w, http.StatusNotFound, "block or note not found")
-	case namederrors.ErrNoAccess:
+	case errors.Is(err, namederrors.ErrNoAccess):
 		log.Warn().Err(err).Msg("access to note denied")
 		apiutils.WriteError(w, http.StatusForbidden, "no access to this note")
 	default:
@@ -351,20 +363,30 @@ func handleBlockError(w http.ResponseWriter, ctx context.Context, err error) {
 	}
 }
 
-func convertToFormats(inputs []BlockTextFormatInput) []models.BlockTextFormat {
-	formats := make([]models.BlockTextFormat, len(inputs))
-	for i, input := range inputs {
-		formats[i] = models.BlockTextFormat{
-			StartOffset:   input.StartOffset,
-			EndOffset:     input.EndOffset,
-			Bold:          apiutils.GetBool(input.Bold, false),
-			Italic:        apiutils.GetBool(input.Italic, false),
-			Underline:     apiutils.GetBool(input.Underline, false),
-			Strikethrough: apiutils.GetBool(input.Strikethrough, false),
-			Link:          input.Link,
-			Font:          models.TextFont(apiutils.GetString(input.Font, string(models.FontInter))),
-			Size:          apiutils.GetInt(input.Size, 12),
-		}
+func parseUpdateBlockRequest(blockID uint64, deliveryReq UpdateBlockDeliveryRequest) (*models.UpdateBlockRequest, error) {
+	req := &models.UpdateBlockRequest{
+		BlockID: blockID,
+		Type:    deliveryReq.Type,
 	}
-	return formats
+
+	switch deliveryReq.Type {
+	case models.BlockTypeText:
+		var textContent models.UpdateTextContent
+		if err := json.Unmarshal(deliveryReq.Content, &textContent); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal text content: %w", err)
+		}
+		req.Content = textContent
+
+	case models.BlockTypeCode:
+		var codeContent models.UpdateCodeContent
+		if err := json.Unmarshal(deliveryReq.Content, &codeContent); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal code content: %w", err)
+		}
+		req.Content = codeContent
+
+	default:
+		return nil, fmt.Errorf("unsupported block type: %s", deliveryReq.Type)
+	}
+
+	return req, nil
 }
