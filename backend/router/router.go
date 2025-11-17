@@ -26,14 +26,14 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries, conf *config.C
 	r.PathPrefix("/swagger/").Handler(httpSwagger.WrapHandler)
 
 	profile := api.PathPrefix("").Subrouter()
-	profile.Use(mw.AuthMiddleware(s), mw.CSRFMiddleware(conf))
-	profile.HandleFunc("/csrf-token", deliveries.AuthDelivery.GetCSRFToken).Methods("GET")
+	profile.Use(mw.AuthMiddleware(deliveries.AuthClient), mw.CSRFMiddleware(conf))
+	// profile.HandleFunc("/csrf-token", deliveries.AuthDelivery.GetCSRFToken).Methods("GET")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.GetProfile).Methods("GET")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.UpdateProfile).Methods("PUT")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.DeleteProfile).Methods("DELETE")
 
 	notes := api.PathPrefix("").Subrouter()
-	notes.Use(mw.AuthMiddleware(s), mw.CSRFMiddleware(conf))
+	notes.Use(mw.AuthMiddleware(deliveries.AuthClient), mw.CSRFMiddleware(conf))
 	notes.HandleFunc("/notes", deliveries.NotesDelivery.GetAllNotes).Methods("GET")
 	notes.HandleFunc("/notes", deliveries.NotesDelivery.CreateNote).Methods("POST")
 	notes.HandleFunc("/notes/{note_id}", deliveries.NotesDelivery.GetNoteById).Methods("GET")
@@ -43,7 +43,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries, conf *config.C
 	notes.HandleFunc("/notes/{note_id}/favorite", deliveries.NotesDelivery.RemoveFavorite).Methods("DELETE")
 
 	blocks := api.PathPrefix("").Subrouter()
-	blocks.Use(mw.AuthMiddleware(s), mw.CSRFMiddleware(conf))
+	blocks.Use(mw.AuthMiddleware(deliveries.AuthClient), mw.CSRFMiddleware(conf))
 	blocks.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.CreateBlock).Methods("POST")
 	blocks.HandleFunc("/notes/{note_id}/blocks", deliveries.BlocksDelivery.GetBlocks).Methods("GET")
 	blocks.HandleFunc("/blocks/{block_id}", deliveries.BlocksDelivery.GetBlock).Methods("GET")
@@ -52,7 +52,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries, conf *config.C
 	blocks.HandleFunc("/blocks/{block_id}/position", deliveries.BlocksDelivery.UpdateBlockPosition).Methods("PUT")
 
 	filesRouter := api.PathPrefix("/files").Subrouter()
-	filesRouter.Use(mw.AuthMiddleware(s), mw.CSRFMiddleware(conf))
+	filesRouter.Use(mw.AuthMiddleware(deliveries.AuthClient), mw.CSRFMiddleware(conf))
 	filesRouter.HandleFunc("/upload", deliveries.FileDelivery.UploadFile).Methods("POST")
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.GetFile).Methods("GET")
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.DeleteFile).Methods("DELETE")

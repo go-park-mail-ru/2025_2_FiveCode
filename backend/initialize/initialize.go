@@ -1,32 +1,37 @@
 package initialize
 
 import (
-	authDelivery "backend/auth/delivery"
-	authRepository "backend/auth/repository"
-	authUsecase "backend/auth/usecase"
-	blocksDelivery "backend/blocks/delivery"
-	blocksRepository "backend/blocks/repository"
-	blocksUsecase "backend/blocks/usecase"
 	"backend/config"
-	fileDelivery "backend/file/delivery"
-	fileRepository "backend/file/repository"
-	fileUsecase "backend/file/usecase"
-	notesDelivery "backend/notes/delivery"
-	notesRepository "backend/notes/repository"
-	notesUsecase "backend/notes/usecase"
 	"backend/store"
-	userDelivery "backend/user/delivery"
-	userRepository "backend/user/repository"
-	userUsecase "backend/user/usecase"
+	authPB "backend/gen/go/auth"
+	"backend/pkg/gateway/delivery"
+	"backend/pkg/auth/repository"
+	userDelivery "backend/pkg/gateway/delivery"
+	userRepository "backend/pkg/user/repository"
+	userUsecase "backend/pkg/user/usecase"
+	notesDelivery "backend/pkg/gateway/notes/delivery"
+	notesRepository "backend/pkg/gateway/notes/repository"
+	notesUsecase "backend/pkg/gateway/notes/usecase"
+	blocksDelivery "backend/pkg/gateway/blocks/delivery"
+	blocksRepository "backend/pkg/gateway/blocks/repository"
+	blocksUsecase "backend/pkg/gateway/blocks/usecase"
+	fileDelivery "backend/pkg/gateway/file/delivery"
+	fileRepository "backend/pkg/gateway/file/repository"
+	fileUsecase "backend/pkg/gateway/file/usecase"
+	"fmt"
+	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
+
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 )
 
 type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
 	Register(w http.ResponseWriter, r *http.Request)
-	GetCSRFToken(w http.ResponseWriter, r *http.Request) // НОВОЕ
+	// GetCSRFToken(w http.ResponseWriter, r *http.Request)
 }
 
 type UserDeliveryInterface interface {
@@ -67,17 +72,31 @@ type Deliveries struct {
 	NotesDelivery  NotesDeliveryInterface
 	BlocksDelivery BlocksDeliveryInterface
 	FileDelivery   FileDeliveryInterface
+
+	AuthClient authPB.AuthClient
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
-	layers := &Deliveries{}
+	authServiceAddr := fmt.Sprintf("localhost:%d", conf.Services["auth"].GrpcPort)
+	authServiceConn, err := grpc.Dial(
+		authServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to connect to auth service")
+	}
+	// defer authServiceConn.Close()
 
-	authR := authRepository.NewAuthRepository(s.Postgres.DB, s.Redis.Client)
-	authUC := authUsecase.NewAuthUsecase(authR, []byte(conf.Auth.CSRF.SecretKey))
-	layers.AuthDelivery = authDelivery.NewAuthDelivery(authUC, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
+	authGRPCClient := authPB.NewAuthClient(authServiceConn)
 
+	layers := &Deliveries{
+		AuthClient: authGRPCClient,
+	}
+	layers.AuthDelivery = delivery.NewAuthDelivery(authGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
+
+	authR_legacy := repository.NewAuthRepository(s.Postgres.DB, s.Redis.Client)
 	userR := userRepository.NewUserRepository(s.Postgres.DB)
-	userUC := userUsecase.NewUserUsecase(userR, authR)
+	userUC := userUsecase.NewUserUsecase(userR, authR_legacy)
 	layers.UserDelivery = userDelivery.NewUserDelivery(userUC)
 
 	notesR := notesRepository.NewNotesRepository(s.Postgres.DB)

@@ -10,3 +10,10 @@ test-coverage:
 
 run:
 	go run main.go
+
+.PHONY: proto
+proto:
+	protoc --proto_path=proto \
+	       --go_out=gen/go --go_opt=paths=source_relative \
+	       --go-grpc_out=gen/go --go-grpc_opt=paths=source_relative \
+	       proto/auth/auth.proto proto/user/user.proto

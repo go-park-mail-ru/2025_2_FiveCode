@@ -1,35 +1,44 @@
 package app
 
 import (
-	"backend/config"
-	"backend/initialize"
-	"backend/router"
-	"backend/store"
-	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"net/http"
 	"os"
 	"time"
 
-	"github.com/pkg/errors"
+	"backend/config"
+	"backend/store"
+
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+	"google.golang.org/grpc"
 )
 
-func init() {
+const (
+	PostgresDependency = "postgres"
+	RedisDependency    = "redis"
+	MinioDependency    = "minio"
+)
+
+type App struct {
+	Config *config.Config
+	Store  *store.Store
+
+	closers []io.Closer
+}
+
+func NewApp() *App {
 	log.Logger = log.Output(zerolog.ConsoleWriter{
 		Out:        os.Stderr,
 		TimeFormat: time.RFC3339,
-		NoColor:    false,
 	})
-}
-
-func RunApp() error {
-	s := store.NewStore()
 
 	configPath, err := config.ReadConfigPath()
 	if err != nil {
-		log.Fatal().Err(err).Msg("failed to read config path")
+		log.Fatal().Err(err).Msg("failed to read config path from .env")
 	}
 
 	cfg, err := config.LoadConfig(configPath)
@@ -37,60 +46,113 @@ func RunApp() error {
 		log.Fatal().Err(err).Str("config_path", configPath).Msg("failed to load config")
 	}
 
-	log.Info().Int("session_duration_days", cfg.Auth.Cookie.SessionDuration).Msg("config loaded")
-
-	if err := s.InitPostgres(cfg); err != nil {
-		log.Fatal().Err(err).Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("failed to init Postgres")
+	return &App{
+		Config:  cfg,
+		Store:   store.NewStore(),
+		closers: []io.Closer{},
 	}
-	defer func() {
-		if err := s.Postgres.Close(); err != nil {
-			log.Error().Err(err).Msg("postgres close failed")
+}
+
+func (a *App) InstallDependencies(dependencies ...string) error {
+	log.Info().Strs("dependencies", dependencies).Msg("Installing dependencies")
+
+	depsMap := make(map[string]bool)
+	for _, dep := range dependencies {
+		depsMap[dep] = true
+	}
+
+	if depsMap[PostgresDependency] {
+		log.Info().Msg("Initializing Postgres...")
+		if err := a.Store.InitPostgres(a.Config); err != nil {
+			return fmt.Errorf("failed to init postgres: %w", err)
 		}
-	}()
-	log.Info().Str("host", cfg.Storages.Db.Host).Int("port", cfg.Storages.Db.Port).Msg("Postgres initialized successfully")
 
-	/*if err := s.Postgres.RunMigrations("./migrations"); err != nil {
-		log.Fatal().Err(err).Msg("failed to run migrations")
-	}
-	log.Info().Msg("Migrations run successfully")*/
-
-	if err := s.InitMinioStorage(cfg); err != nil {
-		log.Fatal().Err(err).Msg("failed to init minio storage")
-	}
-	log.Info().Str("endpoint", cfg.Storages.Minio.Endpoint).Msg("MinIO storage initialized successfully")
-
-	if err := s.InitRedis(cfg); err != nil {
-		log.Fatal().Err(err).Msg("failed to init redis")
-	}
-	defer func() {
-		if err := s.Redis.Close(); err != nil {
-			log.Error().Err(err).Msg("redis close failed")
+		if err := a.Store.Postgres.RunMigrations("./migrations"); err != nil {
+			log.Fatal().Err(err).Msg("failed to run migrations")
 		}
-	}()
-	log.Info().Str("host", cfg.Storages.Redis.Host).Int("port", cfg.Storages.Redis.Port).Msg("Redis initialized successfully")
+		log.Info().Msg("Migrations run successfully")
 
-	if err := s.InitFillStore(context.Background()); err != nil {
-		log.Fatal().Err(err).Msg("failed to fill store")
+		a.closers = append(a.closers, a.Store.Postgres)
 	}
 
-	deliveries := initialize.InitDeliveries(s, cfg)
+	if depsMap[RedisDependency] {
+		log.Info().Msg("Initializing Redis...")
+		if err := a.Store.InitRedis(a.Config); err != nil {
+			return fmt.Errorf("failed to init redis: %w", err)
+		}
+		a.closers = append(a.closers, a.Store.Redis)
+	}
 
-	r := router.NewRouter(s, deliveries, cfg)
+	if depsMap[MinioDependency] {
+		log.Info().Msg("Initializing Minio...")
+		if err := a.Store.InitMinioStorage(a.Config); err != nil {
+			return fmt.Errorf("failed to init minio: %w", err)
+		}
+	}
 
+	log.Info().Msg("Dependencies installed successfully")
+	return nil
+}
+
+func (a *App) Close() error {
+	log.Info().Msg("Closing application resources...")
+	for _, closer := range a.closers {
+		if err := closer.Close(); err != nil {
+			return fmt.Errorf("failed to close resource: %w", err)
+		}
+	}
+	log.Info().Msg("Application resources closed successfully")
+	return nil
+}
+
+type RegisterGRPCServiceFunc func(srv *grpc.Server, app *App)
+
+func (a *App) RunGRPCServer(serviceName string, registerService RegisterGRPCServiceFunc) {
+	serviceConf, ok := a.Config.Services[serviceName]
+	
+	if !ok {
+		log.Fatal().Msgf("config for service '%s' not found", serviceName)
+	}
+	port := serviceConf.GrpcPort
+	if port == 0 {
+		log.Fatal().Msgf("grpc_port for service '%s' is not set in config", serviceName)
+	}
+
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	if err != nil {
+		log.Fatal().Err(err).Msgf("failed to listen on port %d", port)
+	}
+	a.closers = append(a.closers, lis)
+
+	grpcServer := grpc.NewServer()
+
+	registerService(grpcServer, a)
+
+	log.Info().Str("addr", lis.Addr().String()).Msg("gRPC server is ready to accept connections")
+
+	if err := grpcServer.Serve(lis); err != nil {
+		log.Fatal().Err(err).Msg("gRPC server failed to serve")
+	}
+}
+
+type CreateHttpHandlerFunc func(app *App) http.Handler
+
+func (a *App) RunHTTPServer(createHandler CreateHttpHandlerFunc) {
 	serverAddr, err := config.ReadServerAddress()
 	if err != nil {
-		return fmt.Errorf("failed to read server address: %w", err)
+		log.Fatal().Err(err).Msg("failed to read server address")
 	}
+
+	handler := createHandler(a)
 
 	server := &http.Server{
 		Addr:    serverAddr,
-		Handler: r,
+		Handler: handler,
 	}
 
-	log.Info().Str("address", server.Addr).Msg("starting server")
-	err = server.ListenAndServe()
-	if err != nil && !errors.Is(err, http.ErrServerClosed) {
-		return fmt.Errorf("server error: %w", err)
+	log.Info().Str("addr", server.Addr).Msg("HTTP server is ready to accept connections")
+
+	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		log.Fatal().Err(err).Msg("HTTP server failed to serve")
 	}
-	return nil
 }

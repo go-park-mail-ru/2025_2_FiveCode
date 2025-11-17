@@ -42,9 +42,14 @@ type RedisConfig struct {
 	DB       int
 }
 
+type ServiceConfig struct {
+	GrpcPort int `mapstructure:"grpc_port"`
+}
+
 type Config struct {
-	Storages Storages `mapstructure:"storages"`
-	Auth     Auth     `mapstructure:"auth"`
+	Storages Storages                 `mapstructure:"storages"`
+	Auth     Auth                     `mapstructure:"auth"`
+	Services map[string]ServiceConfig `mapstructure:"services"`
 }
 
 type Storages struct {

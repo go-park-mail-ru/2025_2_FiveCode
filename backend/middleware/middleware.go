@@ -3,13 +3,12 @@ package middleware
 import (
 	"backend/apiutils"
 	"backend/config"
+	authPB "backend/gen/go/auth"
 	"backend/logger"
-	"backend/store"
+
 	"bytes"
 	"context"
 	"errors"
-	"fmt"
-	"github.com/redis/go-redis/v9"
 	"io"
 	"net"
 	"net/http"
@@ -152,7 +151,7 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
+func AuthMiddleware(authClient authPB.AuthClient) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			session, err := r.Cookie("session_id")
@@ -165,21 +164,23 @@ func AuthMiddleware(s *store.Store) mux.MiddlewareFunc {
 				return
 			}
 
-			key := "session:" + session.Value
-			val, err := s.Redis.Client.Get(r.Context(), key).Result()
-			if errors.Is(err, redis.Nil) {
-				apiutils.WriteError(w, http.StatusUnauthorized, "invalid session")
-				return
-			}
+			grpcResp, err := authClient.GetUserIDBySession(r.Context(), &authPB.GetUserIDBySessionRequest{
+				SessionId: session.Value,
+			})
+
 			if err != nil {
-				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+				apiutils.WriteError(w, http.StatusInternalServerError, "session validation failed")
 				return
 			}
 
-			var userID uint64
-			_, err = fmt.Sscanf(val, "%d", &userID)
-			if err != nil {
-				apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
+			if !grpcResp.GetIsValid() {
+				apiutils.WriteError(w, http.StatusUnauthorized, "invalid session")
+				return
+			}
+
+			userID := grpcResp.GetUserId()
+			if userID == 0 {
+				apiutils.WriteError(w, http.StatusUnauthorized, "invalid user id in session")
 				return
 			}
 

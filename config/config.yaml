@@ -11,3 +11,9 @@ auth:
   csrf:
     secret_key: "12345678901234567890123456789012"
     token_ttl_minutes: 30
+
+services:
+  auth:
+    grpc_port: 50051
+  users:
+    grpc_port: 50052
