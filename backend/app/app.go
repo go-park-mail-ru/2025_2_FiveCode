@@ -75,7 +75,7 @@ func RunApp() error {
 
 	deliveries := initialize.InitDeliveries(s, cfg)
 
-	r := router.NewRouter(s, deliveries)
+	r := router.NewRouter(s, deliveries, cfg)
 
 	serverAddr, err := config.ReadServerAddress()
 	if err != nil {
