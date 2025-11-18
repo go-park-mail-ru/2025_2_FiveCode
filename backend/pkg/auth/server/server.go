@@ -5,7 +5,6 @@ import (
 	"errors"
 
 	"backend/constants"
-	"backend/logger"
 
 	pb "backend/gen/go/auth"
 
@@ -42,14 +41,11 @@ func RegisterService(grpcServer *grpc.Server, usecase AuthUsecase) {
 }
 
 func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	log := logger.FromContext(ctx)
-
 	userID, sessionId, err := s.Usecase.Register(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, constants.ErrUserExists) {
 			return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
 		}
-		log.Error().Err(err).Msg("failed to register user")
 		return nil, status.Error(codes.Internal, "failed to register user")
 	}
 
@@ -60,14 +56,11 @@ func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.Reg
 }
 
 func (s *Server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
-	log := logger.FromContext(ctx)
-
 	userID, sessionId, err := s.Usecase.Login(ctx, req.GetEmail(), req.GetPassword())
 	if err != nil {
 		if errors.Is(err, constants.ErrInvalidEmailOrPassword) {
 			return nil, status.Error(codes.Unauthenticated, "invalid email or password")
 		}
-		log.Error().Err(err).Msg("failed to login user")
 		return nil, status.Error(codes.Internal, "failed to login user")
 	}
 
@@ -78,14 +71,11 @@ func (s *Server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResp
 }
 
 func (s *Server) Logout(ctx context.Context, req *pb.LogoutRequest) (*emptypb.Empty, error) {
-	log := logger.FromContext(ctx)
-
 	err := s.Usecase.Logout(ctx, req.GetSessionId())
 	if err != nil {
 		if errors.Is(err, constants.ErrInvalidSession) {
 			return &emptypb.Empty{}, nil
 		}
-		log.Error().Err(err).Msg("failed to logout user")
 		return nil, status.Error(codes.Internal, "failed to logout user")
 	}
 
@@ -93,10 +83,8 @@ func (s *Server) Logout(ctx context.Context, req *pb.LogoutRequest) (*emptypb.Em
 }
 
 func (s *Server) GetUserIDBySession(ctx context.Context, req *pb.GetUserIDBySessionRequest) (*pb.GetUserIDBySessionResponse, error) {
-	log := logger.FromContext(ctx)
-
 	userID, err := s.Usecase.GetUserIDBySession(ctx, req.GetSessionId())
-	
+
 	if err != nil {
 		if errors.Is(err, constants.ErrInvalidSession) {
 			return &pb.GetUserIDBySessionResponse{
@@ -104,8 +92,7 @@ func (s *Server) GetUserIDBySession(ctx context.Context, req *pb.GetUserIDBySess
 				IsValid: false,
 			}, nil
 		}
-		
-		log.Error().Err(err).Msg("failed to validate session")
+
 		return nil, status.Error(codes.Internal, "failed to validate session")
 	}
 
@@ -116,14 +103,10 @@ func (s *Server) GetUserIDBySession(ctx context.Context, req *pb.GetUserIDBySess
 }
 
 func (s *Server) GetCSRFToken(ctx context.Context, req *pb.GetCSRFTokenRequest) (*pb.GetCSRFTokenResponse, error) {
-    log := logger.FromContext(ctx)
-    log.Info().Msg("gRPC GetCSRFToken request")
+	token, err := s.Usecase.GenerateCSRFToken(ctx, req.GetSessionId())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "could not generate csrf token")
+	}
 
-    token, err := s.Usecase.GenerateCSRFToken(ctx, req.GetSessionId())
-    if err != nil {
-        log.Error().Err(err).Msg("failed to generate csrf token in usecase")
-        return nil, status.Error(codes.Internal, "could not generate csrf token")
-    }
-
-    return &pb.GetCSRFTokenResponse{Token: token}, nil
+	return &pb.GetCSRFTokenResponse{Token: token}, nil
 }

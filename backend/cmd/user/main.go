@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/app"
+	"backend/pkg/interceptors"
 	"backend/pkg/user/repository"
 	"backend/pkg/user/server"
 	"backend/pkg/user/usecase"
@@ -25,11 +26,13 @@ func main() {
 
 	registerUserService := func(srv *grpc.Server, app *app.App) {
 		userRepo := repository.NewUserRepository(app.Store.Postgres.DB)
-		
+
 		userUsecase := usecase.NewUserUsecase(userRepo)
 
 		server.RegisterService(srv, userUsecase)
 	}
 
-	application.RunGRPCServer(userServiceName, registerUserService)
+	interceptorOpt := grpc.UnaryInterceptor(interceptors.LoggingInterceptor)
+
+	application.RunGRPCServer(userServiceName, registerUserService, interceptorOpt)
 }

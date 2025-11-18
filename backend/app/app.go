@@ -107,7 +107,7 @@ func (a *App) Close() error {
 
 type RegisterGRPCServiceFunc func(srv *grpc.Server, app *App)
 
-func (a *App) RunGRPCServer(serviceName string, registerService RegisterGRPCServiceFunc) {
+func (a *App) RunGRPCServer(serviceName string, registerService RegisterGRPCServiceFunc, opts ...grpc.ServerOption) {
 	serviceConf, ok := a.Config.Services[serviceName]
 	
 	if !ok {
@@ -124,7 +124,7 @@ func (a *App) RunGRPCServer(serviceName string, registerService RegisterGRPCServ
 	}
 	a.closers = append(a.closers, lis)
 
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(opts...)
 
 	registerService(grpcServer, a)
 
