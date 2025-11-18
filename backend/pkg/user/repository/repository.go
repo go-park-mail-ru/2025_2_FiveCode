@@ -2,7 +2,6 @@ package repository
 
 import (
 	"backend/logger"
-	"backend/middleware"
 	"backend/models"
 	"backend/constants"
 	"context"
@@ -23,14 +22,8 @@ func NewUserRepository(db *sql.DB) *UserRepository {
 	}
 }
 
-func (r *UserRepository) UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
+func (r *UserRepository) UpdateUser(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
 	log := logger.FromContext(ctx)
-
-	userID, ok := middleware.GetUserID(ctx)
-	if !ok {
-		log.Error().Msg("user not authenticated in repository layer")
-		return nil, fmt.Errorf("user not authenticated")
-	}
 
 	log.Info().Uint64("user_id", userID).Msg("updating user profile in PostgreSQL")
 
@@ -102,20 +95,6 @@ func (r *UserRepository) UpdateProfile(ctx context.Context, username *string, pa
 
 	log.Info().Uint64("user_id", userID).Msg("profile updated successfully")
 	return user, nil
-}
-
-func (r *UserRepository) GetProfile(ctx context.Context) (*models.User, error) {
-	log := logger.FromContext(ctx)
-
-	userID, ok := middleware.GetUserID(ctx)
-	if !ok {
-		log.Error().Msg("user not authenticated in repository layer")
-		return nil, fmt.Errorf("user not authenticated")
-	}
-
-	log.Info().Uint64("user_id", userID).Msg("getting user profile from PostgreSQL")
-
-	return r.GetUserByID(ctx, userID)
 }
 
 func (r *UserRepository) GetUserByID(ctx context.Context, userID uint64) (*models.User, error) {

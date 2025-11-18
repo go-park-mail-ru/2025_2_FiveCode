@@ -2,26 +2,25 @@ package initialize
 
 import (
 	"backend/config"
-	"backend/store"
 	authPB "backend/gen/go/auth"
-	"backend/pkg/gateway/delivery"
-	"backend/pkg/auth/repository"
-	userDelivery "backend/pkg/gateway/delivery"
-	userRepository "backend/pkg/user/repository"
-	userUsecase "backend/pkg/user/usecase"
-	notesDelivery "backend/pkg/gateway/notes/delivery"
-	notesRepository "backend/pkg/gateway/notes/repository"
-	notesUsecase "backend/pkg/gateway/notes/usecase"
+	userPB "backend/gen/go/user"
 	blocksDelivery "backend/pkg/gateway/blocks/delivery"
 	blocksRepository "backend/pkg/gateway/blocks/repository"
 	blocksUsecase "backend/pkg/gateway/blocks/usecase"
+	"backend/pkg/gateway/delivery"
+	userDelivery "backend/pkg/gateway/delivery"
 	fileDelivery "backend/pkg/gateway/file/delivery"
 	fileRepository "backend/pkg/gateway/file/repository"
 	fileUsecase "backend/pkg/gateway/file/usecase"
+	notesDelivery "backend/pkg/gateway/notes/delivery"
+	notesRepository "backend/pkg/gateway/notes/repository"
+	notesUsecase "backend/pkg/gateway/notes/usecase"
+	"backend/store"
 	"fmt"
-	"github.com/rs/zerolog/log"
 	"net/http"
 	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -74,6 +73,7 @@ type Deliveries struct {
 	FileDelivery   FileDeliveryInterface
 
 	AuthClient authPB.AuthClient
+	UserClient userPB.UserServiceClient
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
@@ -85,19 +85,26 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to auth service")
 	}
-	// defer authServiceConn.Close()
 
 	authGRPCClient := authPB.NewAuthClient(authServiceConn)
 
+	userServiceAddr := fmt.Sprintf("localhost:%d", conf.Services["users"].GrpcPort)
+	userServiceConn, err := grpc.Dial(
+		userServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to connect to user service")
+	}
+	userGRPCClient := userPB.NewUserServiceClient(userServiceConn)
+
 	layers := &Deliveries{
 		AuthClient: authGRPCClient,
+		UserClient: userGRPCClient,
 	}
 	layers.AuthDelivery = delivery.NewAuthDelivery(authGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
-	authR_legacy := repository.NewAuthRepository(s.Postgres.DB, s.Redis.Client)
-	userR := userRepository.NewUserRepository(s.Postgres.DB)
-	userUC := userUsecase.NewUserUsecase(userR, authR_legacy)
-	layers.UserDelivery = userDelivery.NewUserDelivery(userUC)
+	layers.UserDelivery = userDelivery.NewUserDelivery(userGRPCClient, authGRPCClient)
 
 	notesR := notesRepository.NewNotesRepository(s.Postgres.DB)
 	notesUC := notesUsecase.NewNotesUsecase(notesR)

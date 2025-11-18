@@ -20,6 +20,7 @@ type AuthDelivery struct {
 	AuthClient      authPB.AuthClient
 }
 
+// TODO: include user service
 func NewAuthDelivery(authClient authPB.AuthClient, sessionDuration time.Duration) *AuthDelivery {
 	return &AuthDelivery{
 		SessionDuration: sessionDuration,
