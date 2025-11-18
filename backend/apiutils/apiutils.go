@@ -3,11 +3,15 @@ package apiutils
 import (
 	"bytes"
 	"encoding/json"
-	"github.com/spf13/viper"
 	"net/http"
 	"strings"
 
+	"github.com/spf13/viper"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
+
 	"github.com/asaskevich/govalidator"
+	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 )
 
@@ -137,4 +141,29 @@ func TransformMinioURL(internalURL string) string {
 	}
 
 	return url
+}
+
+func HandleGrpcError(w http.ResponseWriter, err error, log zerolog.Logger) {
+	st, ok := status.FromError(err)
+	if !ok {
+		log.Error().Err(err).Msg("unhandled non-grpc error type")
+		WriteError(w, http.StatusInternalServerError, "internal server error")
+		return
+	}
+
+	switch st.Code() {
+	case codes.NotFound:
+		WriteError(w, http.StatusNotFound, st.Message())
+	case codes.InvalidArgument:
+		WriteError(w, http.StatusBadRequest, st.Message())
+	case codes.Unauthenticated:
+		WriteError(w, http.StatusUnauthorized, st.Message())
+	case codes.AlreadyExists:
+		WriteError(w, http.StatusConflict, st.Message())
+	case codes.PermissionDenied:
+		WriteError(w, http.StatusForbidden, st.Message())
+	default:
+		log.Error().Err(err).Str("grpc_code", st.Code().String()).Msg("unhandled gRPC error")
+		WriteError(w, http.StatusInternalServerError, "an unexpected error occurred")
+	}
 }

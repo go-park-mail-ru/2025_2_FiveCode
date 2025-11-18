@@ -37,15 +37,13 @@ func GetUserID(ctx context.Context) (uint64, bool) {
 	return id, ok
 }
 
-var allowed = map[string]bool{
-	"http://localhost:8030":      true,
-	"http://127.0.0.1:8030":      true,
-	"http://89.208.210.115:8030": true,
-	"http://89.208.210.115:8001": true,
-}
-
-func CORS(next http.Handler) http.Handler {
+func CORS(next http.Handler, conf *config.Config) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		allowed := make(map[string]bool)
+		for _, origin := range conf.Auth.Cors.AllowedOrigins {
+			allowed[origin] = true
+		}
+
 		origin := r.Header.Get("Origin")
 		if allowed[origin] {
 			w.Header().Set("Access-Control-Allow-Origin", origin)

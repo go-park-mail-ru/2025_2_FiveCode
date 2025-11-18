@@ -6,7 +6,7 @@ import (
 	userPB "backend/gen/go/user"
 	"backend/logger"
 	"backend/middleware"
-	"backend/models"
+	"backend/utils"
 	"backend/validation"
 	"context"
 	"encoding/json"
@@ -15,8 +15,8 @@ import (
 	"time"
 
 	"github.com/pkg/errors"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 const (
@@ -24,20 +24,25 @@ const (
 	MaxUsernameLength = 50
 )
 
+//go:generate mockgen -destination=../mock/mock_user_client.go -package=mock . UserServiceClient
+type UserServiceClient interface {
+	GetUser(ctx context.Context, in *userPB.GetUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
+	UpdateUser(ctx context.Context, in *userPB.UpdateUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
+	DeleteUser(ctx context.Context, in *userPB.DeleteUserRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+}
+
+//go:generate mockgen -destination=../mock/mock_auth_client.go -package=mock . AuthClient
+type AuthClient interface {
+	GetUserIDBySession(ctx context.Context, in *authPB.GetUserIDBySessionRequest, opts ...grpc.CallOption) (*authPB.GetUserIDBySessionResponse, error)
+	Logout(ctx context.Context, in *authPB.LogoutRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+}
+
 type UserDelivery struct {
-	UserClient userPB.UserServiceClient
-	AuthClient authPB.AuthClient
+	UserClient UserServiceClient
+	AuthClient AuthClient
 }
 
-//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
-type UserUsecase interface {
-	GetUserBySession(ctx context.Context, session string) (*models.User, error)
-	UpdateProfile(ctx context.Context, username *string, password *string, avatarFileID *uint64) (*models.User, error)
-	GetProfile(ctx context.Context) (*models.User, error)
-	DeleteProfile(ctx context.Context, sessionID string) error
-}
-
-func NewUserDelivery(u userPB.UserServiceClient, a authPB.AuthClient) *UserDelivery {
+func NewUserDelivery(u UserServiceClient, a AuthClient) *UserDelivery {
 	return &UserDelivery{
 		UserClient: u,
 		AuthClient: a,
@@ -73,7 +78,7 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("gRPC call to Auth service failed")
-		apiutils.WriteError(w, http.StatusInternalServerError, "session validation failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
@@ -87,11 +92,11 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 	})
 	if err != nil {
 		log.Error().Err(err).Msg("gRPC call to User service failed")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get user profile")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	user := protoUserToModel(userResp)
+	user := utils.ProtoUserToModel(userResp)
 
 	apiutils.WriteJSON(w, http.StatusOK, user)
 }
@@ -153,17 +158,12 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 
 	updatedUser, err := d.UserClient.UpdateUser(r.Context(), grpcReq)
 	if err != nil {
-		st, _ := status.FromError(err)
-		if st.Code() == codes.NotFound {
-			apiutils.WriteError(w, http.StatusNotFound, "user not found")
-			return
-		}
-		log.Error().Err(err).Msg("error updating profile via user service")
-		apiutils.WriteError(w, http.StatusInternalServerError, "error updating profile")
+		log.Warn().Err(err).Msg("error updating profile")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	user := protoUserToModel(updatedUser)
+	user := utils.ProtoUserToModel(updatedUser)
 
 	log.Info().Uint64("user_id", user.ID).Msg("profile updated successfully")
 	apiutils.WriteJSON(w, http.StatusOK, user)
@@ -180,17 +180,12 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 
 	grpcResp, err := d.UserClient.GetUser(r.Context(), &userPB.GetUserRequest{UserId: userID})
 	if err != nil {
-		st, _ := status.FromError(err)
-		if st.Code() == codes.NotFound {
-			apiutils.WriteError(w, http.StatusNotFound, "user not found")
-			return
-		}
-		log.Error().Err(err).Msg("error getting profile from user service")
-		apiutils.WriteError(w, http.StatusInternalServerError, "error getting profile")
+		log.Warn().Err(err).Msg("error getting profile from user service")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	user := protoUserToModel(grpcResp)
+	user := utils.ProtoUserToModel(grpcResp)
 	log.Info().Uint64("user_id", user.ID).Msg("profile retrieved successfully")
 
 	apiutils.WriteJSON(w, http.StatusOK, user)
@@ -213,12 +208,9 @@ func (d *UserDelivery) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 
 	_, err = d.UserClient.DeleteUser(r.Context(), &userPB.DeleteUserRequest{UserId: userID})
 	if err != nil {
-		st, _ := status.FromError(err)
-		if st.Code() != codes.NotFound {
-			log.Error().Err(err).Msg("error deleting profile via user service")
-			apiutils.WriteError(w, http.StatusInternalServerError, "error deleting profile")
-			return
-		}
+		log.Error().Err(err).Msg("error deleting user via user service")
+		apiutils.HandleGrpcError(w, err, log)
+		return
 	}
 
 	_, err = d.AuthClient.Logout(r.Context(), &authPB.LogoutRequest{SessionId: cookie.Value})
@@ -231,24 +223,4 @@ func (d *UserDelivery) DeleteProfile(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Msg("profile deleted successfully")
 	w.WriteHeader(http.StatusNoContent)
-}
-
-func protoUserToModel(p *userPB.User) *models.User {
-	if p == nil {
-		return nil
-	}
-	m := &models.User{
-		ID:        p.Id,
-		Email:     p.Email,
-		Username:  p.Username,
-		CreatedAt: p.CreatedAt.AsTime(),
-	}
-	if p.UpdatedAt != nil && p.UpdatedAt.IsValid() {
-		updatedTime := p.UpdatedAt.AsTime()
-		m.UpdatedAt = &updatedTime
-	}
-	if p.AvatarFileId != nil {
-		m.AvatarFileID = p.AvatarFileId
-	}
-	return m
 }

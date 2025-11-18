@@ -57,5 +57,5 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries, conf *config.C
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.GetFile).Methods("GET")
 	filesRouter.HandleFunc("/{file_id}", deliveries.FileDelivery.DeleteFile).Methods("DELETE")
 
-	return mw.CORS(r)
+	return mw.CORS(r, conf)
 }

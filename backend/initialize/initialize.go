@@ -7,7 +7,8 @@ import (
 	blocksDelivery "backend/pkg/gateway/blocks/delivery"
 	blocksRepository "backend/pkg/gateway/blocks/repository"
 	blocksUsecase "backend/pkg/gateway/blocks/usecase"
-	"backend/pkg/gateway/delivery"
+	authDelivery "backend/pkg/gateway/delivery/auth"
+	userDelivery "backend/pkg/gateway/delivery/user"
 	fileDelivery "backend/pkg/gateway/file/delivery"
 	fileRepository "backend/pkg/gateway/file/repository"
 	fileUsecase "backend/pkg/gateway/file/usecase"
@@ -101,9 +102,9 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 		AuthClient: authGRPCClient,
 		UserClient: userGRPCClient,
 	}
-	layers.AuthDelivery = delivery.NewAuthDelivery(authGRPCClient, userGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
+	layers.AuthDelivery = authDelivery.NewAuthDelivery(authGRPCClient, userGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
-	layers.UserDelivery = delivery.NewUserDelivery(userGRPCClient, authGRPCClient)
+	layers.UserDelivery = userDelivery.NewUserDelivery(userGRPCClient, authGRPCClient)
 
 	notesR := notesRepository.NewNotesRepository(s.Postgres.DB)
 	notesUC := notesUsecase.NewNotesUsecase(notesR)
