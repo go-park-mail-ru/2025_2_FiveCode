@@ -8,7 +8,6 @@ import (
 	blocksRepository "backend/pkg/gateway/blocks/repository"
 	blocksUsecase "backend/pkg/gateway/blocks/usecase"
 	"backend/pkg/gateway/delivery"
-	userDelivery "backend/pkg/gateway/delivery"
 	fileDelivery "backend/pkg/gateway/file/delivery"
 	fileRepository "backend/pkg/gateway/file/repository"
 	fileUsecase "backend/pkg/gateway/file/usecase"
@@ -30,7 +29,7 @@ type AuthDeliveryInterface interface {
 	Login(w http.ResponseWriter, r *http.Request)
 	Logout(w http.ResponseWriter, r *http.Request)
 	Register(w http.ResponseWriter, r *http.Request)
-	// GetCSRFToken(w http.ResponseWriter, r *http.Request)
+	GetCSRFToken(w http.ResponseWriter, r *http.Request)
 }
 
 type UserDeliveryInterface interface {
@@ -102,9 +101,9 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 		AuthClient: authGRPCClient,
 		UserClient: userGRPCClient,
 	}
-	layers.AuthDelivery = delivery.NewAuthDelivery(authGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
+	layers.AuthDelivery = delivery.NewAuthDelivery(authGRPCClient, userGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
 
-	layers.UserDelivery = userDelivery.NewUserDelivery(userGRPCClient, authGRPCClient)
+	layers.UserDelivery = delivery.NewUserDelivery(userGRPCClient, authGRPCClient)
 
 	notesR := notesRepository.NewNotesRepository(s.Postgres.DB)
 	notesUC := notesUsecase.NewNotesUsecase(notesR)

@@ -21,6 +21,7 @@ type AuthUsecase interface {
 	Register(ctx context.Context, email string, password string) (uint64, string, error)
 	Logout(ctx context.Context, sessionID string) error
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
+	GenerateCSRFToken(ctx context.Context, sessionID string) (string, error)
 }
 
 type Server struct {
@@ -112,4 +113,17 @@ func (s *Server) GetUserIDBySession(ctx context.Context, req *pb.GetUserIDBySess
 		UserId:  userID,
 		IsValid: true,
 	}, nil
+}
+
+func (s *Server) GetCSRFToken(ctx context.Context, req *pb.GetCSRFTokenRequest) (*pb.GetCSRFTokenResponse, error) {
+    log := logger.FromContext(ctx)
+    log.Info().Msg("gRPC GetCSRFToken request")
+
+    token, err := s.Usecase.GenerateCSRFToken(ctx, req.GetSessionId())
+    if err != nil {
+        log.Error().Err(err).Msg("failed to generate csrf token in usecase")
+        return nil, status.Error(codes.Internal, "could not generate csrf token")
+    }
+
+    return &pb.GetCSRFTokenResponse{Token: token}, nil
 }

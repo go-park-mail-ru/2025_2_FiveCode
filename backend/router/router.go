@@ -27,7 +27,7 @@ func NewRouter(s *store.Store, deliveries *initialize.Deliveries, conf *config.C
 
 	profile := api.PathPrefix("").Subrouter()
 	profile.Use(mw.AuthMiddleware(deliveries.AuthClient), mw.CSRFMiddleware(conf))
-	// profile.HandleFunc("/csrf-token", deliveries.AuthDelivery.GetCSRFToken).Methods("GET")
+	profile.HandleFunc("/csrf-token", deliveries.AuthDelivery.GetCSRFToken).Methods("GET")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.GetProfile).Methods("GET")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.UpdateProfile).Methods("PUT")
 	profile.HandleFunc("/profile", deliveries.UserDelivery.DeleteProfile).Methods("DELETE")

@@ -24,6 +24,7 @@ const (
 	Auth_Login_FullMethodName              = "/auth.Auth/Login"
 	Auth_Logout_FullMethodName             = "/auth.Auth/Logout"
 	Auth_GetUserIDBySession_FullMethodName = "/auth.Auth/GetUserIDBySession"
+	Auth_GetCSRFToken_FullMethodName       = "/auth.Auth/GetCSRFToken"
 )
 
 // AuthClient is the client API for Auth service.
@@ -34,6 +35,7 @@ type AuthClient interface {
 	Login(ctx context.Context, in *LoginRequest, opts ...grpc.CallOption) (*LoginResponse, error)
 	Logout(ctx context.Context, in *LogoutRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	GetUserIDBySession(ctx context.Context, in *GetUserIDBySessionRequest, opts ...grpc.CallOption) (*GetUserIDBySessionResponse, error)
+	GetCSRFToken(ctx context.Context, in *GetCSRFTokenRequest, opts ...grpc.CallOption) (*GetCSRFTokenResponse, error)
 }
 
 type authClient struct {
@@ -84,6 +86,16 @@ func (c *authClient) GetUserIDBySession(ctx context.Context, in *GetUserIDBySess
 	return out, nil
 }
 
+func (c *authClient) GetCSRFToken(ctx context.Context, in *GetCSRFTokenRequest, opts ...grpc.CallOption) (*GetCSRFTokenResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetCSRFTokenResponse)
+	err := c.cc.Invoke(ctx, Auth_GetCSRFToken_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AuthServer is the server API for Auth service.
 // All implementations must embed UnimplementedAuthServer
 // for forward compatibility.
@@ -92,6 +104,7 @@ type AuthServer interface {
 	Login(context.Context, *LoginRequest) (*LoginResponse, error)
 	Logout(context.Context, *LogoutRequest) (*emptypb.Empty, error)
 	GetUserIDBySession(context.Context, *GetUserIDBySessionRequest) (*GetUserIDBySessionResponse, error)
+	GetCSRFToken(context.Context, *GetCSRFTokenRequest) (*GetCSRFTokenResponse, error)
 	mustEmbedUnimplementedAuthServer()
 }
 
@@ -113,6 +126,9 @@ func (UnimplementedAuthServer) Logout(context.Context, *LogoutRequest) (*emptypb
 }
 func (UnimplementedAuthServer) GetUserIDBySession(context.Context, *GetUserIDBySessionRequest) (*GetUserIDBySessionResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetUserIDBySession not implemented")
+}
+func (UnimplementedAuthServer) GetCSRFToken(context.Context, *GetCSRFTokenRequest) (*GetCSRFTokenResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCSRFToken not implemented")
 }
 func (UnimplementedAuthServer) mustEmbedUnimplementedAuthServer() {}
 func (UnimplementedAuthServer) testEmbeddedByValue()              {}
@@ -207,6 +223,24 @@ func _Auth_GetUserIDBySession_Handler(srv interface{}, ctx context.Context, dec 
 	return interceptor(ctx, in, info, handler)
 }
 
+func _Auth_GetCSRFToken_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCSRFTokenRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AuthServer).GetCSRFToken(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: Auth_GetCSRFToken_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AuthServer).GetCSRFToken(ctx, req.(*GetCSRFTokenRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // Auth_ServiceDesc is the grpc.ServiceDesc for Auth service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -229,6 +263,10 @@ var Auth_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetUserIDBySession",
 			Handler:    _Auth_GetUserIDBySession_Handler,
+		},
+		{
+			MethodName: "GetCSRFToken",
+			Handler:    _Auth_GetCSRFToken_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

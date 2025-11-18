@@ -370,6 +370,94 @@ func (x *GetUserIDBySessionResponse) GetUserId() uint64 {
 	return 0
 }
 
+type GetCSRFTokenRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	SessionId     string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCSRFTokenRequest) Reset() {
+	*x = GetCSRFTokenRequest{}
+	mi := &file_auth_auth_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCSRFTokenRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCSRFTokenRequest) ProtoMessage() {}
+
+func (x *GetCSRFTokenRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_auth_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCSRFTokenRequest.ProtoReflect.Descriptor instead.
+func (*GetCSRFTokenRequest) Descriptor() ([]byte, []int) {
+	return file_auth_auth_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *GetCSRFTokenRequest) GetSessionId() string {
+	if x != nil {
+		return x.SessionId
+	}
+	return ""
+}
+
+type GetCSRFTokenResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Token         string                 `protobuf:"bytes,1,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetCSRFTokenResponse) Reset() {
+	*x = GetCSRFTokenResponse{}
+	mi := &file_auth_auth_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetCSRFTokenResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetCSRFTokenResponse) ProtoMessage() {}
+
+func (x *GetCSRFTokenResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_auth_auth_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetCSRFTokenResponse.ProtoReflect.Descriptor instead.
+func (*GetCSRFTokenResponse) Descriptor() ([]byte, []int) {
+	return file_auth_auth_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *GetCSRFTokenResponse) GetToken() string {
+	if x != nil {
+		return x.Token
+	}
+	return ""
+}
+
 var File_auth_auth_proto protoreflect.FileDescriptor
 
 const file_auth_auth_proto_rawDesc = "" +
@@ -397,12 +485,18 @@ const file_auth_auth_proto_rawDesc = "" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\"P\n" +
 	"\x1aGetUserIDBySessionResponse\x12\x19\n" +
 	"\bis_valid\x18\x01 \x01(\bR\aisValid\x12\x17\n" +
-	"\auser_id\x18\x02 \x01(\x04R\x06userId2\x8b\x02\n" +
+	"\auser_id\x18\x02 \x01(\x04R\x06userId\"4\n" +
+	"\x13GetCSRFTokenRequest\x12\x1d\n" +
+	"\n" +
+	"session_id\x18\x01 \x01(\tR\tsessionId\",\n" +
+	"\x14GetCSRFTokenResponse\x12\x14\n" +
+	"\x05token\x18\x01 \x01(\tR\x05token2\xd4\x02\n" +
 	"\x04Auth\x12;\n" +
 	"\bRegister\x12\x15.auth.RegisterRequest\x1a\x16.auth.RegisterResponse\"\x00\x122\n" +
 	"\x05Login\x12\x12.auth.LoginRequest\x1a\x13.auth.LoginResponse\"\x00\x127\n" +
 	"\x06Logout\x12\x13.auth.LogoutRequest\x1a\x16.google.protobuf.Empty\"\x00\x12Y\n" +
-	"\x12GetUserIDBySession\x12\x1f.auth.GetUserIDBySessionRequest\x1a .auth.GetUserIDBySessionResponse\"\x00B\rZ\vgen/go/authb\x06proto3"
+	"\x12GetUserIDBySession\x12\x1f.auth.GetUserIDBySessionRequest\x1a .auth.GetUserIDBySessionResponse\"\x00\x12G\n" +
+	"\fGetCSRFToken\x12\x19.auth.GetCSRFTokenRequest\x1a\x1a.auth.GetCSRFTokenResponse\"\x00B\rZ\vgen/go/authb\x06proto3"
 
 var (
 	file_auth_auth_proto_rawDescOnce sync.Once
@@ -416,7 +510,7 @@ func file_auth_auth_proto_rawDescGZIP() []byte {
 	return file_auth_auth_proto_rawDescData
 }
 
-var file_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_auth_auth_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
 var file_auth_auth_proto_goTypes = []any{
 	(*RegisterRequest)(nil),            // 0: auth.RegisterRequest
 	(*RegisterResponse)(nil),           // 1: auth.RegisterResponse
@@ -425,19 +519,23 @@ var file_auth_auth_proto_goTypes = []any{
 	(*LogoutRequest)(nil),              // 4: auth.LogoutRequest
 	(*GetUserIDBySessionRequest)(nil),  // 5: auth.GetUserIDBySessionRequest
 	(*GetUserIDBySessionResponse)(nil), // 6: auth.GetUserIDBySessionResponse
-	(*emptypb.Empty)(nil),              // 7: google.protobuf.Empty
+	(*GetCSRFTokenRequest)(nil),        // 7: auth.GetCSRFTokenRequest
+	(*GetCSRFTokenResponse)(nil),       // 8: auth.GetCSRFTokenResponse
+	(*emptypb.Empty)(nil),              // 9: google.protobuf.Empty
 }
 var file_auth_auth_proto_depIdxs = []int32{
 	0, // 0: auth.Auth.Register:input_type -> auth.RegisterRequest
 	2, // 1: auth.Auth.Login:input_type -> auth.LoginRequest
 	4, // 2: auth.Auth.Logout:input_type -> auth.LogoutRequest
 	5, // 3: auth.Auth.GetUserIDBySession:input_type -> auth.GetUserIDBySessionRequest
-	1, // 4: auth.Auth.Register:output_type -> auth.RegisterResponse
-	3, // 5: auth.Auth.Login:output_type -> auth.LoginResponse
-	7, // 6: auth.Auth.Logout:output_type -> google.protobuf.Empty
-	6, // 7: auth.Auth.GetUserIDBySession:output_type -> auth.GetUserIDBySessionResponse
-	4, // [4:8] is the sub-list for method output_type
-	0, // [0:4] is the sub-list for method input_type
+	7, // 4: auth.Auth.GetCSRFToken:input_type -> auth.GetCSRFTokenRequest
+	1, // 5: auth.Auth.Register:output_type -> auth.RegisterResponse
+	3, // 6: auth.Auth.Login:output_type -> auth.LoginResponse
+	9, // 7: auth.Auth.Logout:output_type -> google.protobuf.Empty
+	6, // 8: auth.Auth.GetUserIDBySession:output_type -> auth.GetUserIDBySessionResponse
+	8, // 9: auth.Auth.GetCSRFToken:output_type -> auth.GetCSRFTokenResponse
+	5, // [5:10] is the sub-list for method output_type
+	0, // [0:5] is the sub-list for method input_type
 	0, // [0:0] is the sub-list for extension type_name
 	0, // [0:0] is the sub-list for extension extendee
 	0, // [0:0] is the sub-list for field type_name
@@ -454,7 +552,7 @@ func file_auth_auth_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_auth_auth_proto_rawDesc), len(file_auth_auth_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   9,
 			NumExtensions: 0,
 			NumServices:   1,
 		},
