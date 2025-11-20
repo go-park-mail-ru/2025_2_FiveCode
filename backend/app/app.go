@@ -67,10 +67,10 @@ func (a *App) InstallDependencies(dependencies ...string) error {
 			return fmt.Errorf("failed to init postgres: %w", err)
 		}
 
-		if err := a.Store.Postgres.RunMigrations("./migrations"); err != nil {
-			log.Fatal().Err(err).Msg("failed to run migrations")
-		}
-		log.Info().Msg("Migrations run successfully")
+		// if err := a.Store.Postgres.RunMigrations("./migrations"); err != nil {
+		// 	log.Fatal().Err(err).Msg("failed to run migrations")
+		// }
+		// log.Info().Msg("Migrations run successfully")
 
 		a.closers = append(a.closers, a.Store.Postgres)
 	}

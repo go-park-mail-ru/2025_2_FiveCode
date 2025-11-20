@@ -12,15 +12,20 @@ import (
 func loadEnvFile() error {
 	viper.SetConfigName(".env")
 	viper.SetConfigType("env")
+
+	viper.AddConfigPath(".")
 	viper.AddConfigPath("../")
+	viper.AddConfigPath("../../")
 
 	viper.AutomaticEnv()
 
-	err := viper.ReadInConfig()
-
-	if err != nil {
-		log.Error().Err(err).Msg("error reading env file")
-		return err
+	if err := viper.ReadInConfig(); err != nil {
+		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
+			log.Info().Msg("'.env' file not found, using environment variables.")
+		} else {
+			log.Error().Err(err).Msg("error reading env file")
+			return err
+		}
 	}
 
 	return nil

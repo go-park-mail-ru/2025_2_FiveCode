@@ -43,6 +43,7 @@ type RedisConfig struct {
 }
 
 type ServiceConfig struct {
+	GrpcHost     string `mapstructure:"grpc_host"`
 	GrpcPort int `mapstructure:"grpc_port"`
 }
 

@@ -14,6 +14,8 @@ auth:
 
 services:
   auth:
+    grpc_host: "auth"
     grpc_port: 50051
-  users:
+  user:
+    grpc_host: "user"
     grpc_port: 50052

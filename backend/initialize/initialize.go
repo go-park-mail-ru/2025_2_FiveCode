@@ -2,6 +2,7 @@ package initialize
 
 import (
 	"backend/config"
+	"backend/constants"
 	authPB "backend/gen/go/auth"
 	userPB "backend/gen/go/user"
 	blocksDelivery "backend/pkg/gateway/blocks/delivery"
@@ -77,7 +78,7 @@ type Deliveries struct {
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
-	authServiceAddr := fmt.Sprintf("localhost:%d", conf.Services["auth"].GrpcPort)
+	authServiceAddr := fmt.Sprintf("%s:%d", conf.Services[constants.AuthServiceName].GrpcHost, conf.Services[constants.AuthServiceName].GrpcPort)
 	authServiceConn, err := grpc.Dial(
 		authServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
@@ -88,7 +89,7 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 
 	authGRPCClient := authPB.NewAuthClient(authServiceConn)
 
-	userServiceAddr := fmt.Sprintf("localhost:%d", conf.Services["users"].GrpcPort)
+	userServiceAddr := fmt.Sprintf("%s:%d", conf.Services[constants.UserServiceName].GrpcHost, conf.Services[constants.UserServiceName].GrpcPort)
 	userServiceConn, err := grpc.Dial(
 		userServiceAddr,
 		grpc.WithTransportCredentials(insecure.NewCredentials()),

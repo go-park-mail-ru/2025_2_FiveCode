@@ -7,8 +7,8 @@ services:
       MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
       MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
     ports:
-      - "8001:9000"
-      - "9001:9001"
+      - "${MINIO_PORT_EXTERNAL}:9000"
+      - "${MINIO_CONSOLE_PORT_EXTERNAL}:9001"
     volumes:
       - minio_data:/data
     restart: always
@@ -21,18 +21,86 @@ services:
       POSTGRES_PASSWORD: ${DB_PASSWORD}
       POSTGRES_DB: ${DB_NAME}
     ports:
-      - "${DB_PORT}:5432"
+      - "${DB_PORT_EXTERNAL}:5432"
+    volumes:
+      - ./backend/migrations:/docker-entrypoint-initdb.d
     restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   redis:
     image: redis:7-alpine
     container_name: goose_redis
     command: redis-server --requirepass ${REDIS_PASSWORD}
+    env_file: .env
     ports:
       - "6379:6379"
     volumes:
       - redis_data:/data
     restart: always
+
+  auth:
+    build:
+      context: .
+      dockerfile: Dockerfile.auth
+    container_name: goose_auth
+    env_file: .env
+    environment:
+      CONFIG_PATH: "./config"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      REDIS_HOST: "redis"
+      DB_SSLMODE: "${DB_SSLMODE}"
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  user:
+    build:
+      context: .
+      dockerfile: Dockerfile.user
+    container_name: goose_user
+    env_file: .env
+    environment:
+      CONFIG_PATH: "./config"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      DB_SSLMODE: "${DB_SSLMODE}"
+    restart: always
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    container_name: goose_gateway
+    env_file: .env
+    environment:
+      CONFIG_PATH: "./config"
+      SERVER_HOST: "0.0.0.0"
+      SERVER_PORT: "8080"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      MINIO_ENDPOINT: "minio:9000"
+      AUTH_SERVICE_HOST: "auth"
+      USER_SERVICE_HOST: "user"
+      DB_SSLMODE: "${DB_SSLMODE}"
+    ports:
+      - "${SERVER_PORT_EXTERNAL}:8080"
+    restart: always
+    depends_on:
+      auth:
+        condition: service_started
+      user:
+        condition: service_started
 
 volumes:
   minio_data:

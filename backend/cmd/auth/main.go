@@ -2,6 +2,7 @@ package main
 
 import (
 	"backend/app"
+	"backend/constants"
 	"backend/pkg/auth/repository"
 	"backend/pkg/auth/server"
 	"backend/pkg/auth/usecase"
@@ -9,10 +10,6 @@ import (
 	"log"
 
 	"google.golang.org/grpc"
-)
-
-const (
-	authServiceName = "auth"
 )
 
 func main() {
@@ -33,5 +30,5 @@ func main() {
 
 	interceptorOpt := grpc.UnaryInterceptor(interceptors.LoggingInterceptor)
 
-	application.RunGRPCServer(authServiceName, registerAuthService, interceptorOpt)
+	application.RunGRPCServer(constants.AuthServiceName, registerAuthService, interceptorOpt)
 }
