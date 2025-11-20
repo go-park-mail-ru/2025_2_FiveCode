@@ -1,10 +1,10 @@
 package main
 
 import (
+	"backend/internal/app"
 	"backend/internal/auth_service/repository"
 	"backend/internal/auth_service/server"
 	"backend/internal/auth_service/usecase"
-	"backend/internal/facade/app"
 	"backend/pkg/constants"
 	"backend/pkg/interceptors"
 	"log"

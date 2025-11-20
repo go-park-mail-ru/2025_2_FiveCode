@@ -3,7 +3,7 @@ package delivery
 import (
 	authPB "backend/gen/go/auth"
 	userPB "backend/gen/go/user"
-	"backend/internal/facade/middleware"
+	"backend/internal/middleware"
 	"backend/pkg/apiutils"
 	"backend/pkg/logger"
 	"backend/pkg/utils"

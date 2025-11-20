@@ -1,8 +1,8 @@
 package router
 
 import (
-	"backend/internal/facade/initialize"
-	mw "backend/internal/facade/middleware"
+	"backend/internal/initialize"
+	mw "backend/internal/middleware"
 	"backend/pkg/config"
 	"backend/pkg/store"
 	"net/http"

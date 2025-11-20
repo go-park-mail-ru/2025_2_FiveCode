@@ -1,9 +1,9 @@
 package main
 
 import (
-	"backend/internal/facade/app"
-	"backend/internal/facade/initialize"
-	"backend/internal/facade/router"
+	"backend/internal/app"
+	"backend/internal/initialize"
+	"backend/internal/router"
 	"net/http"
 
 	"github.com/rs/zerolog/log"

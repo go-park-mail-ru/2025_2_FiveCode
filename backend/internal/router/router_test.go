@@ -1,7 +1,7 @@
 package router
 
 import (
-	"backend/internal/facade/initialize"
+	"backend/internal/initialize"
 	"backend/pkg/store"
 	"net/http"
 	"net/http/httptest"
