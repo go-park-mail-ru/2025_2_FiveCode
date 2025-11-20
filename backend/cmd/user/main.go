@@ -2,9 +2,9 @@ package main
 
 import (
 	"backend/internal/app"
-	"backend/internal/user_service/repository"
-	"backend/internal/user_service/server"
-	"backend/internal/user_service/usecase"
+	"backend/user_service/repository"
+	"backend/user_service/server"
+	"backend/user_service/usecase"
 	"backend/pkg/constants"
 	"backend/pkg/interceptors"
 	"log"

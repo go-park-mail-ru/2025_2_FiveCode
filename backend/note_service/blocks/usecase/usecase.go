@@ -4,7 +4,7 @@ import (
 	"backend/pkg/constants"
 	"backend/pkg/logger"
 	models2 "backend/pkg/models"
-	blocksRepository "backend/pkg/note/blocks/repository"
+	blocksRepository "backend/note_service/blocks/repository"
 	"context"
 	"fmt"
 	"sort"

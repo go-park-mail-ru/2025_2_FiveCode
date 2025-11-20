@@ -1,7 +1,7 @@
 package delivery
 
 import (
-	"backend/internal/facade/middleware"
+	"backend/internal/middleware"
 	"backend/pkg/apiutils"
 	"backend/pkg/logger"
 	"backend/pkg/models"
