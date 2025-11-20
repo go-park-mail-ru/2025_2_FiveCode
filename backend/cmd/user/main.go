@@ -1,12 +1,12 @@
 package main
 
 import (
-	"backend/app"
-	"backend/constants"
+	"backend/internal/facade/app"
+	"backend/internal/user_service/repository"
+	"backend/internal/user_service/server"
+	"backend/internal/user_service/usecase"
+	"backend/pkg/constants"
 	"backend/pkg/interceptors"
-	"backend/pkg/user/repository"
-	"backend/pkg/user/server"
-	"backend/pkg/user/usecase"
 	"log"
 
 	"google.golang.org/grpc"

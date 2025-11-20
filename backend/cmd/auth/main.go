@@ -1,11 +1,11 @@
 package main
 
 import (
-	"backend/app"
-	"backend/constants"
-	"backend/pkg/auth/repository"
-	"backend/pkg/auth/server"
-	"backend/pkg/auth/usecase"
+	"backend/internal/auth_service/repository"
+	"backend/internal/auth_service/server"
+	"backend/internal/auth_service/usecase"
+	"backend/internal/facade/app"
+	"backend/pkg/constants"
 	"backend/pkg/interceptors"
 	"log"
 

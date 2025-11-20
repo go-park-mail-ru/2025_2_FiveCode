@@ -77,11 +77,11 @@ services:
       postgres:
         condition: service_healthy
 
-  gateway:
+  note:
     build:
       context: .
-      dockerfile: Dockerfile.gateway
-    container_name: goose_gateway
+      dockerfile: Dockerfile.note
+    container_name: goose_note
     env_file: .env
     environment:
       CONFIG_PATH: "./config"

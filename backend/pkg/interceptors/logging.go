@@ -1,10 +1,9 @@
 package interceptors
 
 import (
+	"backend/pkg/logger"
 	"context"
 	"time"
-
-	"backend/logger"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/status"
