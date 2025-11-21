@@ -2,18 +2,16 @@ package initialize
 
 import (
 	authPB "backend/gen/go/auth"
+	blockPB "backend/gen/go/block"
+	notePB "backend/gen/go/note"
 	userPB "backend/gen/go/user"
 	authDelivery "backend/internal/delivery/auth"
+	blockDelivery "backend/internal/delivery/note"
+	noteDelivery "backend/internal/delivery/note"
 	userDelivery "backend/internal/delivery/user"
-	blocksDelivery "backend/note_service/blocks/delivery"
-	blocksRepository "backend/note_service/blocks/repository"
-	blocksUsecase "backend/note_service/blocks/usecase"
-	fileDelivery "backend/note_service/file/delivery"
-	fileRepository "backend/note_service/file/repository"
-	fileUsecase "backend/note_service/file/usecase"
-	notesDelivery "backend/note_service/notes/delivery"
-	notesRepository "backend/note_service/notes/repository"
-	notesUsecase "backend/note_service/notes/usecase"
+	fileDelivery "backend/internal/file/delivery"
+	fileRepository "backend/internal/file/repository"
+	fileUsecase "backend/internal/file/usecase"
 	"backend/pkg/config"
 	"backend/pkg/constants"
 	"backend/pkg/store"
@@ -73,11 +71,14 @@ type Deliveries struct {
 	BlocksDelivery BlocksDeliveryInterface
 	FileDelivery   FileDeliveryInterface
 
-	AuthClient authPB.AuthClient
-	UserClient userPB.UserServiceClient
+	AuthClient  authPB.AuthClient
+	UserClient  userPB.UserServiceClient
+	NoteClient  notePB.NoteServiceClient
+	BlockClient blockPB.BlockServiceClient
 }
 
 func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
+	// Auth Service
 	authServiceAddr := fmt.Sprintf("%s:%d", conf.Services[constants.AuthServiceName].GrpcHost, conf.Services[constants.AuthServiceName].GrpcPort)
 	authServiceConn, err := grpc.Dial(
 		authServiceAddr,
@@ -86,7 +87,6 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to auth service")
 	}
-
 	authGRPCClient := authPB.NewAuthClient(authServiceConn)
 
 	userServiceAddr := fmt.Sprintf("%s:%d", conf.Services[constants.UserServiceName].GrpcHost, conf.Services[constants.UserServiceName].GrpcPort)
@@ -99,21 +99,28 @@ func InitDeliveries(s *store.Store, conf *config.Config) *Deliveries {
 	}
 	userGRPCClient := userPB.NewUserServiceClient(userServiceConn)
 
-	layers := &Deliveries{
-		AuthClient: authGRPCClient,
-		UserClient: userGRPCClient,
+	noteServiceAddr := fmt.Sprintf("%s:%d", conf.Services[constants.NotesServiceName].GrpcHost, conf.Services[constants.NotesServiceName].GrpcPort)
+	noteServiceConn, err := grpc.Dial(
+		noteServiceAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()),
+	)
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to connect to note service")
 	}
+	noteGRPCClient := notePB.NewNoteServiceClient(noteServiceConn)
+	blockGRPCClient := blockPB.NewBlockServiceClient(noteServiceConn)
+
+	layers := &Deliveries{
+		AuthClient:  authGRPCClient,
+		UserClient:  userGRPCClient,
+		NoteClient:  noteGRPCClient,
+		BlockClient: blockGRPCClient,
+	}
+
 	layers.AuthDelivery = authDelivery.NewAuthDelivery(authGRPCClient, userGRPCClient, time.Duration(conf.Auth.Cookie.SessionDuration)*24*time.Hour)
-
 	layers.UserDelivery = userDelivery.NewUserDelivery(userGRPCClient, authGRPCClient)
-
-	notesR := notesRepository.NewNotesRepository(s.Postgres.DB)
-	notesUC := notesUsecase.NewNotesUsecase(notesR)
-	layers.NotesDelivery = notesDelivery.NewNotesDelivery(notesUC)
-
-	blocksR := blocksRepository.NewBlocksRepository(s.Postgres.DB)
-	blocksUC := blocksUsecase.NewBlocksUsecase(blocksR, notesR)
-	layers.BlocksDelivery = blocksDelivery.NewBlocksDelivery(blocksUC)
+	layers.NotesDelivery = noteDelivery.NewNotesDelivery(noteGRPCClient)
+	layers.BlocksDelivery = blockDelivery.NewBlocksDelivery(blockGRPCClient)
 
 	fileRepo := fileRepository.NewFileRepository(s.Postgres.DB, s.Minio.Client)
 	fileUC := fileUsecase.NewFileUsecase(fileRepo)

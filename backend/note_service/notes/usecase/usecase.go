@@ -9,7 +9,7 @@ import (
 )
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
-type NotesUsecase struct {
+type NoteUsecase struct {
 	Repository NotesRepository
 }
 
@@ -23,13 +23,13 @@ type NotesRepository interface {
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 }
 
-func NewNotesUsecase(Repository NotesRepository) *NotesUsecase {
-	return &NotesUsecase{
+func NewNoteUsecase(Repository NotesRepository) *NoteUsecase {
+	return &NoteUsecase{
 		Repository: Repository,
 	}
 }
 
-func (u *NotesUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
+func (u *NoteUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("getting all notes")
 	notes, err := u.Repository.GetNotes(ctx, userID)
@@ -40,7 +40,7 @@ func (u *NotesUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models
 	return notes, nil
 }
 
-func (u *NotesUsecase) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
+func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Msg("creating note")
 	note, err := u.Repository.CreateNote(ctx, userID)
@@ -52,7 +52,7 @@ func (u *NotesUsecase) CreateNote(ctx context.Context, userID uint64) (*models.N
 	return note, nil
 }
 
-func (u *NotesUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
+func (u *NoteUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("getting note by id")
 	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
@@ -69,7 +69,7 @@ func (u *NotesUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (
 	return note, nil
 }
 
-func (u *NotesUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
+func (u *NoteUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("updating note")
 	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
@@ -92,7 +92,7 @@ func (u *NotesUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uin
 	return updatedNote, nil
 }
 
-func (u *NotesUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint64) error {
+func (u *NoteUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint64) error {
 	log := logger.FromContext(ctx)
 	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("deleting note")
 	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
@@ -114,7 +114,7 @@ func (u *NotesUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uin
 	return nil
 }
 
-func (u *NotesUsecase) AddFavorite(ctx context.Context, userID, noteID uint64) error {
+func (u *NoteUsecase) AddFavorite(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
 		return err
@@ -123,7 +123,7 @@ func (u *NotesUsecase) AddFavorite(ctx context.Context, userID, noteID uint64) e
 	return u.Repository.AddFavorite(ctx, userID, noteID)
 }
 
-func (u *NotesUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64) error {
+func (u *NoteUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
 	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
 		return err
@@ -132,7 +132,7 @@ func (u *NotesUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64
 	return u.Repository.RemoveFavorite(ctx, userID, noteID)
 }
 
-func (u *NotesUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
+func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
 	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
 	if err != nil {

@@ -9,4 +9,8 @@ var (
 	ErrInvalidSession         = errors.New("invalid session")
 	ErrNoAccess               = errors.New("no access")
 	ErrInvalidFileType        = errors.New("invalid file type")
+
+	ErrNoteNotFound  = errors.New("note not found")
+	ErrAccessDenied  = errors.New("access denied")
+	ErrBlockNotFound = errors.New("block not found")
 )

@@ -1,41 +1,43 @@
 package delivery
 
 import (
+	blockPB "backend/gen/go/block"
 	"backend/internal/middleware"
 	"backend/pkg/apiutils"
-	"backend/pkg/constants"
 	"backend/pkg/logger"
 	"backend/pkg/models"
+	"backend/pkg/utils"
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
-type BlocksUsecase interface {
-	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error)
-	GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error)
-	UpdateBlock(ctx context.Context, userID uint64, req *models.UpdateBlockRequest) (*models.Block, error)
-	CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error)
-	CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error)
-	CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error)
-	DeleteBlock(ctx context.Context, userID, blockID uint64) error
-	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error)
+//go:generate mockgen -destination=../mock/mock_block_client.go -package=mock . BlockServiceClient
+type BlockServiceClient interface {
+	GetBlocks(ctx context.Context, in *blockPB.GetBlocksRequest, opts ...grpc.CallOption) (*blockPB.GetBlocksResponse, error)
+	GetBlock(ctx context.Context, in *blockPB.GetBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
+	CreateTextBlock(ctx context.Context, in *blockPB.CreateTextBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
+	CreateCodeBlock(ctx context.Context, in *blockPB.CreateCodeBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
+	CreateAttachmentBlock(ctx context.Context, in *blockPB.CreateAttachmentBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
+	UpdateBlock(ctx context.Context, in *blockPB.UpdateBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
+	DeleteBlock(ctx context.Context, in *blockPB.DeleteBlockRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	UpdateBlockPosition(ctx context.Context, in *blockPB.UpdateBlockPositionRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
 }
 
 type BlocksDelivery struct {
-	Usecase BlocksUsecase
+	BlockClient BlockServiceClient
 }
 
-func NewBlocksDelivery(usecase BlocksUsecase) *BlocksDelivery {
+func NewBlocksDelivery(b BlockServiceClient) *BlocksDelivery {
 	return &BlocksDelivery{
-		Usecase: usecase,
+		BlockClient: b,
 	}
 }
 
@@ -109,11 +111,18 @@ func (d *BlocksDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	block, err := d.Usecase.CreateCodeBlock(r.Context(), userID, noteID, req.BeforeBlockID)
+	grpcResp, err := d.BlockClient.CreateCodeBlock(r.Context(), &blockPB.CreateCodeBlockRequest{
+		UserId:        userID,
+		NoteId:        noteID,
+		BeforeBlockId: req.BeforeBlockID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -131,11 +140,18 @@ func (d *BlocksDelivery) createTextBlock(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	block, err := d.Usecase.CreateTextBlock(r.Context(), userID, noteID, req.BeforeBlockID)
+	grpcResp, err := d.BlockClient.CreateTextBlock(r.Context(), &blockPB.CreateTextBlockRequest{
+		UserId:        userID,
+		NoteId:        noteID,
+		BeforeBlockId: req.BeforeBlockID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -160,11 +176,19 @@ func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	block, err := d.Usecase.CreateAttachmentBlock(r.Context(), userID, noteID, req.BeforeBlockID, req.FileID)
+	grpcResp, err := d.BlockClient.CreateAttachmentBlock(r.Context(), &blockPB.CreateAttachmentBlockRequest{
+		UserId:        userID,
+		NoteId:        noteID,
+		BeforeBlockId: req.BeforeBlockID,
+		FileId:        req.FileID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -186,11 +210,17 @@ func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	blocks, err := d.Usecase.GetBlocks(r.Context(), userID, noteID)
+	grpcResp, err := d.BlockClient.GetBlocks(r.Context(), &blockPB.GetBlocksRequest{
+		UserId: userID,
+		NoteId: noteID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	blocks := utils.ProtoBlocksToModels(grpcResp.Blocks)
 
 	apiutils.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"note_id": noteID,
@@ -216,12 +246,17 @@ func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	block, err := d.Usecase.GetBlock(r.Context(), userID, blockID)
+	grpcResp, err := d.BlockClient.GetBlock(r.Context(), &blockPB.GetBlockRequest{
+		UserId:  userID,
+		BlockId: blockID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
@@ -261,19 +296,21 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	usecaseReq, err := parseUpdateBlockRequest(blockID, deliveryReq)
+	grpcReq, err := convertToGrpcUpdateBlockRequest(userID, blockID, deliveryReq)
 	if err != nil {
-		log.Warn().Err(err).Msg("failed to parse request")
+		log.Warn().Err(err).Msg("failed to convert request")
 		apiutils.WriteError(w, http.StatusBadRequest, err.Error())
 		return
 	}
 
-	block, err := d.Usecase.UpdateBlock(r.Context(), userID, usecaseReq)
+	grpcResp, err := d.BlockClient.UpdateBlock(r.Context(), grpcReq)
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
@@ -295,9 +332,13 @@ func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = d.Usecase.DeleteBlock(r.Context(), userID, blockID)
+	_, err = d.BlockClient.DeleteBlock(r.Context(), &blockPB.DeleteBlockRequest{
+		UserId:  userID,
+		BlockId: blockID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
@@ -339,33 +380,25 @@ func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	block, err := d.Usecase.UpdateBlockPosition(r.Context(), userID, blockID, req.BeforeBlockID)
+	grpcResp, err := d.BlockClient.UpdateBlockPosition(r.Context(), &blockPB.UpdateBlockPositionRequest{
+		UserId:        userID,
+		BlockId:       blockID,
+		BeforeBlockId: req.BeforeBlockID,
+	})
 	if err != nil {
-		handleBlockError(w, r.Context(), err)
+		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
-func handleBlockError(w http.ResponseWriter, ctx context.Context, err error) {
-	log := logger.FromContext(ctx)
-	switch {
-	case errors.Is(err, constants.ErrNotFound):
-		log.Warn().Err(err).Msg("block or note not found")
-		apiutils.WriteError(w, http.StatusNotFound, "block or note not found")
-	case errors.Is(err, constants.ErrNoAccess):
-		log.Warn().Err(err).Msg("access to note denied")
-		apiutils.WriteError(w, http.StatusForbidden, "no access to this note")
-	default:
-		log.Error().Err(err).Msg("internal server error in blocks delivery")
-		apiutils.WriteError(w, http.StatusInternalServerError, "internal server error")
-	}
-}
-
-func parseUpdateBlockRequest(blockID uint64, deliveryReq UpdateBlockDeliveryRequest) (*models.UpdateBlockRequest, error) {
-	req := &models.UpdateBlockRequest{
-		BlockID: blockID,
+func convertToGrpcUpdateBlockRequest(userID, blockID uint64, deliveryReq UpdateBlockDeliveryRequest) (*blockPB.UpdateBlockRequest, error) {
+	grpcReq := &blockPB.UpdateBlockRequest{
+		UserId:  userID,
+		BlockId: blockID,
 		Type:    deliveryReq.Type,
 	}
 
@@ -375,18 +408,22 @@ func parseUpdateBlockRequest(blockID uint64, deliveryReq UpdateBlockDeliveryRequ
 		if err := json.Unmarshal(deliveryReq.Content, &textContent); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal text content: %w", err)
 		}
-		req.Content = textContent
+		grpcReq.Content = &blockPB.UpdateBlockRequest_TextContent{
+			TextContent: utils.ModelTextContentToProto(&textContent),
+		}
 
 	case models.BlockTypeCode:
 		var codeContent models.UpdateCodeContent
 		if err := json.Unmarshal(deliveryReq.Content, &codeContent); err != nil {
 			return nil, fmt.Errorf("failed to unmarshal code content: %w", err)
 		}
-		req.Content = codeContent
+		grpcReq.Content = &blockPB.UpdateBlockRequest_CodeContent{
+			CodeContent: utils.ModelCodeContentToProto(&codeContent),
+		}
 
 	default:
 		return nil, fmt.Errorf("unsupported block type: %s", deliveryReq.Type)
 	}
 
-	return req, nil
+	return grpcReq, nil
 }

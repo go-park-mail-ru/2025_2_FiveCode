@@ -1,6 +1,7 @@
 package constants
 
 const (
-	AuthServiceName = "auth"
-	UserServiceName = "user"
+	AuthServiceName  = "auth"
+	UserServiceName  = "user"
+	NotesServiceName = "notes"
 )

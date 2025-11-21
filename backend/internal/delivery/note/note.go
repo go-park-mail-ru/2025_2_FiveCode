@@ -1,36 +1,39 @@
 package delivery
 
 import (
+	notePB "backend/gen/go/note"
 	"backend/internal/middleware"
 	"backend/pkg/apiutils"
 	"backend/pkg/logger"
-	"backend/pkg/models"
+	"backend/pkg/utils"
 	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
 
 	"github.com/gorilla/mux"
+	"google.golang.org/grpc"
+	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
-type NotesUsecase interface {
-	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
-	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
-	GetNoteById(ctx context.Context, userID uint64, noteID uint64) (*models.Note, error)
-	UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
-	DeleteNote(ctx context.Context, userID uint64, noteID uint64) error
-	AddFavorite(ctx context.Context, userID, noteID uint64) error
-	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
+//go:generate mockgen -destination=../mock/mock_note_client.go -package=mock . NoteServiceClient
+type NoteServiceClient interface {
+	GetAllNotes(ctx context.Context, in *notePB.GetAllNotesRequest, opts ...grpc.CallOption) (*notePB.GetAllNotesResponse, error)
+	CreateNote(ctx context.Context, in *notePB.CreateNoteRequest, opts ...grpc.CallOption) (*notePB.Note, error)
+	GetNoteById(ctx context.Context, in *notePB.GetNoteByIdRequest, opts ...grpc.CallOption) (*notePB.Note, error)
+	UpdateNote(ctx context.Context, in *notePB.UpdateNoteRequest, opts ...grpc.CallOption) (*notePB.Note, error)
+	DeleteNote(ctx context.Context, in *notePB.DeleteNoteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	AddFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	RemoveFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 }
 
 type NotesDelivery struct {
-	Usecase NotesUsecase
+	NoteClient NoteServiceClient
 }
 
-func NewNotesDelivery(usecase NotesUsecase) *NotesDelivery {
+func NewNotesDelivery(n NoteServiceClient) *NotesDelivery {
 	return &NotesDelivery{
-		Usecase: usecase,
+		NoteClient: n,
 	}
 }
 
@@ -43,13 +46,16 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	notes, err := d.Usecase.GetAllNotes(r.Context(), userID)
+	grpcResp, err := d.NoteClient.GetAllNotes(r.Context(), &notePB.GetAllNotesRequest{
+		UserId: userID,
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get notes")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get notes")
+		log.Error().Err(err).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	notes := utils.ProtoNotesToModels(grpcResp.Notes)
 	apiutils.WriteJSON(w, http.StatusOK, notes)
 }
 
@@ -62,13 +68,16 @@ func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.Usecase.CreateNote(r.Context(), userID)
+	grpcResp, err := d.NoteClient.CreateNote(r.Context(), &notePB.CreateNoteRequest{
+		UserId: userID,
+	})
 	if err != nil {
-		log.Error().Err(err).Msg("failed to create note")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to create note")
+		log.Error().Err(err).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	note := utils.ProtoNoteToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, note)
 }
 
@@ -89,13 +98,17 @@ func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.Usecase.GetNoteById(r.Context(), userID, noteID)
+	grpcResp, err := d.NoteClient.GetNoteById(r.Context(), &notePB.GetNoteByIdRequest{
+		UserId: userID,
+		NoteId: noteID,
+	})
 	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get note")
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	note := utils.ProtoNoteToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, note)
 }
 
@@ -126,6 +139,7 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 			log.Error().Err(err).Msg("failed to close request body")
 		}
 	}()
+
 	var req UpdateNoteRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		log.Warn().Err(err).Msg("invalid request body")
@@ -139,13 +153,25 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.Usecase.UpdateNote(r.Context(), userID, noteID, req.Title, req.IsArchived)
+	grpcReq := &notePB.UpdateNoteRequest{
+		UserId: userID,
+		NoteId: noteID,
+	}
+	if req.Title != nil {
+		grpcReq.Title = req.Title
+	}
+	if req.IsArchived != nil {
+		grpcReq.IsArchived = req.IsArchived
+	}
+
+	grpcResp, err := d.NoteClient.UpdateNote(r.Context(), grpcReq)
 	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to update note")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to update note")
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
+	note := utils.ProtoNoteToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, note)
 }
 
@@ -166,10 +192,13 @@ func (d *NotesDelivery) DeleteNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	err = d.Usecase.DeleteNote(r.Context(), userID, noteID)
+	_, err = d.NoteClient.DeleteNote(r.Context(), &notePB.DeleteNoteRequest{
+		UserId: userID,
+		NoteId: noteID,
+	})
 	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to delete note")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to delete note")
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
@@ -184,13 +213,20 @@ func (d *NotesDelivery) AddFavorite(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
+
 	vars := mux.Vars(r)
 	noteID, _ := strconv.ParseUint(vars["note_id"], 10, 64)
-	if err := d.Usecase.AddFavorite(r.Context(), userID, noteID); err != nil {
-		log.Error().Err(err).Msg("failed to add favorite")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to add favorite")
+
+	_, err := d.NoteClient.AddFavorite(r.Context(), &notePB.FavoriteRequest{
+		UserId: userID,
+		NoteId: noteID,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -202,12 +238,19 @@ func (d *NotesDelivery) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 		apiutils.WriteError(w, http.StatusUnauthorized, "user not authenticated")
 		return
 	}
+
 	vars := mux.Vars(r)
 	noteID, _ := strconv.ParseUint(vars["note_id"], 10, 64)
-	if err := d.Usecase.RemoveFavorite(r.Context(), userID, noteID); err != nil {
-		log.Error().Err(err).Msg("failed to remove favorite")
-		apiutils.WriteError(w, http.StatusInternalServerError, "failed to remove favorite")
+
+	_, err := d.NoteClient.RemoveFavorite(r.Context(), &notePB.FavoriteRequest{
+		UserId: userID,
+		NoteId: noteID,
+	})
+	if err != nil {
+		log.Error().Err(err).Msg("gRPC call to Note service failed")
+		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
 	w.WriteHeader(http.StatusNoContent)
 }
