@@ -23,7 +23,7 @@ services:
     ports:
       - "${DB_PORT_EXTERNAL}:5432"
     volumes:
-      - ./backend/migrations:/docker-entrypoint-initdb.d
+      - ./facade/migrations:/docker-entrypoint-initdb.d
     restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
