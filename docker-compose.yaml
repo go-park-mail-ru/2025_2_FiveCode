@@ -11,7 +11,7 @@ services:
       - "${MINIO_CONSOLE_PORT_EXTERNAL}:9001"
     volumes:
       - minio_data:/data
-    restart: always
+    restart: unless-stopped
 
   postgres:
     image: postgres:14
@@ -24,7 +24,7 @@ services:
       - "${DB_PORT_EXTERNAL}:5432"
     volumes:
       - ./backend/migrations:/docker-entrypoint-initdb.d
-    restart: always
+    restart: unless-stopped
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
       interval: 5s
@@ -40,7 +40,7 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    restart: always
+    restart: unless-stopped
 
   auth:
     build:
@@ -54,7 +54,7 @@ services:
       DB_PORT: "5432"
       REDIS_HOST: "redis"
       DB_SSLMODE: "${DB_SSLMODE}"
-    restart: always
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
@@ -72,16 +72,32 @@ services:
       DB_HOST: "postgres"
       DB_PORT: "5432"
       DB_SSLMODE: "${DB_SSLMODE}"
-    restart: always
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
 
-  note:
+  notes:
     build:
       context: .
-      dockerfile: Dockerfile.note
-    container_name: goose_note
+      dockerfile: Dockerfile.notes
+    container_name: goose_notes
+    env_file: .env
+    environment:
+      CONFIG_PATH: "./config"
+      DB_HOST: "postgres"
+      DB_PORT: "5432"
+      DB_SSLMODE: "${DB_SSLMODE}"
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile.gateway
+    container_name: goose_gateway
     env_file: .env
     environment:
       CONFIG_PATH: "./config"
@@ -90,16 +106,16 @@ services:
       DB_HOST: "postgres"
       DB_PORT: "5432"
       MINIO_ENDPOINT: "minio:9000"
-      AUTH_SERVICE_HOST: "auth"
-      USER_SERVICE_HOST: "user"
       DB_SSLMODE: "${DB_SSLMODE}"
     ports:
       - "${SERVER_PORT_EXTERNAL}:8080"
-    restart: always
+    restart: unless-stopped
     depends_on:
       auth:
         condition: service_started
       user:
+        condition: service_started
+      notes:
         condition: service_started
 
 volumes:

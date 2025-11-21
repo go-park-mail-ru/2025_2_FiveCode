@@ -19,3 +19,6 @@ services:
   user:
     grpc_host: "user"
     grpc_port: 50052
+  notes:
+    grpc_host: "notes"
+    grpc_port: 50053
