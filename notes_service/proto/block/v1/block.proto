@@ -1,0 +1,119 @@
+syntax = "proto3";
+
+package block;
+
+option go_package = "backend/notes_service/pkg/block/v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service BlockService {
+  rpc GetBlocks(GetBlocksRequest) returns (GetBlocksResponse);
+  rpc GetBlock(GetBlockRequest) returns (Block);
+  rpc CreateTextBlock(CreateTextBlockRequest) returns (Block);
+  rpc CreateCodeBlock(CreateCodeBlockRequest) returns (Block);
+  rpc CreateAttachmentBlock(CreateAttachmentBlockRequest) returns (Block);
+  rpc UpdateBlock(UpdateBlockRequest) returns (Block);
+  rpc DeleteBlock(DeleteBlockRequest) returns (google.protobuf.Empty);
+  rpc UpdateBlockPosition(UpdateBlockPositionRequest) returns (Block);
+}
+
+message Block {
+  uint64 id = 1;
+  uint64 note_id = 2;
+  string type = 3;
+  double position = 4;
+  google.protobuf.Timestamp created_at = 5;
+  google.protobuf.Timestamp updated_at = 6;
+  oneof content {
+    TextContent text_content = 7;
+    CodeContent code_content = 8;
+    AttachmentContent attachment_content = 9;
+  }
+}
+
+message TextContent {
+  string text = 1;
+  repeated BlockTextFormat formats = 2;
+}
+
+message CodeContent {
+  string code = 1;
+  string language = 2;
+}
+
+message AttachmentContent {
+  string url = 1;
+  optional string caption = 2;
+  string mime_type = 3;
+  int32 size_bytes = 4;
+  optional int32 width = 5;
+  optional int32 height = 6;
+}
+
+message BlockTextFormat {
+  uint64 id = 1;
+  int32 start_offset = 2;
+  int32 end_offset = 3;
+  bool bold = 4;
+  bool italic = 5;
+  bool underline = 6;
+  bool strikethrough = 7;
+  optional string link = 8;
+  string font = 9;
+  int32 size = 10;
+}
+
+message GetBlocksRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+}
+
+message GetBlocksResponse {
+  repeated Block blocks = 1;
+}
+
+message GetBlockRequest {
+  uint64 user_id = 1;
+  uint64 block_id = 2;
+}
+
+message CreateTextBlockRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+  optional uint64 before_block_id = 3;
+}
+
+message CreateCodeBlockRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+  optional uint64 before_block_id = 3;
+}
+
+message CreateAttachmentBlockRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+  optional uint64 before_block_id = 3;
+  uint64 file_id = 4;
+}
+
+message UpdateBlockRequest {
+  uint64 user_id = 1;
+  uint64 block_id = 2;
+  string type = 3;
+  oneof content {
+    TextContent text_content = 4;
+    CodeContent code_content = 5;
+  }
+}
+
+message DeleteBlockRequest {
+  uint64 user_id = 1;
+  uint64 block_id = 2;
+}
+
+message UpdateBlockPositionRequest {
+  uint64 user_id = 1;
+  uint64 block_id = 2;
+  optional uint64 before_block_id = 3;
+}

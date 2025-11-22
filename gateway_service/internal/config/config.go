@@ -91,17 +91,39 @@ func Load() (*Config, error) {
 	cfg.Minio.AccessKey = v.GetString("MINIO_ACCESS_KEY")
 	cfg.Minio.SecretKey = v.GetString("MINIO_SECRET_KEY")
 	cfg.Minio.Secure = v.GetBool("MINIO_SECURE")
-	
-	if cfg.Server.Host == "" {
-		cfg.Server.Host = v.GetString("SERVER_HOST")
+
+	if host := v.GetString("SERVER_HOST"); host != "" {
+		cfg.Server.Host = host
 	}
-	if cfg.Server.Port == 0 {
-		cfg.Server.Port = v.GetInt("SERVER_PORT")
+	if port := v.GetInt("SERVER_PORT"); port != 0 {
+		cfg.Server.Port = port
 	}
-	if cfg.CSRF.SecretKey == "" {
-		cfg.CSRF.SecretKey = v.GetString("CSRF_SECRET_KEY")
+
+	if key := v.GetString("CSRF_SECRET_KEY"); key != "" {
+		cfg.CSRF.SecretKey = key
 	}
-	
+
+	if cfg.Services == nil {
+		cfg.Services = make(map[string]ServiceConfig)
+	}
+
+	serviceNames := []string{"auth", "user", "notes"}
+	for _, svc := range serviceNames {
+		current := cfg.Services[svc]
+
+		hostKey := fmt.Sprintf("SERVICES_%s_GRPC_HOST", strings.ToUpper(svc))
+		portKey := fmt.Sprintf("SERVICES_%s_GRPC_PORT", strings.ToUpper(svc))
+
+		if val := v.GetString(hostKey); val != "" {
+			current.GrpcHost = val
+		}
+		if val := v.GetInt(portKey); val != 0 {
+			current.GrpcPort = val
+		}
+
+		cfg.Services[svc] = current
+	}
+
 	if cfg.CSRF.SecretKey == "" {
 		return nil, fmt.Errorf("CSRF_SECRET_KEY is required")
 	}

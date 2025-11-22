@@ -1,0 +1,66 @@
+syntax = "proto3";
+
+package note;
+
+option go_package = "backend/notes_service/pkg/note/v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service NoteService {
+  rpc GetAllNotes(GetAllNotesRequest) returns (GetAllNotesResponse);
+  rpc CreateNote(CreateNoteRequest) returns (Note);
+  rpc GetNoteById(GetNoteByIdRequest) returns (Note);
+  rpc UpdateNote(UpdateNoteRequest) returns (Note);
+  rpc DeleteNote(DeleteNoteRequest) returns (google.protobuf.Empty);
+  rpc AddFavorite(FavoriteRequest) returns (google.protobuf.Empty);
+  rpc RemoveFavorite(FavoriteRequest) returns (google.protobuf.Empty);
+}
+
+message Note {
+  uint64 id = 1;
+  uint64 owner_id = 2;
+  optional uint64 parent_note_id = 3;
+  string title = 4;
+  optional uint64 icon_file_id = 5;
+  bool is_favorite = 6;
+  bool is_archived = 7;
+  bool is_shared = 8;
+  google.protobuf.Timestamp created_at = 9;
+  google.protobuf.Timestamp updated_at = 10;
+  optional google.protobuf.Timestamp deleted_at = 11;
+}
+
+message GetAllNotesRequest {
+  uint64 user_id = 1;
+}
+
+message GetAllNotesResponse {
+  repeated Note notes = 1;
+}
+
+message CreateNoteRequest {
+  uint64 user_id = 1;
+}
+
+message GetNoteByIdRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+}
+
+message UpdateNoteRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+  optional string title = 3;
+  optional bool is_archived = 4;
+}
+
+message DeleteNoteRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+}
+
+message FavoriteRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+}

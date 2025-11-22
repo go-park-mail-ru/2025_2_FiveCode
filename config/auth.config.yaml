@@ -11,3 +11,8 @@ csrf:
   token_ttl_minutes: 30
 
 grpc_port: 50051
+
+services:
+  user:
+    grpc_host: "localhost"
+    grpc_port: 50052

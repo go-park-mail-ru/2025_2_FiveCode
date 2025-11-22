@@ -3,7 +3,7 @@ cover
 .env
 .DS_Store
 .vscode
-*.sh
+test.sh
 *.txt
 *.out
 backend-goose

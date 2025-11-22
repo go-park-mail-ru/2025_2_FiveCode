@@ -65,6 +65,11 @@ func (a *App) initDependencies() {
 	}
 	a.closers = append(a.closers, a.Store.Postgres)
 
+	a.Logger.Info().Msg("Running migrations...")
+    if err := a.Store.Postgres.RunMigrations("./db/migrations"); err != nil {
+        a.Logger.Fatal().Err(err).Msg("failed to run migrations")
+    }
+
 	a.Logger.Info().Msg("Dependencies installed successfully")
 }
 

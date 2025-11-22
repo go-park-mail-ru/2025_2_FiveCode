@@ -1,49 +1,42 @@
 package usecase
 
 import (
-	"backend/auth_service/internal/constants"
 	"backend/auth_service/internal/utils"
 	"context"
 	"fmt"
-
-	"golang.org/x/crypto/bcrypt"
 )
 
 type AuthUsecase struct {
-	Repository AuthRepository
-	CSRFSecret []byte
+	Repository  AuthRepository
+	UserService UserService
+	CSRFSecret  []byte
 }
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type AuthRepository interface {
 	CreateSession(ctx context.Context, userID uint64) (string, error)
-	GetUserIDByEmail(ctx context.Context, email string) (uint64, error)
 	DeleteSession(ctx context.Context, sessionID string) error
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
-	CreateUser(ctx context.Context, email, passwordHash string) (uint64, error)
-	GetUserHashedPasswordByID(ctx context.Context, userID uint64) (string, error)
 }
 
-func NewAuthUsecase(repository AuthRepository, csrfSecret []byte) *AuthUsecase {
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
+type UserService interface {
+	VerifyUser(ctx context.Context, email, password string) (uint64, error)
+	CreateUser(ctx context.Context, email, password string) (uint64, error)
+}
+
+func NewAuthUsecase(repository AuthRepository, userService UserService, csrfSecret []byte) *AuthUsecase {
 	return &AuthUsecase{
-		Repository: repository,
-		CSRFSecret: csrfSecret,
+		Repository:  repository,
+		UserService: userService,
+		CSRFSecret:  csrfSecret,
 	}
 }
 
 func (u *AuthUsecase) Login(ctx context.Context, email, password string) (uint64, string, error) {
-	userID, err := u.Repository.GetUserIDByEmail(ctx, email)
+	userID, err := u.UserService.VerifyUser(ctx, email, password)
 	if err != nil {
-		return 0, "", constants.ErrInvalidEmailOrPassword
-	}
-
-	userPasswordHash, err := u.Repository.GetUserHashedPasswordByID(ctx, userID)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to get user hashed password: %w", err)
-	}
-
-	if err := bcrypt.CompareHashAndPassword([]byte(userPasswordHash), []byte(password)); err != nil {
-		return 0, "", constants.ErrInvalidEmailOrPassword
+		return 0, "", fmt.Errorf("failed to verify user: %w", err)
 	}
 
 	sessionID, err := u.Repository.CreateSession(ctx, userID)
@@ -55,12 +48,7 @@ func (u *AuthUsecase) Login(ctx context.Context, email, password string) (uint64
 }
 
 func (u *AuthUsecase) Register(ctx context.Context, email, password string) (uint64, string, error) {
-	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to hash password: %w", err)
-	}
-
-	userID, err := u.Repository.CreateUser(ctx, email, string(hashedPassword))
+	userID, err := u.UserService.CreateUser(ctx, email, password)
 	if err != nil {
 		return 0, "", err
 	}

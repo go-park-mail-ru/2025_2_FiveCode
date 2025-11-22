@@ -3,5 +3,6 @@ package constants
 import "errors"
 
 var (
-	ErrNotFound               = errors.New("not found")
+	ErrInvalidSession = errors.New("invalid session")
+	ErrNotFound       = errors.New("not found")
 )

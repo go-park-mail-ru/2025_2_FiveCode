@@ -1,10 +1,10 @@
 package server
 
 import (
-	"backend/facade/gen/go/user"
 	"backend/user_service/internal/constants"
 	"backend/user_service/logger"
 	"backend/user_service/models"
+	user "backend/user_service/pkg/user/v1"
 	"context"
 	"errors"
 
@@ -16,9 +16,11 @@ import (
 )
 
 type UserUsecase interface {
+	CreateUser(ctx context.Context, email, password, username string) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
 	UpdateUser(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	DeleteUser(ctx context.Context, userID uint64) error
+	VerifyUser(ctx context.Context, email, password string) (*models.User, error)
 }
 
 type Server struct {
@@ -35,6 +37,18 @@ func NewServer(uc UserUsecase) *Server {
 func RegisterService(grpcServer *grpc.Server, usecase UserUsecase) {
 	server := NewServer(usecase)
 	user.RegisterUserServiceServer(grpcServer, server)
+}
+
+func (s *Server) CreateUser(ctx context.Context, req *user.CreateUserRequest) (*user.User, error) {
+	createdUser, err := s.Usecase.CreateUser(ctx, req.GetEmail(), req.GetPassword(), req.GetUsername())
+	if err != nil {
+		if errors.Is(err, constants.ErrUserExists) {
+			return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
+		}
+		return nil, status.Error(codes.Internal, err.Error())
+	}
+
+	return modelUserToProto(createdUser), nil
 }
 
 func (s *Server) GetUser(ctx context.Context, req *user.GetUserRequest) (*user.User, error) {
@@ -99,6 +113,15 @@ func (s *Server) DeleteUser(ctx context.Context, req *user.DeleteUserRequest) (*
 	}
 
 	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) VerifyUser(ctx context.Context, req *user.VerifyUserRequest) (*user.User, error) {
+	userModel, err := s.Usecase.VerifyUser(ctx, req.GetEmail(), req.GetPassword())
+	if err != nil {
+		return nil, status.Error(codes.Unauthenticated, "invalid email or password")
+	}
+
+	return modelUserToProto(userModel), nil
 }
 
 func modelUserToProto(u *models.User) *user.User {

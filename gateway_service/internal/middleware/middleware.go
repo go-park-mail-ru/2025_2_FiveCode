@@ -1,7 +1,6 @@
 package middleware
 
 import (
-	authPB "backend/facade/gen/go/auth"
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/config"
 	"backend/gateway_service/internal/utils"
@@ -159,9 +158,14 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 	})
 }
 
-func AuthMiddleware(authClient authPB.AuthClient) mux.MiddlewareFunc {
+type SessionValidator interface {
+    ValidateSession(ctx context.Context, sessionID string) (uint64, error)
+}
+
+func AuthMiddleware(sessionValidator SessionValidator) mux.MiddlewareFunc {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			log := logger.FromContext(r.Context())
 			session, err := r.Cookie("session_id")
 			if errors.Is(err, http.ErrNoCookie) {
 				apiutils.WriteError(w, http.StatusBadRequest, "no session cookie")
@@ -172,23 +176,11 @@ func AuthMiddleware(authClient authPB.AuthClient) mux.MiddlewareFunc {
 				return
 			}
 
-			grpcResp, err := authClient.GetUserIDBySession(r.Context(), &authPB.GetUserIDBySessionRequest{
-				SessionId: session.Value,
-			})
-
+			userID, err := sessionValidator.ValidateSession(r.Context(), session.Value)
 			if err != nil {
-				apiutils.WriteError(w, http.StatusInternalServerError, "session validation failed")
-				return
-			}
-
-			if !grpcResp.GetIsValid() {
-				apiutils.WriteError(w, http.StatusUnauthorized, "invalid session")
-				return
-			}
-
-			userID := grpcResp.GetUserId()
-			if userID == 0 {
-				apiutils.WriteError(w, http.StatusUnauthorized, "invalid user id in session")
+				log.Warn().Err(err).Msg("session validation failed")
+				
+				apiutils.WriteError(w, http.StatusUnauthorized, "session expired or invalid")
 				return
 			}
 

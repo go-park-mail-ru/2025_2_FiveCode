@@ -13,7 +13,10 @@ run:
 
 .PHONY: proto
 proto:
-	protoc --proto_path=proto \
-	       --go_out=gen/go --go_opt=paths=source_relative \
-	       --go-grpc_out=gen/go --go-grpc_opt=paths=source_relative \
-	       proto/auth/auth.proto proto/user/user.proto
+	protoc -I . \
+		--go_out=. --go_opt=module=backend \
+		--go-grpc_out=. --go-grpc_opt=module=backend \
+		auth_service/proto/auth/v1/auth.proto \
+		user_service/proto/user/v1/user.proto \
+		notes_service/proto/note/v1/note.proto \
+		notes_service/proto/block/v1/block.proto

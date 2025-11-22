@@ -5,15 +5,15 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-COPY config/ ./config/
 
-RUN CGO_ENABLED=0 go build -o /app/gateway ./cmd/gateway/main.go
+RUN CGO_ENABLED=0 go build -o /app/bin/gateway ./gateway_service/cmd/main.go
 
 FROM alpine:latest
 WORKDIR /app
 
-COPY --from=builder /app/gateway .
+COPY --from=builder /app/bin/gateway .
 COPY --from=builder /app/config/ ./config/
+COPY --from=builder /app/gateway_service/db/migrations ./db/migrations
 
 EXPOSE 8080
 CMD ["./gateway"]

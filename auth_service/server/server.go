@@ -5,7 +5,7 @@ import (
 	"errors"
 
 	"backend/auth_service/internal/constants"
-	pb "backend/facade/gen/go/auth"
+	pb "backend/auth_service/pkg/auth/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

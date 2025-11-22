@@ -1,7 +1,7 @@
 package delivery
 
 import (
-	notePB "backend/facade/gen/go/note"
+	notePB "backend/notes_service/pkg/note/v1"
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
 	"backend/gateway_service/internal/utils"

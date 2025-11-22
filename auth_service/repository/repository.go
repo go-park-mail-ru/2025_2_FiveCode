@@ -4,10 +4,8 @@ import (
 	"backend/auth_service/internal/constants"
 	"backend/auth_service/logger"
 	"context"
-	"database/sql"
 	"errors"
 	"fmt"
-	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -15,13 +13,11 @@ import (
 )
 
 type AuthRepository struct {
-	db    *sql.DB
 	redis *redis.Client
 }
 
-func NewAuthRepository(db *sql.DB, redisClient *redis.Client) *AuthRepository {
+func NewAuthRepository(redisClient *redis.Client) *AuthRepository {
 	return &AuthRepository{
-		db:    db,
 		redis: redisClient,
 	}
 }
@@ -79,67 +75,4 @@ func (r *AuthRepository) DeleteSession(ctx context.Context, sessionID string) er
 	}
 
 	return nil
-}
-
-func (r *AuthRepository) GetUserIDByEmail(ctx context.Context, email string) (uint64, error) {
-	log := logger.FromContext(ctx)
-
-	query := `SELECT id FROM "user" WHERE email = $1`
-
-	var userID uint64
-	err := r.db.QueryRowContext(ctx, query, email).Scan(&userID)
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Warn().Str("email", email).Msg("user not found by email")
-		return 0, constants.ErrNotFound
-	}
-	if err != nil {
-		log.Error().Err(err).Str("email", email).Msg("failed to query user")
-		return 0, fmt.Errorf("failed to get user: %w", err)
-	}
-
-	return userID, nil
-}
-
-func (r *AuthRepository) CreateUser(ctx context.Context, email, passwordHash string) (uint64, error) {
-	log := logger.FromContext(ctx)
-
-	username := strings.Split(email, "@")[0]
-
-	query := `
-		INSERT INTO "user" (email, password_hash, username)
-		VALUES ($1, $2, $3)
-		RETURNING id
-	`
-
-	var userID uint64
-	err := r.db.QueryRowContext(ctx, query, email, passwordHash, username).Scan(&userID)
-	if err != nil {
-		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
-			log.Warn().Str("email", email).Msg("user already exists")
-			return 0, constants.ErrUserExists
-		}
-		log.Error().Err(err).Msg("failed to create user in PostgreSQL")
-		return 0, fmt.Errorf("failed to create user: %w", err)
-	}
-
-	return userID, nil
-}
-
-func (r *AuthRepository) GetUserHashedPasswordByID(ctx context.Context, userID uint64) (string, error) {
-	log := logger.FromContext(ctx)
-
-	query := `SELECT password_hash FROM "user" WHERE id = $1`
-
-	var passwordHash string
-	err := r.db.QueryRowContext(ctx, query, userID).Scan(&passwordHash)
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Warn().Uint64("user_id", userID).Msg("user not found by id")
-		return "", constants.ErrNotFound
-	}
-	if err != nil {
-		log.Error().Err(err).Uint64("user_id", userID).Msg("failed to query user hashed password")
-		return "", fmt.Errorf("failed to get user hashed password: %w", err)
-	}
-
-	return passwordHash, nil
 }

@@ -1,8 +1,8 @@
 package delivery
 
 import (
-	authPB "backend/facade/gen/go/auth"
-	userPB "backend/facade/gen/go/user"
+	userPB "backend/user_service/pkg/user/v1"
+	authPB "backend/auth_service/pkg/auth/v1"
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
 	"backend/gateway_service/internal/utils"

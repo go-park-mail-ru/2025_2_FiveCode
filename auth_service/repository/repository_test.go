@@ -1,8 +1,7 @@
 package repository
 
 import (
-	namederrors "backend/named_errors"
-	store2 "backend/pkg/store"
+	"backend/pkg/store"
 	"context"
 	"database/sql"
 	"testing"
@@ -12,14 +11,14 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, *store2.Store) {
+func setupTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, *store.Store) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("failed to create mock db: %v", err)
 	}
 
-	store := &store2.Store{
-		Postgres: &store2.PostgresDB{DB: db},
+	store := &store.Store{
+		Postgres: &store.PostgresDB{DB: db},
 	}
 
 	return db, mock, store

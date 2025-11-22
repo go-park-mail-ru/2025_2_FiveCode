@@ -20,15 +20,6 @@ type CSRFConfig struct {
 	TokenTTLMinutes int    `mapstructure:"token_ttl_minutes"`
 }
 
-type DBConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
-}
-
 type RedisConfig struct {
 	Host     string
 	Port     int
@@ -36,13 +27,18 @@ type RedisConfig struct {
 	DB       int
 }
 
+type ServiceConfig struct {
+	GrpcHost string `mapstructure:"grpc_host"`
+	GrpcPort int    `mapstructure:"grpc_port"`
+}
+
 type Config struct {
 	GRPCPort int `mapstructure:"grpc_port"`
-	DB       DBConfig
 	Redis    RedisConfig
-	Cors     CorsConfig   `mapstructure:"cors"`
-	Cookie   CookieConfig `mapstructure:"cookie"`
-	CSRF     CSRFConfig   `mapstructure:"csrf"`
+	Services map[string]ServiceConfig `mapstructure:"services"`
+	Cors     CorsConfig               `mapstructure:"cors"`
+	Cookie   CookieConfig             `mapstructure:"cookie"`
+	CSRF     CSRFConfig               `mapstructure:"csrf"`
 }
 
 func Load() (*Config, error) {
@@ -69,17 +65,25 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	cfg.DB.Host = v.GetString("DB_HOST")
-	cfg.DB.Port = v.GetInt("DB_PORT")
-	cfg.DB.User = v.GetString("DB_USER")
-	cfg.DB.Password = v.GetString("DB_PASSWORD")
-	cfg.DB.DBName = v.GetString("DB_NAME")
-	cfg.DB.SSLMode = v.GetString("DB_SSLMODE")
-
 	cfg.Redis.Host = v.GetString("REDIS_HOST")
 	cfg.Redis.Port = v.GetInt("REDIS_PORT")
 	cfg.Redis.Password = v.GetString("REDIS_PASSWORD")
 	cfg.Redis.DB = v.GetInt("REDIS_DB")
+
+	if cfg.Services == nil {
+		cfg.Services = make(map[string]ServiceConfig)
+	}
+
+	userService := cfg.Services["user"]
+
+	if host := v.GetString("SERVICES_USER_GRPC_HOST"); host != "" {
+		userService.GrpcHost = host
+	}
+	if port := v.GetInt("SERVICES_USER_GRPC_PORT"); port != 0 {
+		userService.GrpcPort = port
+	}
+
+	cfg.Services["user"] = userService
 
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
@@ -91,9 +95,6 @@ func Load() (*Config, error) {
 		if cfg.CSRF.SecretKey == "" {
 			return nil, fmt.Errorf("CSRF_SECRET_KEY is required")
 		}
-	}
-	if cfg.DB.Host == "" {
-		return nil, fmt.Errorf("DB_HOST is a required")
 	}
 
 	return &cfg, nil

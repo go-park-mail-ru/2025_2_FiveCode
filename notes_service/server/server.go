@@ -4,8 +4,8 @@ import (
 	"context"
 	"errors"
 
-	notePB "backend/facade/gen/go/note"
-	blockPB "backend/facade/gen/go/block"
+	notePB "backend/notes_service/pkg/note/v1"
+	blockPB "backend/notes_service/pkg/block/v1"
 	"backend/notes_service/internal/constants"
 	"backend/notes_service/models"
 

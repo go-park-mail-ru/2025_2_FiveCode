@@ -4,8 +4,8 @@ import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/validation"
 	"backend/gateway_service/logger"
-	authPB "backend/facade/gen/go/auth"
-	userPB "backend/facade/gen/go/user"
+	authPB "backend/auth_service/pkg/auth/v1"
+	userPB "backend/user_service/pkg/user/v1"
 
 	"backend/gateway_service/internal/utils"
 	"context"

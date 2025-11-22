@@ -1,12 +1,12 @@
 package delivery
 
 import (
-	blockPB "backend/facade/gen/go/block"
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
 	"backend/gateway_service/internal/utils"
 	"backend/gateway_service/logger"
 	"backend/notes_service/models"
+	blockPB "backend/notes_service/pkg/block/v1"
 	"context"
 	"encoding/json"
 	"fmt"

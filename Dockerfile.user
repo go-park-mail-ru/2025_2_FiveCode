@@ -5,15 +5,15 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
-COPY config/ ./config/
 
-RUN CGO_ENABLED=0 go build -o /app/user-service ./cmd/user/main.go
+RUN CGO_ENABLED=0 go build -o /app/bin/user-service ./user_service/cmd/main.go
 
 FROM alpine:latest
 WORKDIR /app
 
-COPY --from=builder /app/user-service .
+COPY --from=builder /app/bin/user-service .
 COPY --from=builder /app/config/ ./config/
+COPY --from=builder /app/user_service/db/migrations ./db/migrations
 
 EXPOSE 50052
 CMD ["./user-service"]

@@ -1,10 +1,10 @@
 package utils
 
 import (
-	blockPB "backend/facade/gen/go/block"
-	notePB "backend/facade/gen/go/note"
+	blockPB "backend/notes_service/pkg/block/v1"
+	notePB "backend/notes_service/pkg/note/v1"
 	noteModel "backend/notes_service/models"
-	userPB "backend/facade/gen/go/user"
+	userPB "backend/user_service/pkg/user/v1"
 	userModel "backend/user_service/models"
 )
 

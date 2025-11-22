@@ -160,3 +160,69 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID uint64) error {
 
 	return nil
 }
+
+func (r *UserRepository) CreateUser(ctx context.Context, email, passwordHash, username string) (uint64, error) {
+	log := logger.FromContext(ctx)
+
+	query := `
+		INSERT INTO "user" (email, password_hash, username)
+		VALUES ($1, $2, $3)
+		RETURNING id
+	`
+
+	var userID uint64
+	err := r.db.QueryRowContext(ctx, query, email, passwordHash, username).Scan(&userID)
+	if err != nil {
+		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
+			log.Warn().Str("email", email).Msg("user already exists")
+			return 0, constants.ErrUserExists
+		}
+		log.Error().Err(err).Msg("failed to create user in PostgreSQL")
+		return 0, fmt.Errorf("failed to create user: %w", err)
+	}
+
+	return userID, nil
+}
+
+func (r *UserRepository) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
+	log := logger.FromContext(ctx)
+
+	query := `
+		SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at
+		FROM "user"
+		WHERE email = $1
+	`
+
+	user := &models.User{}
+	var avatarFileID sql.NullInt64
+	var updatedAt sql.NullTime
+
+	err := r.db.QueryRowContext(ctx, query, email).Scan(
+		&user.ID,
+		&user.Email,
+		&user.Password,
+		&user.Username,
+		&avatarFileID,
+		&user.CreatedAt,
+		&updatedAt,
+	)
+
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Str("email", email).Msg("user not found by email")
+		return nil, constants.ErrNotFound
+	}
+	if err != nil {
+		log.Error().Err(err).Str("email", email).Msg("failed to query user")
+		return nil, fmt.Errorf("failed to get user: %w", err)
+	}
+
+	if avatarFileID.Valid {
+		val := uint64(avatarFileID.Int64)
+		user.AvatarFileID = &val
+	}
+	if updatedAt.Valid {
+		user.UpdatedAt = &updatedAt.Time
+	}
+
+	return user, nil
+}
