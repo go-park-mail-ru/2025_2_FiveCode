@@ -5,16 +5,16 @@ import (
 	"context"
 )
 
-func (u *NotesUsecase) CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
-	return u.repo.CreateTextBlock(ctx, userID, noteID, beforeBlockID)
+func (u *NotesUsecase) CreateTextBlock(ctx context.Context, input *models.CreateTextBlockInput) (*models.Block, error) {
+	return u.repo.CreateTextBlock(ctx, input)
 }
 
-func (u *NotesUsecase) CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
-	return u.repo.CreateCodeBlock(ctx, userID, noteID, beforeBlockID)
+func (u *NotesUsecase) CreateCodeBlock(ctx context.Context, input *models.CreateCodeBlockInput) (*models.Block, error) {
+	return u.repo.CreateCodeBlock(ctx, input)
 }
 
-func (u *NotesUsecase) CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error) {
-	return u.repo.CreateAttachmentBlock(ctx, userID, noteID, beforeBlockID, fileID)
+func (u *NotesUsecase) CreateAttachmentBlock(ctx context.Context, input *models.CreateAttachmentBlockInput) (*models.Block, error) {
+	return u.repo.CreateAttachmentBlock(ctx, input)
 }
 
 func (u *NotesUsecase) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error) {

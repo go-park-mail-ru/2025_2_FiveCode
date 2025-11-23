@@ -132,11 +132,11 @@ func (r *NotesRepository) GetBlock(ctx context.Context, userID, blockID uint64) 
 	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
+func (r *NotesRepository) CreateTextBlock(ctx context.Context, input *models.CreateTextBlockInput) (*models.Block, error) {
 	resp, err := r.blockClient.CreateTextBlock(ctx, &blockPB.CreateTextBlockRequest{
-		UserId:        userID,
-		NoteId:        noteID,
-		BeforeBlockId: beforeBlockID,
+		UserId:        input.UserID,
+		NoteId:        input.NoteID,
+		BeforeBlockId: input.BeforeBlockID,
 	})
 	if err != nil {
 		return nil, err
@@ -144,11 +144,11 @@ func (r *NotesRepository) CreateTextBlock(ctx context.Context, userID, noteID ui
 	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
+func (r *NotesRepository) CreateCodeBlock(ctx context.Context, input *models.CreateCodeBlockInput) (*models.Block, error) {
 	resp, err := r.blockClient.CreateCodeBlock(ctx, &blockPB.CreateCodeBlockRequest{
-		UserId:        userID,
-		NoteId:        noteID,
-		BeforeBlockId: beforeBlockID,
+		UserId:        input.UserID,
+		NoteId:        input.NoteID,
+		BeforeBlockId: input.BeforeBlockID,
 	})
 	if err != nil {
 		return nil, err
@@ -156,12 +156,12 @@ func (r *NotesRepository) CreateCodeBlock(ctx context.Context, userID, noteID ui
 	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error) {
+func (r *NotesRepository) CreateAttachmentBlock(ctx context.Context, input *models.CreateAttachmentBlockInput) (*models.Block, error) {
 	resp, err := r.blockClient.CreateAttachmentBlock(ctx, &blockPB.CreateAttachmentBlockRequest{
-		UserId:        userID,
-		NoteId:        noteID,
-		BeforeBlockId: beforeBlockID,
-		FileId:        fileID,
+		UserId:        input.UserID,
+		NoteId:        input.NoteID,
+		BeforeBlockId: input.BeforeBlockID,
+		FileId:        input.FileID,
 	})
 	if err != nil {
 		return nil, err

@@ -5,6 +5,7 @@ import (
 	"backend/gateway_service/logger"
 	"backend/gateway_service/router"
 	"backend/pkg/store"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -174,16 +175,23 @@ func (a *App) mustConnectGrpc(serviceName string) *grpc.ClientConn {
 }
 
 func (a *App) Close() error {
-	var firstErr error
+	a.Logger.Info().Msg("Closing application resources...")
+	
+	var errs error
 	for _, closer := range a.closers {
 		if err := closer.Close(); err != nil {
 			a.Logger.Error().Err(err).Msg("failed to close resource")
-			if firstErr == nil {
-				firstErr = err
-			}
+			errs = errors.Join(errs, err)
 		}
 	}
-	return firstErr
+
+	if errs != nil {
+		a.Logger.Error().Err(errs).Msg("Application resources closed with errors")
+	} else {
+		a.Logger.Info().Msg("Application resources closed successfully")
+	}
+
+	return errs
 }
 
 func (a *App) Run() {

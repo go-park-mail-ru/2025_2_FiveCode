@@ -22,3 +22,22 @@ type UpdateCodeContent struct {
 	Code     string `json:"code"`
 	Language string `json:"language"`
 }
+
+type CreateTextBlockInput struct {
+	UserID        uint64
+	NoteID        uint64
+	BeforeBlockID *uint64
+}
+
+type CreateCodeBlockInput struct {
+	UserID        uint64
+	NoteID        uint64
+	BeforeBlockID *uint64
+}
+
+type CreateAttachmentBlockInput struct {
+	UserID        uint64
+	NoteID        uint64
+	BeforeBlockID *uint64
+	FileID        uint64
+}

@@ -11,6 +11,7 @@ import (
 	"backend/notes_service/server"
 	"backend/pkg/interceptors"
 	"backend/pkg/store"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -126,15 +127,19 @@ func (a *App) Close() error {
 		a.GRPCServer.GracefulStop()
 	}
 
-	var firstErr error
+	var errs error
 	for _, closer := range a.closers {
 		if err := closer.Close(); err != nil {
 			a.Logger.Error().Err(err).Msg("failed to close resource")
-			if firstErr == nil {
-				firstErr = err
-			}
+			errs = errors.Join(errs, err)
 		}
 	}
-	a.Logger.Info().Msg("Application resources closed successfully")
-	return firstErr
+
+	if errs != nil {
+		a.Logger.Error().Err(errs).Msg("Application resources closed with errors")
+	} else {
+		a.Logger.Info().Msg("Application resources closed successfully")
+	}
+
+	return errs
 }

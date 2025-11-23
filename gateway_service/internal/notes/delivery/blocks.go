@@ -83,7 +83,13 @@ func (d *NotesDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	block, err := d.usecase.CreateCodeBlock(r.Context(), userID, noteID, req.BeforeBlockID)
+	input := &models.CreateCodeBlockInput{
+		UserID:        userID,
+		NoteID:        noteID,
+		BeforeBlockID: req.BeforeBlockID,
+	}
+
+	block, err := d.usecase.CreateCodeBlock(r.Context(), input)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create code block")
 		apiutils.HandleGrpcError(w, err, log)
@@ -107,7 +113,13 @@ func (d *NotesDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	block, err := d.usecase.CreateTextBlock(r.Context(), userID, noteID, req.BeforeBlockID)
+	input := &models.CreateTextBlockInput{
+		UserID:        userID,
+		NoteID:        noteID,
+		BeforeBlockID: req.BeforeBlockID,
+	}
+
+	block, err := d.usecase.CreateTextBlock(r.Context(), input)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create text block")
 		apiutils.HandleGrpcError(w, err, log)
@@ -138,7 +150,14 @@ func (d *NotesDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	block, err := d.usecase.CreateAttachmentBlock(r.Context(), userID, noteID, req.BeforeBlockID, req.FileID)
+	input := &models.CreateAttachmentBlockInput{
+		UserID:        userID,
+		NoteID:        noteID,
+		BeforeBlockID: req.BeforeBlockID,
+		FileID:        req.FileID,
+	}
+
+	block, err := d.usecase.CreateAttachmentBlock(r.Context(), input)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create attachment block")
 		apiutils.HandleGrpcError(w, err, log)

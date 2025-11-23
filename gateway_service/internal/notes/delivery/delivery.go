@@ -18,9 +18,9 @@ type NotesUsecase interface {
 	// Blocks
 	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error)
 	GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error)
-	CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error)
-	CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error)
-	CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error)
+	CreateTextBlock(ctx context.Context, input *models.CreateTextBlockInput) (*models.Block, error)
+	CreateCodeBlock(ctx context.Context, input *models.CreateCodeBlockInput) (*models.Block, error)
+	CreateAttachmentBlock(ctx context.Context, input *models.CreateAttachmentBlockInput) (*models.Block, error)
 	UpdateBlock(ctx context.Context, userID uint64, input *models.UpdateBlockInput) (*models.Block, error)
 	DeleteBlock(ctx context.Context, userID, blockID uint64) error
 	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error)
