@@ -1,24 +1,24 @@
 package usecase
 
 import (
-	notePB "backend/notes_service/pkg/note/v1"
+	"backend/gateway_service/internal/notes/models"
 	"context"
 )
 
-func (u *NotesUsecase) GetAllNotes(ctx context.Context, userID uint64) (*notePB.GetAllNotesResponse, error) {
+func (u *NotesUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
 	return u.repo.GetAllNotes(ctx, userID)
 }
 
-func (u *NotesUsecase) CreateNote(ctx context.Context, userID uint64) (*notePB.Note, error) {
+func (u *NotesUsecase) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	return u.repo.CreateNote(ctx, userID)
 }
 
-func (u *NotesUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*notePB.Note, error) {
+func (u *NotesUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
 	return u.repo.GetNoteById(ctx, userID, noteID)
 }
 
-func (u *NotesUsecase) UpdateNote(ctx context.Context, req *notePB.UpdateNoteRequest) (*notePB.Note, error) {
-	return u.repo.UpdateNote(ctx, req)
+func (u *NotesUsecase) UpdateNote(ctx context.Context, input *models.UpdateNoteInput) (*models.Note, error) {
+	return u.repo.UpdateNote(ctx, input)
 }
 
 func (u *NotesUsecase) DeleteNote(ctx context.Context, userID, noteID uint64) error {

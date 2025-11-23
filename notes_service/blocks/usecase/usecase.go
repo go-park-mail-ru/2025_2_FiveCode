@@ -3,7 +3,7 @@ package usecase
 import (
 	blocksRepository "backend/notes_service/blocks/repository"
 	"backend/notes_service/internal/constants"
-	"backend/notes_service/models"
+	"backend/notes_service/internal/models"
 	"backend/notes_service/logger"
 	"context"
 	"fmt"

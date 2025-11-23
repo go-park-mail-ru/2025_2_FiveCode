@@ -3,23 +3,6 @@ CREATE TYPE block_type AS ENUM ('text', 'code', 'attachment');
 CREATE TYPE note_role AS ENUM ('editor', 'commenter', 'viewer');
 CREATE TYPE text_font AS ENUM ('Inter', 'Roboto', 'Montserrat', 'Manrope');
 
-CREATE OR REPLACE FUNCTION set_timestamps()
-    RETURNS TRIGGER AS
-$$
-BEGIN
-    IF (TG_OP = 'INSERT') THEN
-        NEW.created_at := CURRENT_TIMESTAMP;
-        NEW.updated_at := CURRENT_TIMESTAMP;
-        RETURN NEW;
-    END IF;
-
-    IF (TG_OP = 'UPDATE') THEN
-        NEW.updated_at := CURRENT_TIMESTAMP;
-        RETURN NEW;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
 -- NOTE
 CREATE TABLE IF NOT EXISTS note
 (
@@ -30,8 +13,8 @@ CREATE TABLE IF NOT EXISTS note
     icon_file_id   INTEGER,
     is_archived    BOOLEAN     NOT NULL DEFAULT false,
     is_shared      BOOLEAN     NOT NULL DEFAULT false,
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at     TIMESTAMPTZ NOT NULL,
+    updated_at     TIMESTAMPTZ NOT NULL,
     deleted_at     TIMESTAMPTZ
 );
 
@@ -42,8 +25,8 @@ CREATE TABLE IF NOT EXISTS block
     note_id        INTEGER        NOT NULL REFERENCES note (id) ON DELETE CASCADE,
     type           block_type,
     position       NUMERIC(12, 6) NOT NULL CHECK (position >= 0),
-    created_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at     TIMESTAMPTZ    NOT NULL,
+    updated_at     TIMESTAMPTZ    NOT NULL,
     last_edited_by INTEGER
 );
 
@@ -52,8 +35,8 @@ CREATE TABLE block_text
     id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     block_id   INTEGER UNIQUE NOT NULL REFERENCES block (id) ON DELETE CASCADE,
     text       TEXT           NOT NULL,
-    created_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ    NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ    NOT NULL,
+    updated_at TIMESTAMPTZ    NOT NULL
 );
 
 -- BLOCK_TEXT_FORMAT
@@ -70,8 +53,8 @@ CREATE TABLE block_text_format
     link          TEXT CHECK (link IS NULL OR link ~ '^https?:\/\/.+'),
     font          text_font            DEFAULT 'Inter',
     size          INTEGER              DEFAULT 12 CHECK (size > 0 AND size <= 72),
-    created_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at    TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at    TIMESTAMPTZ NOT NULL,
+    updated_at    TIMESTAMPTZ NOT NULL
 );
 
 -- BLOCK_CODE
@@ -80,8 +63,8 @@ CREATE TABLE IF NOT EXISTS block_code
     block_id   INTEGER PRIMARY KEY REFERENCES block (id) ON DELETE CASCADE,
     language   TEXT CHECK (LENGTH(language) <= 50),
     code_text  TEXT        NOT NULL,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- BLOCK_ATTACHMENT
@@ -91,8 +74,8 @@ CREATE TABLE IF NOT EXISTS block_attachment
     block_id   INTEGER REFERENCES block (id) ON DELETE CASCADE,
     file_id    INTEGER     NOT NULL,
     caption    TEXT CHECK (LENGTH(caption) <= 255),
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- NOTE_PERMISSION
@@ -104,8 +87,8 @@ CREATE TABLE IF NOT EXISTS note_permission
     granted_to         INTEGER,
     role               note_role,
     can_share          BOOLEAN     NOT NULL DEFAULT false,
-    created_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at         TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at         TIMESTAMPTZ NOT NULL,
+    updated_at         TIMESTAMPTZ NOT NULL,
 
     CONSTRAINT unique_note_granted_to UNIQUE (note_id, granted_to)
 );
@@ -115,8 +98,8 @@ CREATE TABLE IF NOT EXISTS favorite
 (
     user_id    INTEGER     NOT NULL,
     note_id    INTEGER     NOT NULL REFERENCES note (id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (user_id, note_id)
 );
 
@@ -126,8 +109,8 @@ CREATE TABLE IF NOT EXISTS tag
     id         INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     name       TEXT        NOT NULL UNIQUE CHECK (LENGTH(name) <= 50),
     created_by INTEGER,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL
 );
 
 -- NOTE_TAG
@@ -135,19 +118,7 @@ CREATE TABLE IF NOT EXISTS note_tag
 (
     note_id    INTEGER     NOT NULL REFERENCES note (id) ON DELETE CASCADE,
     tag_id     INTEGER     NOT NULL REFERENCES tag (id) ON DELETE CASCADE,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMPTZ NOT NULL,
+    updated_at TIMESTAMPTZ NOT NULL,
     PRIMARY KEY (note_id, tag_id)
 );
-
--- TRIGGERS
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON note FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON block FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON block_text FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON block_text_format FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON block_code FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON block_attachment FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON note_permission FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON favorite FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON tag FOR EACH ROW EXECUTE FUNCTION set_timestamps();
-CREATE TRIGGER trigger_set_timestamps BEFORE INSERT OR UPDATE ON note_tag FOR EACH ROW EXECUTE FUNCTION set_timestamps();

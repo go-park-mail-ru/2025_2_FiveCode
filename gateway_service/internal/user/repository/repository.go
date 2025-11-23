@@ -1,9 +1,10 @@
 package repository
 
 import (
-	"context"
-
+	"backend/gateway_service/internal/user/models"
+	"backend/gateway_service/internal/utils"
 	userPB "backend/user_service/pkg/user/v1"
+	"context"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
@@ -28,12 +29,33 @@ func NewUserRepository(client UserClient) *UserRepository {
 	}
 }
 
-func (r *UserRepository) GetUser(ctx context.Context, userID uint64) (*userPB.User, error) {
-	return r.client.GetUser(ctx, &userPB.GetUserRequest{UserId: userID})
+func (r *UserRepository) GetUser(ctx context.Context, userID uint64) (*models.User, error) {
+	resp, err := r.client.GetUser(ctx, &userPB.GetUserRequest{UserId: userID})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToUser(resp), nil
 }
 
-func (r *UserRepository) UpdateUser(ctx context.Context, req *userPB.UpdateUserRequest) (*userPB.User, error) {
-	return r.client.UpdateUser(ctx, req)
+func (r *UserRepository) UpdateUser(ctx context.Context, input *models.UpdateUserInput) (*models.User, error) {
+	req := &userPB.UpdateUserRequest{
+		UserId: input.ID,
+	}
+	if input.Username != nil {
+		req.Username = *input.Username
+	}
+	if input.Password != nil {
+		req.Password = *input.Password
+	}
+	if input.AvatarFileID != nil {
+		req.AvatarFileId = *input.AvatarFileID
+	}
+
+	resp, err := r.client.UpdateUser(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToUser(resp), nil
 }
 
 func (r *UserRepository) DeleteUser(ctx context.Context, userID uint64) error {

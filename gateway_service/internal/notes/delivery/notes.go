@@ -3,9 +3,8 @@ package delivery
 import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
-	"backend/gateway_service/internal/utils"
+	"backend/gateway_service/internal/notes/models"
 	"backend/gateway_service/logger"
-	notePB "backend/notes_service/pkg/note/v1"
 	"encoding/json"
 	"net/http"
 	"strconv"
@@ -22,14 +21,13 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.usecase.GetAllNotes(r.Context(), userID)
+	notes, err := d.usecase.GetAllNotes(r.Context(), userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get notes")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	notes := utils.ProtoNotesToModels(grpcResp.Notes)
 	apiutils.WriteJSON(w, http.StatusOK, notes)
 }
 
@@ -42,14 +40,13 @@ func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.usecase.CreateNote(r.Context(), userID)
+	note, err := d.usecase.CreateNote(r.Context(), userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create note")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	note := utils.ProtoNoteToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, note)
 }
 
@@ -70,14 +67,13 @@ func (d *NotesDelivery) GetNoteById(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.usecase.GetNoteById(r.Context(), userID, noteID)
+	note, err := d.usecase.GetNoteById(r.Context(), userID, noteID)
 	if err != nil {
 		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	note := utils.ProtoNoteToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, note)
 }
 
@@ -122,25 +118,20 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcReq := &notePB.UpdateNoteRequest{
-		UserId: userID,
-		NoteId: noteID,
-	}
-	if req.Title != nil {
-		grpcReq.Title = req.Title
-	}
-	if req.IsArchived != nil {
-		grpcReq.IsArchived = req.IsArchived
+	input := &models.UpdateNoteInput{
+		ID:         noteID,
+		UserID:     userID,
+		Title:      req.Title,
+		IsArchived: req.IsArchived,
 	}
 
-	grpcResp, err := d.usecase.UpdateNote(r.Context(), grpcReq)
+	note, err := d.usecase.UpdateNote(r.Context(), input)
 	if err != nil {
 		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to update note")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	note := utils.ProtoNoteToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, note)
 }
 

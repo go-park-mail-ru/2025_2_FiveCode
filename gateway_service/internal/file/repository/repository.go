@@ -2,8 +2,7 @@ package repository
 
 import (
 	"backend/gateway_service/internal/constants"
-	"backend/gateway_service/internal/models"
-	"backend/gateway_service/internal/utils"
+	"backend/gateway_service/internal/file/models"
 	"backend/gateway_service/logger"
 	"bytes"
 	"context"
@@ -11,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/minio/minio-go/v7"
@@ -82,16 +82,18 @@ func (r *FileRepository) DeleteFileFromMinIO(ctx context.Context, url string) er
 func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, sizeBytes int64, width, height *int) (*models.File, error) {
 	log := logger.FromContext(ctx)
 
+	now := time.Now().UTC()
+
 	query := `
-		INSERT INTO file (url, mime_type, size_bytes, width, height)
-		VALUES ($1, $2, $3, $4, $5)
+		INSERT INTO file (url, mime_type, size_bytes, width, height, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id, url, mime_type, size_bytes, width, height, created_at, updated_at
 	`
 
 	file := &models.File{}
 	var widthResult, heightResult sql.NullInt32
 
-	err := r.db.QueryRowContext(ctx, query, url, mimeType, sizeBytes, width, height).Scan(
+	err := r.db.QueryRowContext(ctx, query, url, mimeType, sizeBytes, width, height, now, now).Scan(
 		&file.ID,
 		&file.URL,
 		&file.MimeType,
@@ -115,8 +117,6 @@ func (r *FileRepository) SaveFile(ctx context.Context, url, mimeType string, siz
 		h := int(heightResult.Int32)
 		file.Height = &h
 	}
-
-	file.URL = utils.TransformMinioURL(file.URL)
 
 	return file, nil
 }
@@ -161,8 +161,6 @@ func (r *FileRepository) GetFileByID(ctx context.Context, fileID uint64) (*model
 		h := int(height.Int32)
 		file.Height = &h
 	}
-
-	file.URL = utils.TransformMinioURL(file.URL)
 
 	return file, nil
 }

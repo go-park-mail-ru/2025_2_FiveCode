@@ -1,16 +1,16 @@
 package repository
 
 import (
-	"context"
-
+	"backend/gateway_service/internal/notes/models"
+	"backend/gateway_service/internal/utils"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
+	"context"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-// Интерфейсы клиентов
 type NoteClient interface {
 	GetAllNotes(ctx context.Context, in *notePB.GetAllNotesRequest, opts ...grpc.CallOption) (*notePB.GetAllNotesResponse, error)
 	CreateNote(ctx context.Context, in *notePB.CreateNoteRequest, opts ...grpc.CallOption) (*notePB.Note, error)
@@ -44,22 +44,54 @@ func NewNotesRepository(n NoteClient, b BlockClient) *NotesRepository {
 	}
 }
 
-// Note Methods
+// --- Note Methods ---
 
-func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) (*notePB.GetAllNotesResponse, error) {
-	return r.noteClient.GetAllNotes(ctx, &notePB.GetAllNotesRequest{UserId: userID})
+func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
+	resp, err := r.noteClient.GetAllNotes(ctx, &notePB.GetAllNotesRequest{UserId: userID})
+	if err != nil {
+		return nil, err
+	}
+
+	notes := make([]models.Note, len(resp.Notes))
+	for i, pNote := range resp.Notes {
+		notes[i] = *utils.MapProtoToNote(pNote)
+	}
+	return notes, nil
 }
 
-func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*notePB.Note, error) {
-	return r.noteClient.CreateNote(ctx, &notePB.CreateNoteRequest{UserId: userID})
+func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
+	resp, err := r.noteClient.CreateNote(ctx, &notePB.CreateNoteRequest{UserId: userID})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToNote(resp), nil
 }
 
-func (r *NotesRepository) GetNoteById(ctx context.Context, userID, noteID uint64) (*notePB.Note, error) {
-	return r.noteClient.GetNoteById(ctx, &notePB.GetNoteByIdRequest{UserId: userID, NoteId: noteID})
+func (r *NotesRepository) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
+	resp, err := r.noteClient.GetNoteById(ctx, &notePB.GetNoteByIdRequest{UserId: userID, NoteId: noteID})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToNote(resp), nil
 }
 
-func (r *NotesRepository) UpdateNote(ctx context.Context, req *notePB.UpdateNoteRequest) (*notePB.Note, error) {
-	return r.noteClient.UpdateNote(ctx, req)
+func (r *NotesRepository) UpdateNote(ctx context.Context, input *models.UpdateNoteInput) (*models.Note, error) {
+	req := &notePB.UpdateNoteRequest{
+		UserId: input.UserID,
+		NoteId: input.ID,
+	}
+	if input.Title != nil {
+		req.Title = input.Title
+	}
+	if input.IsArchived != nil {
+		req.IsArchived = input.IsArchived
+	}
+
+	resp, err := r.noteClient.UpdateNote(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToNote(resp), nil
 }
 
 func (r *NotesRepository) DeleteNote(ctx context.Context, userID, noteID uint64) error {
@@ -77,30 +109,93 @@ func (r *NotesRepository) RemoveFavorite(ctx context.Context, userID, noteID uin
 	return err
 }
 
-// Block Methods
+// --- Block Methods ---
 
-func (r *NotesRepository) GetBlocks(ctx context.Context, userID, noteID uint64) (*blockPB.GetBlocksResponse, error) {
-	return r.blockClient.GetBlocks(ctx, &blockPB.GetBlocksRequest{UserId: userID, NoteId: noteID})
+func (r *NotesRepository) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error) {
+	resp, err := r.blockClient.GetBlocks(ctx, &blockPB.GetBlocksRequest{UserId: userID, NoteId: noteID})
+	if err != nil {
+		return nil, err
+	}
+
+	blocks := make([]models.Block, len(resp.Blocks))
+	for i, pbBlock := range resp.Blocks {
+		blocks[i] = *utils.MapProtoToBlock(pbBlock)
+	}
+	return blocks, nil
 }
 
-func (r *NotesRepository) GetBlock(ctx context.Context, userID, blockID uint64) (*blockPB.Block, error) {
-	return r.blockClient.GetBlock(ctx, &blockPB.GetBlockRequest{UserId: userID, BlockId: blockID})
+func (r *NotesRepository) GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error) {
+	resp, err := r.blockClient.GetBlock(ctx, &blockPB.GetBlockRequest{UserId: userID, BlockId: blockID})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) CreateTextBlock(ctx context.Context, req *blockPB.CreateTextBlockRequest) (*blockPB.Block, error) {
-	return r.blockClient.CreateTextBlock(ctx, req)
+func (r *NotesRepository) CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
+	resp, err := r.blockClient.CreateTextBlock(ctx, &blockPB.CreateTextBlockRequest{
+		UserId:        userID,
+		NoteId:        noteID,
+		BeforeBlockId: beforeBlockID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) CreateCodeBlock(ctx context.Context, req *blockPB.CreateCodeBlockRequest) (*blockPB.Block, error) {
-	return r.blockClient.CreateCodeBlock(ctx, req)
+func (r *NotesRepository) CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
+	resp, err := r.blockClient.CreateCodeBlock(ctx, &blockPB.CreateCodeBlockRequest{
+		UserId:        userID,
+		NoteId:        noteID,
+		BeforeBlockId: beforeBlockID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) CreateAttachmentBlock(ctx context.Context, req *blockPB.CreateAttachmentBlockRequest) (*blockPB.Block, error) {
-	return r.blockClient.CreateAttachmentBlock(ctx, req)
+func (r *NotesRepository) CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error) {
+	resp, err := r.blockClient.CreateAttachmentBlock(ctx, &blockPB.CreateAttachmentBlockRequest{
+		UserId:        userID,
+		NoteId:        noteID,
+		BeforeBlockId: beforeBlockID,
+		FileId:        fileID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) UpdateBlock(ctx context.Context, req *blockPB.UpdateBlockRequest) (*blockPB.Block, error) {
-	return r.blockClient.UpdateBlock(ctx, req)
+func (r *NotesRepository) UpdateBlock(ctx context.Context, userID uint64, input *models.UpdateBlockInput) (*models.Block, error) {
+	req := &blockPB.UpdateBlockRequest{
+		UserId:  userID,
+		BlockId: input.BlockID,
+		Type:    input.Type,
+	}
+
+	switch input.Type {
+	case models.BlockTypeText:
+		if content, ok := input.Content.(models.UpdateTextContent); ok {
+			req.Content = &blockPB.UpdateBlockRequest_TextContent{
+				TextContent: utils.MapModelTextContentToProto(&content),
+			}
+		}
+	case models.BlockTypeCode:
+		if content, ok := input.Content.(models.UpdateCodeContent); ok {
+			req.Content = &blockPB.UpdateBlockRequest_CodeContent{
+				CodeContent: utils.MapModelCodeContentToProto(&content),
+			}
+		}
+	}
+
+	resp, err := r.blockClient.UpdateBlock(ctx, req)
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToBlock(resp), nil
 }
 
 func (r *NotesRepository) DeleteBlock(ctx context.Context, userID, blockID uint64) error {
@@ -108,6 +203,14 @@ func (r *NotesRepository) DeleteBlock(ctx context.Context, userID, blockID uint6
 	return err
 }
 
-func (r *NotesRepository) UpdateBlockPosition(ctx context.Context, req *blockPB.UpdateBlockPositionRequest) (*blockPB.Block, error) {
-	return r.blockClient.UpdateBlockPosition(ctx, req)
+func (r *NotesRepository) UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error) {
+	resp, err := r.blockClient.UpdateBlockPosition(ctx, &blockPB.UpdateBlockPositionRequest{
+		UserId:        userID,
+		BlockId:       blockID,
+		BeforeBlockId: beforeBlockID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToBlock(resp), nil
 }

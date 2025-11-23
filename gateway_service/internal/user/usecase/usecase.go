@@ -1,15 +1,13 @@
 package usecase
 
 import (
+	"backend/gateway_service/internal/user/models"
 	"context"
-	"fmt"
-
-	userPB "backend/user_service/pkg/user/v1"
 )
 
 type UserRepository interface {
-	GetUser(ctx context.Context, userID uint64) (*userPB.User, error)
-	UpdateUser(ctx context.Context, req *userPB.UpdateUserRequest) (*userPB.User, error)
+	GetUser(ctx context.Context, userID uint64) (*models.User, error)
+	UpdateUser(ctx context.Context, input *models.UpdateUserInput) (*models.User, error)
 	DeleteUser(ctx context.Context, userID uint64) error
 }
 
@@ -30,30 +28,30 @@ func NewUserUsecase(userRepo UserRepository, authRepo AuthRepository) *UserUseca
 	}
 }
 
-func (u *UserUsecase) GetProfile(ctx context.Context, userID uint64) (*userPB.User, error) {
+func (u *UserUsecase) GetProfile(ctx context.Context, userID uint64) (*models.User, error) {
 	return u.userRepo.GetUser(ctx, userID)
 }
 
-func (u *UserUsecase) UpdateProfile(ctx context.Context, req *userPB.UpdateUserRequest) (*userPB.User, error) {
-	return u.userRepo.UpdateUser(ctx, req)
+func (u *UserUsecase) UpdateProfile(ctx context.Context, input *models.UpdateUserInput) (*models.User, error) {
+	return u.userRepo.UpdateUser(ctx, input)
 }
 
 func (u *UserUsecase) DeleteProfile(ctx context.Context, userID uint64, sessionID string) error {
 	if err := u.userRepo.DeleteUser(ctx, userID); err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+		return err
 	}
 
 	if err := u.authRepo.Logout(ctx, sessionID); err != nil {
-		return fmt.Errorf("user deleted, but session logout failed: %w", err)
+		return err
 	}
 
 	return nil
 }
 
-func (u *UserUsecase) GetProfileBySession(ctx context.Context, sessionID string) (*userPB.User, error) {
+func (u *UserUsecase) GetProfileBySession(ctx context.Context, sessionID string) (*models.User, error) {
 	userID, isValid, err := u.authRepo.GetUserIDBySession(ctx, sessionID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check session: %w", err)
+		return nil, err
 	}
 
 	if !isValid {
@@ -62,7 +60,7 @@ func (u *UserUsecase) GetProfileBySession(ctx context.Context, sessionID string)
 
 	user, err := u.userRepo.GetUser(ctx, userID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get user: %w", err)
+		return nil, err
 	}
 
 	return user, nil

@@ -3,7 +3,7 @@ package delivery
 import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/constants"
-	"backend/gateway_service/internal/models"
+	"backend/gateway_service/internal/file/models"
 	"backend/gateway_service/logger"
 	"context"
 	"fmt"

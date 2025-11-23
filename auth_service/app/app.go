@@ -4,6 +4,10 @@ import (
 	"backend/auth_service/internal/config"
 	"backend/auth_service/internal/constants"
 	"backend/auth_service/logger"
+	"backend/auth_service/repository"
+	"backend/auth_service/server"
+	"backend/auth_service/usecase"
+	"backend/pkg/interceptors"
 	"backend/pkg/store"
 	"fmt"
 	"io"
@@ -20,6 +24,9 @@ type App struct {
 	Config *config.Config
 	Store  *store.Store
 	Logger zerolog.Logger
+
+	GRPCServer *grpc.Server
+	Lis        net.Listener
 
 	closers []io.Closer
 }
@@ -45,6 +52,7 @@ func NewApp() *App {
 	}
 
 	app.initDependencies()
+	app.initGRPCServer()
 
 	return app
 }
@@ -66,22 +74,8 @@ func (a *App) initDependencies() {
 	a.Logger.Info().Msg("Dependencies installed successfully")
 }
 
-func (a *App) Close() error {
-	a.Logger.Info().Msg("Closing application resources...")
-	for _, closer := range a.closers {
-		if err := closer.Close(); err != nil {
-			a.Logger.Error().Err(err).Msg("failed to close resource")
-		}
-	}
-	a.Logger.Info().Msg("Application resources closed")
-	return nil
-}
-
-type RegisterGRPCServiceFunc func(srv *grpc.Server, app *App)
-
-func (a *App) RunGRPCServer(registerService RegisterGRPCServiceFunc, opts ...grpc.ServerOption) {
+func (a *App) initGRPCServer() {
 	serviceName := constants.AuthServiceName
-
 	port := a.Config.GRPCPort
 	if port == 0 {
 		a.Logger.Fatal().Msgf("grpc_port for service '%s' is not set in config", serviceName)
@@ -91,14 +85,44 @@ func (a *App) RunGRPCServer(registerService RegisterGRPCServiceFunc, opts ...grp
 	if err != nil {
 		a.Logger.Fatal().Err(err).Msgf("failed to listen on port %d", port)
 	}
+	a.Lis = lis
 	a.closers = append(a.closers, lis)
 
-	grpcServer := grpc.NewServer(opts...)
+	interceptorOpt := grpc.UnaryInterceptor(
+		interceptors.LoggingInterceptor(a.Logger, logger.ToContext),
+	)
 
-	registerService(grpcServer, a)
+	a.GRPCServer = grpc.NewServer(interceptorOpt)
 
-	a.Logger.Info().Str("addr", lis.Addr().String()).Msg("gRPC server is ready to accept connections")
-	if err := grpcServer.Serve(lis); err != nil {
+	authRepo := repository.NewAuthRepository(a.Store.Redis.Client)
+	authUsecase := usecase.NewAuthUsecase(authRepo, []byte(a.Config.CSRF.SecretKey))
+
+	server.RegisterService(a.GRPCServer, authUsecase)
+}
+
+func (a *App) Run() {
+	a.Logger.Info().Str("addr", a.Lis.Addr().String()).Msg("gRPC server is ready to accept connections")
+	if err := a.GRPCServer.Serve(a.Lis); err != nil {
 		a.Logger.Fatal().Err(err).Msg("gRPC server failed to serve")
 	}
+}
+
+func (a *App) Close() error {
+	a.Logger.Info().Msg("Closing application resources...")
+
+	if a.GRPCServer != nil {
+		a.GRPCServer.GracefulStop()
+	}
+
+	var firstErr error
+	for _, closer := range a.closers {
+		if err := closer.Close(); err != nil {
+			a.Logger.Error().Err(err).Msg("failed to close resource")
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	a.Logger.Info().Msg("Application resources closed")
+	return firstErr
 }

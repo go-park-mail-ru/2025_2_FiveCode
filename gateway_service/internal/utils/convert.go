@@ -1,131 +1,75 @@
 package utils
 
 import (
+	noteModels "backend/gateway_service/internal/notes/models"
+	userModels "backend/gateway_service/internal/user/models"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
-	noteModel "backend/notes_service/models"
 	userPB "backend/user_service/pkg/user/v1"
-	userModel "backend/user_service/models"
 )
 
-func ProtoUserToModel(p *userPB.User) *userModel.User {
+// Note
+
+func MapProtoToNote(p *notePB.Note) *noteModels.Note {
 	if p == nil {
 		return nil
 	}
-	m := &userModel.User{
-		ID:        p.Id,
-		Email:     p.Email,
-		Username:  p.Username,
-		CreatedAt: p.CreatedAt.AsTime(),
+	m := &noteModels.Note{
+		ID:         p.Id,
+		OwnerID:    p.OwnerId,
+		Title:      p.Title,
+		IsFavorite: p.IsFavorite,
+		IsArchived: p.IsArchived,
+		IsShared:   p.IsShared,
+		CreatedAt:  p.CreatedAt.AsTime(),
+		UpdatedAt:  p.UpdatedAt.AsTime(),
 	}
-	if p.UpdatedAt != nil && p.UpdatedAt.IsValid() {
-		updatedTime := p.UpdatedAt.AsTime()
-		m.UpdatedAt = &updatedTime
+	if p.ParentNoteId != nil {
+		m.ParentNoteID = p.ParentNoteId
 	}
-	if p.AvatarFileId != nil {
-		m.AvatarFileID = p.AvatarFileId
+	if p.IconFileId != nil {
+		m.IconFileID = p.IconFileId
+	}
+	if p.DeletedAt != nil {
+		deletedAt := p.DeletedAt.AsTime()
+		m.DeletedAt = &deletedAt
 	}
 	return m
 }
 
-func ProtoNoteToModel(protoNote *notePB.Note) *noteModel.Note {
-	if protoNote == nil {
+// Block
+
+func MapProtoToBlock(p *blockPB.Block) *noteModels.Block {
+	if p == nil {
 		return nil
 	}
-
-	note := &noteModel.Note{
-		ID:         protoNote.Id,
-		OwnerID:    protoNote.OwnerId,
-		Title:      protoNote.Title,
-		IsFavorite: protoNote.IsFavorite,
-		IsArchived: protoNote.IsArchived,
-		IsShared:   protoNote.IsShared,
-		CreatedAt:  protoNote.CreatedAt.AsTime(),
-		UpdatedAt:  protoNote.UpdatedAt.AsTime(),
+	b := &noteModels.Block{
+		ID:        p.Id,
+		NoteID:    p.NoteId,
+		Type:      p.Type,
+		Position:  p.Position,
+		CreatedAt: p.CreatedAt.AsTime(),
+		UpdatedAt: p.UpdatedAt.AsTime(),
 	}
 
-	if protoNote.ParentNoteId != nil {
-		note.ParentNoteID = protoNote.ParentNoteId
-	}
-
-	if protoNote.IconFileId != nil {
-		note.IconFileID = protoNote.IconFileId
-	}
-
-	if protoNote.DeletedAt != nil {
-		deletedAt := protoNote.DeletedAt.AsTime()
-		note.DeletedAt = &deletedAt
-	}
-
-	return note
-}
-
-func ProtoNotesToModels(protoNotes []*notePB.Note) []noteModel.Note {
-	if protoNotes == nil {
-		return []noteModel.Note{}
-	}
-
-	notes := make([]noteModel.Note, len(protoNotes))
-	for i, protoNote := range protoNotes {
-		if protoNote != nil {
-			notes[i] = *ProtoNoteToModel(protoNote)
-		}
-	}
-
-	return notes
-}
-
-func ProtoBlockToModel(protoBlock *blockPB.Block) *noteModel.Block {
-	if protoBlock == nil {
-		return nil
-	}
-
-	block := &noteModel.Block{
-		BaseBlock: noteModel.BaseBlock{
-			ID:        protoBlock.Id,
-			NoteID:    protoBlock.NoteId,
-			Type:      protoBlock.Type,
-			Position:  protoBlock.Position,
-			CreatedAt: protoBlock.CreatedAt.AsTime(),
-			UpdatedAt: protoBlock.UpdatedAt.AsTime(),
-		},
-	}
-
-	switch content := protoBlock.Content.(type) {
+	switch c := p.Content.(type) {
 	case *blockPB.Block_TextContent:
-		block.Content = protoTextContentToModel(content.TextContent)
+		b.Content = MapProtoTextContent(c.TextContent)
 	case *blockPB.Block_CodeContent:
-		block.Content = protoCodeContentToModel(content.CodeContent)
+		b.Content = MapProtoCodeContent(c.CodeContent)
 	case *blockPB.Block_AttachmentContent:
-		block.Content = protoAttachmentContentToModel(content.AttachmentContent)
+		b.Content = MapProtoAttachmentContent(c.AttachmentContent)
 	}
-
-	return block
+	return b
 }
 
-func ProtoBlocksToModels(protoBlocks []*blockPB.Block) []noteModel.Block {
-	if protoBlocks == nil {
-		return []noteModel.Block{}
+func MapProtoTextContent(p *blockPB.TextContent) noteModels.TextContent {
+	if p == nil {
+		return noteModels.TextContent{}
 	}
-
-	blocks := make([]noteModel.Block, len(protoBlocks))
-	for i, protoBlock := range protoBlocks {
-		if protoBlock != nil {
-			blocks[i] = *ProtoBlockToModel(protoBlock)
-		}
-	}
-
-	return blocks
-}
-
-func protoTextContentToModel(protoContent *blockPB.TextContent) noteModel.TextContent {
-	if protoContent == nil {
-		return noteModel.TextContent{}
-	}
-
-	formats := make([]noteModel.BlockTextFormat, len(protoContent.Formats))
-	for i, f := range protoContent.Formats {
-		formats[i] = noteModel.BlockTextFormat{
+	formats := make([]noteModels.BlockTextFormat, len(p.Formats))
+	for i, f := range p.Formats {
+		formats[i] = noteModels.BlockTextFormat{
 			ID:            f.Id,
 			StartOffset:   int(f.StartOffset),
 			EndOffset:     int(f.EndOffset),
@@ -133,64 +77,48 @@ func protoTextContentToModel(protoContent *blockPB.TextContent) noteModel.TextCo
 			Italic:        f.Italic,
 			Underline:     f.Underline,
 			Strikethrough: f.Strikethrough,
-			Font:          noteModel.TextFont(f.Font),
+			Link:          f.Link,
+			Font:          noteModels.TextFont(f.Font),
 			Size:          int(f.Size),
 		}
-		if f.Link != nil {
-			formats[i].Link = f.Link
-		}
 	}
-
-	return noteModel.TextContent{
-		Text:    protoContent.Text,
-		Formats: formats,
-	}
+	return noteModels.TextContent{Text: p.Text, Formats: formats}
 }
 
-func protoCodeContentToModel(protoContent *blockPB.CodeContent) noteModel.CodeContent {
-	if protoContent == nil {
-		return noteModel.CodeContent{}
+func MapProtoCodeContent(p *blockPB.CodeContent) noteModels.CodeContent {
+	if p == nil {
+		return noteModels.CodeContent{}
 	}
-
-	return noteModel.CodeContent{
-		Code:     protoContent.Code,
-		Language: protoContent.Language,
-	}
+	return noteModels.CodeContent{Code: p.Code, Language: p.Language}
 }
 
-func protoAttachmentContentToModel(protoContent *blockPB.AttachmentContent) noteModel.AttachmentContent {
-	if protoContent == nil {
-		return noteModel.AttachmentContent{}
+func MapProtoAttachmentContent(p *blockPB.AttachmentContent) noteModels.AttachmentContent {
+	if p == nil {
+		return noteModels.AttachmentContent{}
 	}
-
-	content := noteModel.AttachmentContent{
-		URL:       protoContent.Url,
-		MimeType:  protoContent.MimeType,
-		SizeBytes: int(protoContent.SizeBytes),
+	c := noteModels.AttachmentContent{
+		URL:       p.Url,
+		Caption:   p.Caption,
+		MimeType:  p.MimeType,
+		SizeBytes: int(p.SizeBytes),
 	}
-
-	if protoContent.Caption != nil {
-		content.Caption = protoContent.Caption
+	if p.Width != nil {
+		w := int(*p.Width)
+		c.Width = &w
 	}
-	if protoContent.Width != nil {
-		width := int(*protoContent.Width)
-		content.Width = &width
+	if p.Height != nil {
+		h := int(*p.Height)
+		c.Height = &h
 	}
-	if protoContent.Height != nil {
-		height := int(*protoContent.Height)
-		content.Height = &height
-	}
-
-	return content
+	return c
 }
 
-func ModelTextContentToProto(modelContent *noteModel.UpdateTextContent) *blockPB.TextContent {
-	if modelContent == nil {
+func MapModelTextContentToProto(m *noteModels.UpdateTextContent) *blockPB.TextContent {
+	if m == nil {
 		return nil
 	}
-
-	formats := make([]*blockPB.BlockTextFormat, len(modelContent.Formats))
-	for i, f := range modelContent.Formats {
+	formats := make([]*blockPB.BlockTextFormat, len(m.Formats))
+	for i, f := range m.Formats {
 		formats[i] = &blockPB.BlockTextFormat{
 			Id:            f.ID,
 			StartOffset:   int32(f.StartOffset),
@@ -199,27 +127,39 @@ func ModelTextContentToProto(modelContent *noteModel.UpdateTextContent) *blockPB
 			Italic:        f.Italic,
 			Underline:     f.Underline,
 			Strikethrough: f.Strikethrough,
+			Link:          f.Link,
 			Font:          string(f.Font),
 			Size:          int32(f.Size),
 		}
-		if f.Link != nil {
-			formats[i].Link = f.Link
-		}
 	}
-
-	return &blockPB.TextContent{
-		Text:    modelContent.Text,
-		Formats: formats,
-	}
+	return &blockPB.TextContent{Text: m.Text, Formats: formats}
 }
 
-func ModelCodeContentToProto(modelContent *noteModel.UpdateCodeContent) *blockPB.CodeContent {
-	if modelContent == nil {
+func MapModelCodeContentToProto(m *noteModels.UpdateCodeContent) *blockPB.CodeContent {
+	if m == nil {
 		return nil
 	}
+	return &blockPB.CodeContent{Code: m.Code, Language: m.Language}
+}
 
-	return &blockPB.CodeContent{
-		Code:     modelContent.Code,
-		Language: modelContent.Language,
+// User
+
+func MapProtoToUser(p *userPB.User) *userModels.User {
+	if p == nil {
+		return nil
 	}
+	u := &userModels.User{
+		ID:        p.Id,
+		Email:     p.Email,
+		Username:  p.Username,
+		CreatedAt: p.CreatedAt.AsTime(),
+	}
+	if p.AvatarFileId != nil {
+		u.AvatarFileID = p.AvatarFileId
+	}
+	if p.UpdatedAt != nil {
+		t := p.UpdatedAt.AsTime()
+		u.UpdatedAt = &t
+	}
+	return u
 }

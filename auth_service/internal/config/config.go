@@ -21,18 +21,18 @@ type CSRFConfig struct {
 }
 
 type RedisConfig struct {
-	Host     string
-	Port     int
-	Password string
-	DB       int
+	Host     string `mapstructure:"host"`
+	Port     int    `mapstructure:"port"`
+	Password string `mapstructure:"password"`
+	DB       int    `mapstructure:"db"`
 }
 
 type Config struct {
 	GRPCPort int `mapstructure:"grpc_port"`
 	Redis    RedisConfig
-	Cors     CorsConfig               `mapstructure:"cors"`
-	Cookie   CookieConfig             `mapstructure:"cookie"`
-	CSRF     CSRFConfig               `mapstructure:"csrf"`
+	Cors     CorsConfig   `mapstructure:"cors"`
+	Cookie   CookieConfig `mapstructure:"cookie"`
+	CSRF     CSRFConfig   `mapstructure:"csrf"`
 }
 
 func Load() (*Config, error) {
@@ -43,9 +43,7 @@ func Load() (*Config, error) {
 	v.AddConfigPath("./config")
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Println("config file not found, using environment variables only")
-		} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
@@ -54,15 +52,19 @@ func Load() (*Config, error) {
 	v.AutomaticEnv()
 
 	var cfg Config
-
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	cfg.Redis.Host = v.GetString("REDIS_HOST")
-	cfg.Redis.Port = v.GetInt("REDIS_PORT")
-	cfg.Redis.Password = v.GetString("REDIS_PASSWORD")
-	cfg.Redis.DB = v.GetInt("REDIS_DB")
+	if cfg.Redis.Host == "" {
+		cfg.Redis.Host = v.GetString("REDIS_HOST")
+	}
+	if cfg.Redis.Port == 0 {
+		cfg.Redis.Port = v.GetInt("REDIS_PORT")
+	}
+	if cfg.Redis.Password == "" {
+		cfg.Redis.Password = v.GetString("REDIS_PASSWORD")
+	}
 
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
@@ -70,10 +72,19 @@ func Load() (*Config, error) {
 
 	if cfg.CSRF.SecretKey == "" {
 		cfg.CSRF.SecretKey = v.GetString("CSRF_SECRET_KEY")
+	}
 
-		if cfg.CSRF.SecretKey == "" {
-			return nil, fmt.Errorf("CSRF_SECRET_KEY is required")
-		}
+	if cfg.GRPCPort == 0 {
+		return nil, fmt.Errorf("GRPC_PORT is required")
+	}
+	if cfg.Redis.Host == "" {
+		return nil, fmt.Errorf("REDIS_HOST is required")
+	}
+	if cfg.Redis.Port == 0 {
+		return nil, fmt.Errorf("REDIS_PORT is required")
+	}
+	if cfg.CSRF.SecretKey == "" {
+		return nil, fmt.Errorf("CSRF_SECRET_KEY is required")
 	}
 
 	return &cfg, nil

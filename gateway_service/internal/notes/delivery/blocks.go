@@ -3,10 +3,8 @@ package delivery
 import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
-	"backend/gateway_service/internal/utils"
+	"backend/gateway_service/internal/notes/models"
 	"backend/gateway_service/logger"
-	"backend/notes_service/models"
-	blockPB "backend/notes_service/pkg/block/v1"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -85,18 +83,13 @@ func (d *NotesDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	grpcResp, err := d.usecase.CreateCodeBlock(r.Context(), &blockPB.CreateCodeBlockRequest{
-		UserId:        userID,
-		NoteId:        noteID,
-		BeforeBlockId: req.BeforeBlockID,
-	})
+	block, err := d.usecase.CreateCodeBlock(r.Context(), userID, noteID, req.BeforeBlockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create code block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -114,18 +107,13 @@ func (d *NotesDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
-	grpcResp, err := d.usecase.CreateTextBlock(r.Context(), &blockPB.CreateTextBlockRequest{
-		UserId:        userID,
-		NoteId:        noteID,
-		BeforeBlockId: req.BeforeBlockID,
-	})
+	block, err := d.usecase.CreateTextBlock(r.Context(), userID, noteID, req.BeforeBlockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create text block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -150,19 +138,13 @@ func (d *NotesDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	grpcResp, err := d.usecase.CreateAttachmentBlock(r.Context(), &blockPB.CreateAttachmentBlockRequest{
-		UserId:        userID,
-		NoteId:        noteID,
-		BeforeBlockId: req.BeforeBlockID,
-		FileId:        req.FileID,
-	})
+	block, err := d.usecase.CreateAttachmentBlock(r.Context(), userID, noteID, req.BeforeBlockID, req.FileID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create attachment block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -184,14 +166,12 @@ func (d *NotesDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.usecase.GetBlocks(r.Context(), userID, noteID)
+	blocks, err := d.usecase.GetBlocks(r.Context(), userID, noteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get blocks")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
-
-	blocks := utils.ProtoBlocksToModels(grpcResp.Blocks)
 
 	apiutils.WriteJSON(w, http.StatusOK, map[string]interface{}{
 		"note_id": noteID,
@@ -217,14 +197,13 @@ func (d *NotesDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.usecase.GetBlock(r.Context(), userID, blockID)
+	block, err := d.usecase.GetBlock(r.Context(), userID, blockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
@@ -264,21 +243,42 @@ func (d *NotesDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcReq, err := convertToGrpcUpdateBlockRequest(userID, blockID, deliveryReq)
-	if err != nil {
-		log.Warn().Err(err).Msg("failed to convert request")
-		apiutils.WriteError(w, http.StatusBadRequest, err.Error())
+	input := &models.UpdateBlockInput{
+		BlockID: blockID,
+		Type:    deliveryReq.Type,
+	}
+
+	switch deliveryReq.Type {
+	case models.BlockTypeText:
+		var textContent models.UpdateTextContent
+		if err := json.Unmarshal(deliveryReq.Content, &textContent); err != nil {
+			log.Warn().Err(err).Msg("failed to unmarshal text content")
+			apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("failed to parse text content: %v", err))
+			return
+		}
+		input.Content = textContent
+
+	case models.BlockTypeCode:
+		var codeContent models.UpdateCodeContent
+		if err := json.Unmarshal(deliveryReq.Content, &codeContent); err != nil {
+			log.Warn().Err(err).Msg("failed to unmarshal code content")
+			apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("failed to parse code content: %v", err))
+			return
+		}
+		input.Content = codeContent
+
+	default:
+		apiutils.WriteError(w, http.StatusBadRequest, fmt.Sprintf("unsupported block type: %s", deliveryReq.Type))
 		return
 	}
 
-	grpcResp, err := d.usecase.UpdateBlock(r.Context(), grpcReq)
+	block, err := d.usecase.UpdateBlock(r.Context(), userID, input)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
@@ -345,50 +345,12 @@ func (d *NotesDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	grpcResp, err := d.usecase.UpdateBlockPosition(r.Context(), &blockPB.UpdateBlockPositionRequest{
-		UserId:        userID,
-		BlockId:       blockID,
-		BeforeBlockId: req.BeforeBlockID,
-	})
+	block, err := d.usecase.UpdateBlockPosition(r.Context(), userID, blockID, req.BeforeBlockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update block position")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	block := utils.ProtoBlockToModel(grpcResp)
 	apiutils.WriteJSON(w, http.StatusOK, block)
-}
-
-func convertToGrpcUpdateBlockRequest(userID, blockID uint64, deliveryReq UpdateBlockDeliveryRequest) (*blockPB.UpdateBlockRequest, error) {
-	grpcReq := &blockPB.UpdateBlockRequest{
-		UserId:  userID,
-		BlockId: blockID,
-		Type:    deliveryReq.Type,
-	}
-
-	switch deliveryReq.Type {
-	case models.BlockTypeText:
-		var textContent models.UpdateTextContent
-		if err := json.Unmarshal(deliveryReq.Content, &textContent); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal text content: %w", err)
-		}
-		grpcReq.Content = &blockPB.UpdateBlockRequest_TextContent{
-			TextContent: utils.ModelTextContentToProto(&textContent),
-		}
-
-	case models.BlockTypeCode:
-		var codeContent models.UpdateCodeContent
-		if err := json.Unmarshal(deliveryReq.Content, &codeContent); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal code content: %w", err)
-		}
-		grpcReq.Content = &blockPB.UpdateBlockRequest_CodeContent{
-			CodeContent: utils.ModelCodeContentToProto(&codeContent),
-		}
-
-	default:
-		return nil, fmt.Errorf("unsupported block type: %s", deliveryReq.Type)
-	}
-
-	return grpcReq, nil
 }

@@ -64,9 +64,7 @@ func Load() (*Config, error) {
 	v.AddConfigPath("./config")
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Println("config file not found, using environment variables only")
-		} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
@@ -75,7 +73,6 @@ func Load() (*Config, error) {
 	v.AutomaticEnv()
 
 	var cfg Config
-
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
@@ -109,7 +106,10 @@ func Load() (*Config, error) {
 
 	serviceNames := []string{"auth", "user", "notes"}
 	for _, svc := range serviceNames {
-		current := cfg.Services[svc]
+		current, exists := cfg.Services[svc]
+		if !exists {
+			current = ServiceConfig{}
+		}
 
 		hostKey := fmt.Sprintf("SERVICES_%s_GRPC_HOST", strings.ToUpper(svc))
 		portKey := fmt.Sprintf("SERVICES_%s_GRPC_PORT", strings.ToUpper(svc))
@@ -124,6 +124,9 @@ func Load() (*Config, error) {
 		cfg.Services[svc] = current
 	}
 
+	if cfg.Server.Port == 0 {
+		return nil, fmt.Errorf("SERVER_PORT is required")
+	}
 	if cfg.CSRF.SecretKey == "" {
 		return nil, fmt.Errorf("CSRF_SECRET_KEY is required")
 	}
@@ -132,6 +135,13 @@ func Load() (*Config, error) {
 	}
 	if cfg.Minio.Endpoint == "" {
 		return nil, fmt.Errorf("MINIO_ENDPOINT is required")
+	}
+
+	for _, svc := range serviceNames {
+		sCfg, ok := cfg.Services[svc]
+		if !ok || sCfg.GrpcHost == "" || sCfg.GrpcPort == 0 {
+			return nil, fmt.Errorf("config for service '%s' is incomplete (host or port missing)", svc)
+		}
 	}
 
 	return &cfg, nil

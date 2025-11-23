@@ -3,7 +3,7 @@ package delivery
 import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
-	"backend/gateway_service/internal/utils"
+	"backend/gateway_service/internal/user/models"
 	"backend/gateway_service/internal/validation"
 	"backend/gateway_service/logger"
 	"context"
@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"net/http"
 	"time"
-
-	userPB "backend/user_service/pkg/user/v1"
 )
 
 const (
@@ -22,10 +20,10 @@ const (
 )
 
 type UserUsecase interface {
-	GetProfile(ctx context.Context, userID uint64) (*userPB.User, error)
-	UpdateProfile(ctx context.Context, req *userPB.UpdateUserRequest) (*userPB.User, error)
+	GetProfile(ctx context.Context, userID uint64) (*models.User, error)
+	UpdateProfile(ctx context.Context, input *models.UpdateUserInput) (*models.User, error)
 	DeleteProfile(ctx context.Context, userID uint64, sessionID string) error
-	GetProfileBySession(ctx context.Context, sessionID string) (*userPB.User, error)
+	GetProfileBySession(ctx context.Context, sessionID string) (*models.User, error)
 }
 
 type UserDelivery struct {
@@ -74,7 +72,7 @@ func (d *UserDelivery) GetProfileBySession(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	apiutils.WriteJSON(w, http.StatusOK, utils.ProtoUserToModel(user))
+	apiutils.WriteJSON(w, http.StatusOK, user)
 }
 
 func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
@@ -93,8 +91,8 @@ func (d *UserDelivery) GetProfile(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Info().Uint64("user_id", user.Id).Msg("profile retrieved successfully")
-	apiutils.WriteJSON(w, http.StatusOK, utils.ProtoUserToModel(user))
+	log.Info().Uint64("user_id", user.ID).Msg("profile retrieved successfully")
+	apiutils.WriteJSON(w, http.StatusOK, user)
 }
 
 func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
@@ -141,26 +139,28 @@ func (d *UserDelivery) UpdateProfile(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	grpcReq := &userPB.UpdateUserRequest{UserId: userID}
+	input := &models.UpdateUserInput{
+		ID: userID,
+	}
 	if req.Username != nil {
-		grpcReq.Username = *req.Username
+		input.Username = req.Username
 	}
 	if req.Password != nil {
-		grpcReq.Password = *req.Password
+		input.Password = req.Password
 	}
 	if req.AvatarFileID != nil {
-		grpcReq.AvatarFileId = *req.AvatarFileID
+		input.AvatarFileID = req.AvatarFileID
 	}
 
-	updatedUser, err := d.usecase.UpdateProfile(r.Context(), grpcReq)
+	updatedUser, err := d.usecase.UpdateProfile(r.Context(), input)
 	if err != nil {
 		log.Warn().Err(err).Msg("error updating profile")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	log.Info().Uint64("user_id", updatedUser.Id).Msg("profile updated successfully")
-	apiutils.WriteJSON(w, http.StatusOK, utils.ProtoUserToModel(updatedUser))
+	log.Info().Uint64("user_id", updatedUser.ID).Msg("profile updated successfully")
+	apiutils.WriteJSON(w, http.StatusOK, updatedUser)
 }
 
 func (d *UserDelivery) DeleteProfile(w http.ResponseWriter, r *http.Request) {

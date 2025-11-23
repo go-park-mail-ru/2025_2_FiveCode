@@ -2,8 +2,8 @@ package usecase
 
 import (
 	"backend/user_service/internal/constants"
+	"backend/user_service/internal/models"
 	"backend/user_service/logger"
-	"backend/user_service/models"
 	"context"
 	"fmt"
 	"strings"

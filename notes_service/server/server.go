@@ -4,10 +4,10 @@ import (
 	"context"
 	"errors"
 
-	notePB "backend/notes_service/pkg/note/v1"
-	blockPB "backend/notes_service/pkg/block/v1"
 	"backend/notes_service/internal/constants"
-	"backend/notes_service/models"
+	"backend/notes_service/internal/models"
+	blockPB "backend/notes_service/pkg/block/v1"
+	notePB "backend/notes_service/pkg/note/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"

@@ -1,10 +1,14 @@
 package app
 
 import (
+	"backend/pkg/interceptors"
 	"backend/pkg/store"
 	"backend/user_service/internal/config"
 	"backend/user_service/internal/constants"
 	"backend/user_service/logger"
+	"backend/user_service/repository"
+	"backend/user_service/server"
+	"backend/user_service/usecase"
 	"fmt"
 	"io"
 	"net"
@@ -20,6 +24,9 @@ type App struct {
 	Config *config.Config
 	Store  *store.Store
 	Logger zerolog.Logger
+
+	GRPCServer *grpc.Server
+	Lis        net.Listener
 
 	closers []io.Closer
 }
@@ -45,9 +52,9 @@ func NewApp() *App {
 	}
 
 	app.initDependencies()
+	app.initGRPCServer()
 
 	return app
-
 }
 
 func (a *App) initDependencies() {
@@ -67,30 +74,15 @@ func (a *App) initDependencies() {
 	a.closers = append(a.closers, a.Store.Postgres)
 
 	a.Logger.Info().Msg("Running migrations...")
-    if err := a.Store.Postgres.RunMigrations("./db/migrations"); err != nil {
-        a.Logger.Fatal().Err(err).Msg("failed to run migrations")
-    }
+	if err := a.Store.Postgres.RunMigrations("./db/migrations"); err != nil {
+		a.Logger.Fatal().Err(err).Msg("failed to run migrations")
+	}
 
 	a.Logger.Info().Msg("Dependencies installed successfully")
-
 }
 
-func (a *App) Close() error {
-	a.Logger.Info().Msg("Closing application resources...")
-	for _, closer := range a.closers {
-		if err := closer.Close(); err != nil {
-			return fmt.Errorf("failed to close resource: %w", err)
-		}
-	}
-	a.Logger.Info().Msg("Application resources closed successfully")
-	return nil
-}
-
-type RegisterGRPCServiceFunc func(srv *grpc.Server, app *App)
-
-func (a *App) RunGRPCServer(registerService RegisterGRPCServiceFunc, opts ...grpc.ServerOption) {
+func (a *App) initGRPCServer() {
 	serviceName := constants.UserServiceName
-
 	port := a.Config.GRPCPort
 	if port == 0 {
 		a.Logger.Fatal().Msgf("grpc_port for service '%s' is not set in config", serviceName)
@@ -100,14 +92,44 @@ func (a *App) RunGRPCServer(registerService RegisterGRPCServiceFunc, opts ...grp
 	if err != nil {
 		a.Logger.Fatal().Err(err).Msgf("failed to listen on port %d", port)
 	}
+	a.Lis = lis
 	a.closers = append(a.closers, lis)
 
-	grpcServer := grpc.NewServer(opts...)
+	interceptorOpt := grpc.UnaryInterceptor(
+		interceptors.LoggingInterceptor(a.Logger, logger.ToContext),
+	)
 
-	registerService(grpcServer, a)
+	a.GRPCServer = grpc.NewServer(interceptorOpt)
 
-	a.Logger.Info().Str("addr", lis.Addr().String()).Msg("gRPC server is ready to accept connections")
-	if err := grpcServer.Serve(lis); err != nil {
+	userRepo := repository.NewUserRepository(a.Store.Postgres.DB)
+	userUsecase := usecase.NewUserUsecase(userRepo)
+
+	server.RegisterService(a.GRPCServer, userUsecase)
+}
+
+func (a *App) Run() {
+	a.Logger.Info().Str("addr", a.Lis.Addr().String()).Msg("gRPC server is ready to accept connections")
+	if err := a.GRPCServer.Serve(a.Lis); err != nil {
 		a.Logger.Fatal().Err(err).Msg("gRPC server failed to serve")
 	}
+}
+
+func (a *App) Close() error {
+	a.Logger.Info().Msg("Closing application resources...")
+
+	if a.GRPCServer != nil {
+		a.GRPCServer.GracefulStop()
+	}
+
+	var firstErr error
+	for _, closer := range a.closers {
+		if err := closer.Close(); err != nil {
+			a.Logger.Error().Err(err).Msg("failed to close resource")
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	a.Logger.Info().Msg("Application resources closed successfully")
+	return firstErr
 }

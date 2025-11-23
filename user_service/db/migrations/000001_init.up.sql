@@ -1,20 +1,3 @@
-CREATE OR REPLACE FUNCTION set_timestamps()
-    RETURNS TRIGGER AS
-$$
-BEGIN
-    IF (TG_OP = 'INSERT') THEN
-        NEW.created_at := CURRENT_TIMESTAMP;
-        NEW.updated_at := CURRENT_TIMESTAMP;
-        RETURN NEW;
-    END IF;
-
-    IF (TG_OP = 'UPDATE') THEN
-        NEW.updated_at := CURRENT_TIMESTAMP;
-        RETURN NEW;
-    END IF;
-END;
-$$ LANGUAGE plpgsql;
-
 CREATE TABLE IF NOT EXISTS "user"
 (
     id             INTEGER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -26,12 +9,6 @@ CREATE TABLE IF NOT EXISTS "user"
     
     avatar_file_id INTEGER,     
     
-    created_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at     TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+    created_at     TIMESTAMPTZ NOT NULL,
+    updated_at     TIMESTAMPTZ NOT NULL
 );
-
-CREATE TRIGGER trigger_set_timestamps
-    BEFORE INSERT OR UPDATE
-    ON "user"
-    FOR EACH ROW
-EXECUTE FUNCTION set_timestamps();

@@ -1,9 +1,9 @@
 package repository
 
 import (
-	"backend/user_service/logger"
 	"backend/user_service/internal/constants"
-	"backend/user_service/models"
+	"backend/user_service/internal/models"
+	"backend/user_service/logger"
 	"context"
 	"database/sql"
 	"errors"
@@ -164,14 +164,16 @@ func (r *UserRepository) DeleteUser(ctx context.Context, userID uint64) error {
 func (r *UserRepository) CreateUser(ctx context.Context, email, passwordHash, username string) (uint64, error) {
 	log := logger.FromContext(ctx)
 
+	now := time.Now().UTC()
+
 	query := `
-		INSERT INTO "user" (email, password_hash, username)
-		VALUES ($1, $2, $3)
+		INSERT INTO "user" (email, password_hash, username, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 		RETURNING id
 	`
 
 	var userID uint64
-	err := r.db.QueryRowContext(ctx, query, email, passwordHash, username).Scan(&userID)
+	err := r.db.QueryRowContext(ctx, query, email, passwordHash, username, now, now).Scan(&userID)
 	if err != nil {
 		if strings.Contains(err.Error(), "duplicate key") || strings.Contains(err.Error(), "unique constraint") {
 			log.Warn().Str("email", email).Msg("user already exists")

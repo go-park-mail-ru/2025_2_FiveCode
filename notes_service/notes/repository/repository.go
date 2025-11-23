@@ -2,8 +2,8 @@ package repository
 
 import (
 	"backend/notes_service/internal/constants"
-	"backend/notes_service/models"
 	"backend/notes_service/logger"
+	"backend/notes_service/internal/models"
 	"context"
 	"database/sql"
 	"errors"
@@ -23,6 +23,7 @@ func NewNotesRepository(db *sql.DB) *NotesRepository {
 
 func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -36,8 +37,8 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	}()
 
 	noteQuery := `
-		INSERT INTO note (owner_id, title, is_archived, is_shared)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO note (owner_id, title, is_archived, is_shared, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5, $6)
 		RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
 		          is_archived, is_shared, created_at, updated_at, deleted_at
 	`
@@ -47,7 +48,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	var parentNoteID, iconFileID sql.NullInt64
 	var deletedAt sql.NullTime
 
-	err = tx.QueryRowContext(ctx, noteQuery, userID, defaultTitle, false, false).Scan(
+	err = tx.QueryRowContext(ctx, noteQuery, userID, defaultTitle, false, false, now, now).Scan(
 		&note.ID,
 		&note.OwnerID,
 		&parentNoteID,
@@ -65,21 +66,21 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	}
 
 	blockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by) 
-		VALUES ($1, 'text', 1.0, $2)
+		INSERT INTO block (note_id, type, position, last_edited_by, created_at, updated_at) 
+		VALUES ($1, 'text', 1.0, $2, $3, $4)
 		RETURNING id
 	`
 	var blockID uint64
-	err = tx.QueryRowContext(ctx, blockQuery, note.ID, userID).Scan(&blockID)
+	err = tx.QueryRowContext(ctx, blockQuery, note.ID, userID, now, now).Scan(&blockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create initial block entry")
 		return nil, fmt.Errorf("failed to create initial block: %w", err)
 	}
 
 	textQuery := `
-		INSERT INTO block_text (block_id, text) VALUES ($1, '')
+		INSERT INTO block_text (block_id, text, created_at, updated_at) VALUES ($1, '', $2, $3)
 	`
-	_, err = tx.ExecContext(ctx, textQuery, blockID)
+	_, err = tx.ExecContext(ctx, textQuery, blockID, now, now)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create initial block_text entry")
 		return nil, fmt.Errorf("failed to create initial block_text: %w", err)
@@ -318,8 +319,10 @@ func (r *NotesRepository) DeleteNote(ctx context.Context, noteID uint64) error {
 
 func (r *NotesRepository) AddFavorite(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
-	query := `INSERT INTO favorite (user_id, note_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`
-	_, err := r.db.ExecContext(ctx, query, userID, noteID)
+	now := time.Now().UTC()
+
+	query := `INSERT INTO favorite (user_id, note_id, created_at, updated_at) VALUES ($1, $2, $3, $4) ON CONFLICT DO NOTHING`
+	_, err := r.db.ExecContext(ctx, query, userID, noteID, now, now)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to add favorite")
 		return fmt.Errorf("failed to add favorite: %w", err)

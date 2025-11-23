@@ -3,13 +3,34 @@ package app
 import (
 	"backend/gateway_service/internal/config"
 	"backend/gateway_service/logger"
+	"backend/gateway_service/router"
 	"backend/pkg/store"
-	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	authDelivery "backend/gateway_service/internal/auth/delivery"
+	authRepo "backend/gateway_service/internal/auth/repository"
+	authUC "backend/gateway_service/internal/auth/usecase"
+
+	fileDelivery "backend/gateway_service/internal/file/delivery"
+	fileRepo "backend/gateway_service/internal/file/repository"
+	fileUC "backend/gateway_service/internal/file/usecase"
+
+	notesDelivery "backend/gateway_service/internal/notes/delivery"
+	notesRepo "backend/gateway_service/internal/notes/repository"
+	notesUC "backend/gateway_service/internal/notes/usecase"
+
+	userDelivery "backend/gateway_service/internal/user/delivery"
+	userRepo "backend/gateway_service/internal/user/repository"
+	userUC "backend/gateway_service/internal/user/usecase"
+
+	authPB "backend/auth_service/pkg/auth/v1"
+	blockPB "backend/notes_service/pkg/block/v1"
+	notePB "backend/notes_service/pkg/note/v1"
+	userPB "backend/user_service/pkg/user/v1"
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
@@ -25,6 +46,8 @@ type App struct {
 	AuthConn  *grpc.ClientConn
 	UserConn  *grpc.ClientConn
 	NotesConn *grpc.ClientConn
+
+	Handler http.Handler
 
 	closers []io.Closer
 }
@@ -50,6 +73,7 @@ func NewApp() *App {
 	}
 
 	app.initDependencies()
+	app.initHTTPHandler()
 
 	return app
 }
@@ -88,6 +112,49 @@ func (a *App) initDependencies() {
 	a.NotesConn = a.mustConnectGrpc("notes")
 }
 
+func (a *App) initHTTPHandler() {
+	a.Logger.Info().Msg("Initializing HTTP Handlers...")
+
+	// gRPC Clients
+	authClientGRPC := authPB.NewAuthClient(a.AuthConn)
+	userClientGRPC := userPB.NewUserServiceClient(a.UserConn)
+	noteClientGRPC := notePB.NewNoteServiceClient(a.NotesConn)
+	blockClientGRPC := blockPB.NewBlockServiceClient(a.NotesConn)
+
+	// Repositories
+	gatewayAuthRepo := authRepo.NewAuthRepository(authClientGRPC)
+	gatewayUserRepo := userRepo.NewUserRepository(userClientGRPC)
+	gatewayNotesRepo := notesRepo.NewNotesRepository(noteClientGRPC, blockClientGRPC)
+	gatewayFileRepo := fileRepo.NewFileRepository(a.Store.Postgres.DB, a.Store.Minio.Client)
+
+	// Usecases
+	gatewayAuthUC := authUC.NewAuthUsecase(gatewayAuthRepo, gatewayUserRepo)
+	gatewayUserUC := userUC.NewUserUsecase(gatewayUserRepo, gatewayAuthRepo)
+	gatewayNotesUC := notesUC.NewNotesUsecase(gatewayNotesRepo)
+	gatewayFileUC := fileUC.NewFileUsecase(gatewayFileRepo)
+
+	// Handlers
+	sessionDuration := time.Duration(a.Config.Cookie.SessionDuration) * time.Hour
+
+	authHandler := authDelivery.NewAuthDelivery(gatewayAuthUC, sessionDuration)
+	userHandler := userDelivery.NewUserDelivery(gatewayUserUC)
+	notesHandler := notesDelivery.NewNotesDelivery(gatewayNotesUC)
+	fileHandler := fileDelivery.NewFileDelivery(gatewayFileUC)
+
+	sessionValidator := gatewayAuthRepo
+
+	// Router
+	a.Handler = router.NewRouter(
+		a.Config,
+		&a.Logger,
+		sessionValidator,
+		authHandler,
+		userHandler,
+		notesHandler,
+		fileHandler,
+	)
+}
+
 func (a *App) mustConnectGrpc(serviceName string) *grpc.ClientConn {
 	cfg, ok := a.Config.Services[serviceName]
 	if !ok {
@@ -107,21 +174,27 @@ func (a *App) mustConnectGrpc(serviceName string) *grpc.ClientConn {
 }
 
 func (a *App) Close() error {
+	var firstErr error
 	for _, closer := range a.closers {
-		_ = closer.Close()
+		if err := closer.Close(); err != nil {
+			a.Logger.Error().Err(err).Msg("failed to close resource")
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
 	}
-	return nil
+	return firstErr
 }
 
-func (a *App) RunHTTPServer(handler http.Handler) {
+func (a *App) Run() {
 	addr := fmt.Sprintf("%s:%d", a.Config.Server.Host, a.Config.Server.Port)
 	server := &http.Server{
 		Addr:    addr,
-		Handler: handler,
+		Handler: a.Handler,
 	}
 
 	a.Logger.Info().Str("addr", addr).Msg("Gateway is running")
-	if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 		a.Logger.Fatal().Err(err).Msg("server failed")
 	}
 }

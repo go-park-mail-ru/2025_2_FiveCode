@@ -29,9 +29,7 @@ func Load() (*Config, error) {
 	v.AddConfigPath("./config")
 
 	if err := v.ReadInConfig(); err != nil {
-		if _, ok := err.(viper.ConfigFileNotFoundError); ok {
-			fmt.Println("config file not found, using environment variables only")
-		} else {
+		if _, ok := err.(viper.ConfigFileNotFoundError); !ok {
 			return nil, fmt.Errorf("failed to read config file: %w", err)
 		}
 	}
@@ -40,7 +38,6 @@ func Load() (*Config, error) {
 	v.AutomaticEnv()
 
 	var cfg Config
-
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
@@ -56,8 +53,20 @@ func Load() (*Config, error) {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
 	}
 
+	if cfg.GRPCPort == 0 {
+		return nil, fmt.Errorf("GRPC_PORT is required")
+	}
 	if cfg.DB.Host == "" {
-		return nil, fmt.Errorf("DB_HOST is a required environment variable")
+		return nil, fmt.Errorf("DB_HOST is required")
+	}
+	if cfg.DB.Port == 0 {
+		return nil, fmt.Errorf("DB_PORT is required")
+	}
+	if cfg.DB.User == "" {
+		return nil, fmt.Errorf("DB_USER is required")
+	}
+	if cfg.DB.DBName == "" {
+		return nil, fmt.Errorf("DB_NAME is required")
 	}
 
 	return &cfg, nil

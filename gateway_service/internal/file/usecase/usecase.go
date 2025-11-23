@@ -1,7 +1,8 @@
 package usecase
 
 import (
-	"backend/gateway_service/internal/models"
+	"backend/gateway_service/internal/file/models"
+	"backend/gateway_service/internal/utils"
 	"backend/gateway_service/logger"
 	"bytes"
 	"context"
@@ -70,6 +71,8 @@ func (u *FileUsecase) UploadFile(ctx context.Context, file io.Reader, filename, 
 		return nil, fmt.Errorf("failed to save file metadata: %w", err)
 	}
 
+	fileModel.URL = utils.TransformMinioURL(fileModel.URL)
+
 	return fileModel, nil
 }
 
@@ -81,6 +84,8 @@ func (u *FileUsecase) GetFile(ctx context.Context, fileID uint64) (*models.File,
 		log.Error().Err(err).Uint64("file_id", fileID).Msg("failed to get file")
 		return nil, fmt.Errorf("failed to get file: %w", err)
 	}
+
+	file.URL = utils.TransformMinioURL(file.URL)
 
 	return file, nil
 }

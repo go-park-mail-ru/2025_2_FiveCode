@@ -2,8 +2,8 @@ package server
 
 import (
 	"backend/user_service/internal/constants"
+	"backend/user_service/internal/models"
 	"backend/user_service/logger"
-	"backend/user_service/models"
 	user "backend/user_service/pkg/user/v1"
 	"context"
 	"errors"

@@ -2,7 +2,7 @@ package delivery
 
 import (
 	"backend/gateway_service/internal/apiutils"
-	"backend/gateway_service/internal/utils"
+	"backend/gateway_service/internal/user/models"
 	"backend/gateway_service/internal/validation"
 	"backend/gateway_service/logger"
 	"context"
@@ -10,14 +10,12 @@ import (
 	"net/http"
 	"time"
 
-	userPB "backend/user_service/pkg/user/v1"
-
 	pkgErrors "github.com/pkg/errors"
 )
 
 type AuthUsecase interface {
-	Login(ctx context.Context, email, password string) (string, *userPB.User, error)
-	Register(ctx context.Context, email, password string) (string, *userPB.User, error)
+	Login(ctx context.Context, email, password string) (string, *models.User, error)
+	Register(ctx context.Context, email, password string) (string, *models.User, error)
 	Logout(ctx context.Context, sessionID string) error
 	GetCSRFToken(ctx context.Context, sessionID string) (string, error)
 }
@@ -68,7 +66,7 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, userProto, err := d.usecase.Login(r.Context(), req.Email, req.Password)
+	sessionID, user, err := d.usecase.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
 		log.Warn().Err(err).Str("email", req.Email).Msg("login failed")
 		apiutils.HandleGrpcError(w, err, log)
@@ -84,10 +82,10 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	log.Info().Uint64("user_id", userProto.Id).Msg("user logged in successfully")
+	log.Info().Uint64("user_id", user.ID).Msg("user logged in successfully")
 
 	apiutils.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"user": utils.ProtoUserToModel(userProto),
+		"user": user,
 	})
 }
 
@@ -120,7 +118,7 @@ func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	sessionID, userProto, err := d.usecase.Register(r.Context(), req.Email, req.Password)
+	sessionID, user, err := d.usecase.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
 		log.Warn().Err(err).Str("email", req.Email).Msg("registration failed")
 		apiutils.HandleGrpcError(w, err, log)
@@ -136,10 +134,10 @@ func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
 		HttpOnly: true,
 	})
 
-	log.Info().Uint64("user_id", userProto.Id).Msg("user registered successfully")
+	log.Info().Uint64("user_id", user.ID).Msg("user registered successfully")
 
 	apiutils.WriteJSON(w, http.StatusCreated, map[string]interface{}{
-		"user": utils.ProtoUserToModel(userProto),
+		"user": user,
 	})
 }
 

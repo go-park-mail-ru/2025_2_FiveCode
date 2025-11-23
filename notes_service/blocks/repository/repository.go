@@ -2,9 +2,9 @@ package repository
 
 import (
 	"backend/notes_service/internal/constants"
+	"backend/notes_service/internal/models"
 	"backend/notes_service/internal/utils"
 	"backend/notes_service/logger"
-	"backend/notes_service/models"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -25,6 +25,7 @@ func NewBlocksRepository(db *sql.DB) *BlocksRepository {
 
 func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -38,21 +39,21 @@ func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, p
 	}()
 
 	insertBlockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by)
-		VALUES ($1, 'text', $2, $3)
+		INSERT INTO block (note_id, type, position, last_edited_by, created_at, updated_at)
+		VALUES ($1, 'text', $2, $3, $4, $5)
 		RETURNING id
 	`
 	var blockID uint64
-	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(&blockID); err != nil {
+	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID, now, now).Scan(&blockID); err != nil {
 		log.Error().Err(err).Msg("CreateTextBlock: insert block failed")
 		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
 	insertTextQuery := `
-		INSERT INTO block_text (block_id, text)
-		VALUES ($1, $2)
+		INSERT INTO block_text (block_id, text, created_at, updated_at)
+		VALUES ($1, $2, $3, $4)
 	`
-	if _, err := tx.ExecContext(ctx, insertTextQuery, blockID, ""); err != nil {
+	if _, err := tx.ExecContext(ctx, insertTextQuery, blockID, "", now, now); err != nil {
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("CreateTextBlock: insert block_text failed")
 		return nil, fmt.Errorf("failed to create block_text: %w", err)
 	}
@@ -67,6 +68,7 @@ func (r *BlocksRepository) CreateTextBlock(ctx context.Context, noteID uint64, p
 
 func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -80,21 +82,21 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 	}()
 
 	insertBlockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by)
-		VALUES ($1, 'attachment', $2, $3)
+		INSERT INTO block (note_id, type, position, last_edited_by, created_at, updated_at)
+		VALUES ($1, 'attachment', $2, $3, $4, $5)
 		RETURNING id
 	`
 	var blockID uint64
-	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(&blockID); err != nil {
+	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID, now, now).Scan(&blockID); err != nil {
 		log.Error().Err(err).Msg("CreateAttachmentBlock: insert block failed")
 		return nil, fmt.Errorf("failed to create block: %w", err)
 	}
 
 	insertAttachQuery := `
-		INSERT INTO block_attachment (block_id, file_id)
-		VALUES ($1, $2)
+		INSERT INTO block_attachment (block_id, file_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4)
 	`
-	if _, err := tx.ExecContext(ctx, insertAttachQuery, blockID, fileID); err != nil {
+	if _, err := tx.ExecContext(ctx, insertAttachQuery, blockID, fileID, now, now); err != nil {
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("CreateAttachmentBlock: insert block_attachment failed")
 		return nil, fmt.Errorf("failed to create block_attachment: %w", err)
 	}
@@ -109,6 +111,8 @@ func (r *BlocksRepository) CreateAttachmentBlock(ctx context.Context, noteID uin
 
 func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("CreateCodeBlock: failed to begin transaction")
@@ -116,26 +120,26 @@ func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, p
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil && !errors.Is(err, sql.ErrTxDone) {
-			log.Error().Err(err).Msg("UpdateCodeBlock: rollback failed")
+			log.Error().Err(err).Msg("CreateCodeBlock: rollback failed")
 		}
 	}()
 
 	insertBlockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by)
-		VALUES ($1, 'code', $2, $3)
+		INSERT INTO block (note_id, type, position, last_edited_by, created_at, updated_at)
+		VALUES ($1, 'code', $2, $3, $4, $5)
 		RETURNING id
 	`
 	var blockID uint64
-	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID).Scan(&blockID); err != nil {
+	if err := tx.QueryRowContext(ctx, insertBlockQuery, noteID, position, userID, now, now).Scan(&blockID); err != nil {
 		log.Error().Err(err).Msg("CreateCodeBlock: failed to create block")
 		return nil, fmt.Errorf("CreateCodeBlock: failed to create block: %w", err)
 	}
 
 	insertCodeQuery := `
-		INSERT INTO block_code (block_id, language, code_text)
-		VALUES ($1, $2, $3)
+		INSERT INTO block_code (block_id, language, code_text, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, $5)
 	`
-	if _, err := tx.ExecContext(ctx, insertCodeQuery, blockID, "javascript", ""); err != nil {
+	if _, err := tx.ExecContext(ctx, insertCodeQuery, blockID, "javascript", "", now, now); err != nil {
 		log.Error().Err(err).Msg("CreateCodeBlock: failed to create block_code")
 		return nil, fmt.Errorf("CreateCodeCode: failed to create block_code: %w", err)
 	}
@@ -150,6 +154,8 @@ func (r *BlocksRepository) CreateCodeBlock(ctx context.Context, noteID uint64, p
 
 func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, language, codeText string) (*models.Block, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
+
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
 		log.Error().Err(err).Msg("UpdateCodeBlock: failed to begin transaction")
@@ -162,18 +168,18 @@ func (r *BlocksRepository) UpdateCodeBlock(ctx context.Context, blockID uint64, 
 	}()
 
 	updateBlockQuery := `UPDATE block SET updated_at = $1 WHERE id = $2`
-	if _, err = tx.ExecContext(ctx, updateBlockQuery, time.Now().UTC(), blockID); err != nil {
+	if _, err = tx.ExecContext(ctx, updateBlockQuery, now, blockID); err != nil {
 		log.Error().Err(err).Msg("UpdateCodeBlock: failed to update block timestamp")
 		return nil, fmt.Errorf("UpdateCodeBlock: failed to update block timestamp: %w", err)
 	}
 
 	updateCodeQuery := `
-        INSERT INTO block_code (block_id, language, code_text)
-        VALUES ($1, $2, $3)
+        INSERT INTO block_code (block_id, language, code_text, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (block_id) DO UPDATE 
-        SET language = EXCLUDED.language, code_text = EXCLUDED.code_text, updated_at = NOW()
+        SET language = EXCLUDED.language, code_text = EXCLUDED.code_text, updated_at = EXCLUDED.updated_at
 	`
-	if _, err := tx.ExecContext(ctx, updateCodeQuery, blockID, language, codeText); err != nil {
+	if _, err := tx.ExecContext(ctx, updateCodeQuery, blockID, language, codeText, now, now); err != nil {
 		log.Error().Err(err).Msg("UpdateCodeBlock: failed to update/insert block_code")
 		return nil, fmt.Errorf("UpdateCodeBlock: failed to update/insert block_code: %w", err)
 	}
@@ -530,6 +536,7 @@ func (r *BlocksRepository) getAttachmentContentsBatch(ctx context.Context, block
 
 func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models.BlockTextFormat) (*models.Block, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -543,7 +550,7 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 	}()
 
 	updateBlockQuery := `UPDATE block SET updated_at = $1 WHERE id = $2`
-	if _, err = tx.ExecContext(ctx, updateBlockQuery, time.Now().UTC(), blockID); err != nil {
+	if _, err = tx.ExecContext(ctx, updateBlockQuery, now, blockID); err != nil {
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: update block timestamp failed")
 		return nil, fmt.Errorf("failed to update block timestamp: %w", err)
 	}
@@ -555,7 +562,7 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 		WHERE block_id = $3
 		RETURNING id
 	`
-	if err = tx.QueryRowContext(ctx, updateTextQuery, text, time.Now().UTC(), blockID).Scan(&blockTextID); err != nil {
+	if err = tx.QueryRowContext(ctx, updateTextQuery, text, now, blockID).Scan(&blockTextID); err != nil {
 		log.Error().Err(err).Uint64("block_id", blockID).Msg("UpdateBlockText: update block_text failed")
 		return nil, fmt.Errorf("failed to update block_text: %w", err)
 	}
@@ -568,8 +575,8 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 
 	if len(formats) > 0 {
 		insertFormatQuery := `
-			INSERT INTO block_text_format (block_text_id, start_offset, end_offset, bold, italic, underline, strikethrough, link, font, size)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+			INSERT INTO block_text_format (block_text_id, start_offset, end_offset, bold, italic, underline, strikethrough, link, font, size, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		`
 		for _, f := range formats {
 			var link interface{}
@@ -577,7 +584,7 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 				link = *f.Link
 			}
 			if _, err = tx.ExecContext(ctx, insertFormatQuery,
-				blockTextID, f.StartOffset, f.EndOffset, f.Bold, f.Italic, f.Underline, f.Strikethrough, link, f.Font, f.Size,
+				blockTextID, f.StartOffset, f.EndOffset, f.Bold, f.Italic, f.Underline, f.Strikethrough, link, f.Font, f.Size, now, now,
 			); err != nil {
 				log.Error().Err(err).Uint64("block_text_id", blockTextID).Msg("UpdateBlockText: insert format failed")
 				return nil, fmt.Errorf("failed to insert format: %w", err)
@@ -600,6 +607,7 @@ func (r *BlocksRepository) UpdateBlockText(ctx context.Context, blockID uint64, 
 
 func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models.Block, error) {
 	log := logger.FromContext(ctx)
+	now := time.Now().UTC()
 
 	query := `
         UPDATE block
@@ -607,7 +615,7 @@ func (r *BlocksRepository) UpdateBlockPosition(ctx context.Context, blockID uint
         WHERE id = $3
     `
 
-	result, err := r.db.ExecContext(ctx, query, position, time.Now().UTC(), blockID)
+	result, err := r.db.ExecContext(ctx, query, position, now, blockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to update block position")
 		return nil, fmt.Errorf("failed to update block position: %w", err)

@@ -1,10 +1,8 @@
 package usecase
 
 import (
+	"backend/gateway_service/internal/user/models"
 	"context"
-	"fmt"
-
-	userPB "backend/user_service/pkg/user/v1"
 )
 
 type AuthRepository interface {
@@ -16,7 +14,7 @@ type AuthRepository interface {
 type UserRepository interface {
 	VerifyUser(ctx context.Context, email, password string) (uint64, error)
 	CreateUser(ctx context.Context, email, password, username string) (uint64, error)
-	GetUser(ctx context.Context, userID uint64) (*userPB.User, error)
+	GetUser(ctx context.Context, userID uint64) (*models.User, error)
 }
 
 type AuthUsecase struct {
@@ -31,39 +29,39 @@ func NewAuthUsecase(authRepo AuthRepository, userRepo UserRepository) *AuthUseca
 	}
 }
 
-func (u *AuthUsecase) Login(ctx context.Context, email, password string) (string, *userPB.User, error) {
+func (u *AuthUsecase) Login(ctx context.Context, email, password string) (string, *models.User, error) {
 	userID, err := u.userRepo.VerifyUser(ctx, email, password)
 	if err != nil {
-		return "", nil, fmt.Errorf("verify user failed: %w", err)
+		return "", nil, err
 	}
 
 	sessionID, err := u.authRepo.CreateSession(ctx, userID)
 	if err != nil {
-		return "", nil, fmt.Errorf("create session failed: %w", err)
+		return "", nil, err
 	}
 
 	user, err := u.userRepo.GetUser(ctx, userID)
 	if err != nil {
-		return "", nil, fmt.Errorf("get user profile failed: %w", err)
+		return "", nil, err
 	}
 
 	return sessionID, user, nil
 }
 
-func (u *AuthUsecase) Register(ctx context.Context, email, password string) (string, *userPB.User, error) {
+func (u *AuthUsecase) Register(ctx context.Context, email, password string) (string, *models.User, error) {
 	userID, err := u.userRepo.CreateUser(ctx, email, password, "")
 	if err != nil {
-		return "", nil, fmt.Errorf("create user failed: %w", err)
+		return "", nil, err
 	}
 
 	sessionID, err := u.authRepo.CreateSession(ctx, userID)
 	if err != nil {
-		return "", nil, fmt.Errorf("create session failed: %w", err)
+		return "", nil, err
 	}
 
 	user, err := u.userRepo.GetUser(ctx, userID)
 	if err != nil {
-		return "", nil, fmt.Errorf("get user profile failed: %w", err)
+		return "", nil, err
 	}
 
 	return sessionID, user, nil
