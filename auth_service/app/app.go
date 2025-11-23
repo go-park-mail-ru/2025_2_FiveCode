@@ -14,14 +14,12 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
 )
 
 type App struct {
-	Config   *config.Config
-	Store    *store.Store
-	Logger   zerolog.Logger
-	UserConn *grpc.ClientConn
+	Config *config.Config
+	Store  *store.Store
+	Logger zerolog.Logger
 
 	closers []io.Closer
 }
@@ -64,23 +62,6 @@ func (a *App) initDependencies() {
 		a.Logger.Fatal().Err(err).Msg("failed to init redis")
 	}
 	a.closers = append(a.closers, a.Store.Redis)
-
-	a.Logger.Info().Msg("Connecting to User Service...")
-
-	userHost := a.Config.Services["user"].GrpcHost
-	userPort := a.Config.Services["user"].GrpcPort
-	userAddr := fmt.Sprintf("%s:%d", userHost, userPort)
-
-	conn, err := grpc.Dial(
-		userAddr,
-		grpc.WithTransportCredentials(insecure.NewCredentials()),
-	)
-	if err != nil {
-		a.Logger.Fatal().Err(err).Msgf("failed to connect to user service at %s", userAddr)
-	}
-
-	a.UserConn = conn
-	a.closers = append(a.closers, conn)
 
 	a.Logger.Info().Msg("Dependencies installed successfully")
 }

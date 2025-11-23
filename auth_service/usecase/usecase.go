@@ -8,7 +8,6 @@ import (
 
 type AuthUsecase struct {
 	Repository  AuthRepository
-	UserService UserService
 	CSRFSecret  []byte
 }
 
@@ -18,47 +17,20 @@ type AuthRepository interface {
 	DeleteSession(ctx context.Context, sessionID string) error
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
 }
-
-//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
-type UserService interface {
-	VerifyUser(ctx context.Context, email, password string) (uint64, error)
-	CreateUser(ctx context.Context, email, password string) (uint64, error)
-}
-
-func NewAuthUsecase(repository AuthRepository, userService UserService, csrfSecret []byte) *AuthUsecase {
+	
+func NewAuthUsecase(repository AuthRepository, csrfSecret []byte) *AuthUsecase {
 	return &AuthUsecase{
 		Repository:  repository,
-		UserService: userService,
 		CSRFSecret:  csrfSecret,
 	}
 }
 
-func (u *AuthUsecase) Login(ctx context.Context, email, password string) (uint64, string, error) {
-	userID, err := u.UserService.VerifyUser(ctx, email, password)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to verify user: %w", err)
-	}
-
+func (u *AuthUsecase) CreateSession(ctx context.Context, userID uint64) (string, error) {
 	sessionID, err := u.Repository.CreateSession(ctx, userID)
 	if err != nil {
-		return 0, "", fmt.Errorf("failed to create session: %w", err)
+		return "", fmt.Errorf("failed to create session: %w", err)
 	}
-
-	return userID, sessionID, nil
-}
-
-func (u *AuthUsecase) Register(ctx context.Context, email, password string) (uint64, string, error) {
-	userID, err := u.UserService.CreateUser(ctx, email, password)
-	if err != nil {
-		return 0, "", err
-	}
-
-	sessionID, err := u.Repository.CreateSession(ctx, userID)
-	if err != nil {
-		return 0, "", fmt.Errorf("failed to create session: %w", err)
-	}
-
-	return userID, sessionID, nil
+	return sessionID, nil
 }
 
 func (u *AuthUsecase) Logout(ctx context.Context, sessionID string) error {

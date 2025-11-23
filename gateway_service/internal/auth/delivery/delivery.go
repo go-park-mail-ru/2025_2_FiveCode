@@ -2,46 +2,35 @@ package delivery
 
 import (
 	"backend/gateway_service/internal/apiutils"
+	"backend/gateway_service/internal/utils"
 	"backend/gateway_service/internal/validation"
 	"backend/gateway_service/logger"
-	authPB "backend/auth_service/pkg/auth/v1"
-	userPB "backend/user_service/pkg/user/v1"
-
-	"backend/gateway_service/internal/utils"
 	"context"
 	"encoding/json"
 	"net/http"
 	"time"
 
+	userPB "backend/user_service/pkg/user/v1"
+
 	pkgErrors "github.com/pkg/errors"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-//go:generate mockgen -destination=../mock/mock_auth_client.go -package=mock . AuthClient
-type AuthClient interface {
-	Login(ctx context.Context, in *authPB.LoginRequest, opts ...grpc.CallOption) (*authPB.LoginResponse, error)
-	Register(ctx context.Context, in *authPB.RegisterRequest, opts ...grpc.CallOption) (*authPB.RegisterResponse, error)
-	Logout(ctx context.Context, in *authPB.LogoutRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	GetCSRFToken(ctx context.Context, in *authPB.GetCSRFTokenRequest, opts ...grpc.CallOption) (*authPB.GetCSRFTokenResponse, error)
-}
-
-//go:generate mockgen -destination=../mock/mock_user_client.go -package=mock . UserServiceClient
-type UserServiceClient interface {
-	GetUser(ctx context.Context, in *userPB.GetUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
+type AuthUsecase interface {
+	Login(ctx context.Context, email, password string) (string, *userPB.User, error)
+	Register(ctx context.Context, email, password string) (string, *userPB.User, error)
+	Logout(ctx context.Context, sessionID string) error
+	GetCSRFToken(ctx context.Context, sessionID string) (string, error)
 }
 
 type AuthDelivery struct {
+	usecase         AuthUsecase
 	SessionDuration time.Duration
-	AuthClient      AuthClient
-	UserClient      UserServiceClient
 }
 
-func NewAuthDelivery(authClient AuthClient, userClient UserServiceClient, sessionDuration time.Duration) *AuthDelivery {
+func NewAuthDelivery(usecase AuthUsecase, sessionDuration time.Duration) *AuthDelivery {
 	return &AuthDelivery{
+		usecase:         usecase,
 		SessionDuration: sessionDuration,
-		AuthClient:      authClient,
-		UserClient:      userClient,
 	}
 }
 
@@ -79,20 +68,9 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResp, err := d.AuthClient.Login(r.Context(), &authPB.LoginRequest{
-		Email:    req.Email,
-		Password: req.Password,
-	})
-
+	sessionID, userProto, err := d.usecase.Login(r.Context(), req.Email, req.Password)
 	if err != nil {
-		log.Warn().Err(err).Str("email", req.Email).Msg("gRPC login failed")
-		apiutils.HandleGrpcError(w, err, log)
-		return
-	}
-
-	userResp, err := d.UserClient.GetUser(r.Context(), &userPB.GetUserRequest{UserId: authResp.GetUserId()})
-	if err != nil {
-		log.Error().Err(err).Msg("failed to retrieve user profile after login")
+		log.Warn().Err(err).Str("email", req.Email).Msg("login failed")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -100,16 +78,16 @@ func (d *AuthDelivery) Login(w http.ResponseWriter, r *http.Request) {
 	expiration := time.Now().Add(d.SessionDuration)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "session_id",
-		Value:    authResp.GetSessionId(),
+		Value:    sessionID,
 		Path:     "/",
 		Expires:  expiration,
 		HttpOnly: true,
 	})
 
-	log.Info().Uint64("user_id", authResp.GetUserId()).Msg("user logged in successfully")
+	log.Info().Uint64("user_id", userProto.Id).Msg("user logged in successfully")
 
 	apiutils.WriteJSON(w, http.StatusOK, map[string]interface{}{
-		"user": utils.ProtoUserToModel(userResp),
+		"user": utils.ProtoUserToModel(userProto),
 	})
 }
 
@@ -142,37 +120,26 @@ func (d *AuthDelivery) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	authResp, err := d.AuthClient.Register(r.Context(), &authPB.RegisterRequest{
-		Email:    req.Email,
-		Password: req.Password,
-	})
+	sessionID, userProto, err := d.usecase.Register(r.Context(), req.Email, req.Password)
 	if err != nil {
-		log.Warn().Err(err).Str("email", req.Email).Msg("gRPC registration failed")
-		apiutils.HandleGrpcError(w, err, log)
-		return
-	}
-
-	userResp, err := d.UserClient.GetUser(r.Context(), &userPB.GetUserRequest{UserId: authResp.GetUserId()})
-	if err != nil {
-		log.Error().Err(err).Msg("failed to retrieve user profile after registration")
+		log.Warn().Err(err).Str("email", req.Email).Msg("registration failed")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
 	expiration := time.Now().Add(d.SessionDuration)
-	session := &http.Cookie{
+	http.SetCookie(w, &http.Cookie{
 		Name:     "session_id",
-		Value:    authResp.GetSessionId(),
+		Value:    sessionID,
 		Path:     "/",
 		Expires:  expiration,
 		HttpOnly: true,
-	}
-	http.SetCookie(w, session)
+	})
 
-	log.Info().Uint64("user_id", authResp.GetUserId()).Msg("user registered successfully")
+	log.Info().Uint64("user_id", userProto.Id).Msg("user registered successfully")
 
 	apiutils.WriteJSON(w, http.StatusCreated, map[string]interface{}{
-		"user": utils.ProtoUserToModel(userResp),
+		"user": utils.ProtoUserToModel(userProto),
 	})
 }
 
@@ -190,11 +157,9 @@ func (d *AuthDelivery) Logout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = d.AuthClient.Logout(r.Context(), &authPB.LogoutRequest{
-		SessionId: session.Value,
-	})
+	err = d.usecase.Logout(r.Context(), session.Value)
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC logout failed")
+		log.Error().Err(err).Msg("logout failed")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -215,14 +180,12 @@ func (d *AuthDelivery) GetCSRFToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.AuthClient.GetCSRFToken(r.Context(), &authPB.GetCSRFTokenRequest{
-		SessionId: cookie.Value,
-	})
+	token, err := d.usecase.GetCSRFToken(r.Context(), cookie.Value)
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to GetCSRFToken failed")
+		log.Error().Err(err).Msg("GetCSRFToken failed")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
 
-	apiutils.WriteJSON(w, http.StatusOK, map[string]string{"token": grpcResp.Token})
+	apiutils.WriteJSON(w, http.StatusOK, map[string]string{"token": token})
 }

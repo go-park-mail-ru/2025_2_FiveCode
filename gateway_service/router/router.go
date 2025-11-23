@@ -3,12 +3,12 @@ package router
 import (
 	"net/http"
 
-	fileDelivery "backend/gateway_service/file/delivery"
+	authDelivery "backend/gateway_service/internal/auth/delivery"
 	"backend/gateway_service/internal/config"
-	authDelivery "backend/gateway_service/internal/delivery/auth"
-	notesDelivery "backend/gateway_service/internal/delivery/notes"
-	userDelivery "backend/gateway_service/internal/delivery/user"
+	fileDelivery "backend/gateway_service/internal/file/delivery"
 	mw "backend/gateway_service/internal/middleware"
+	notesDelivery "backend/gateway_service/internal/notes/delivery"
+	userDelivery "backend/gateway_service/internal/user/delivery"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
@@ -21,7 +21,6 @@ func NewRouter(
 	auth *authDelivery.AuthDelivery,
 	user *userDelivery.UserDelivery,
 	notes *notesDelivery.NotesDelivery,
-	blocks *notesDelivery.BlocksDelivery,
 	files *fileDelivery.FileDelivery,
 ) http.Handler {
 
@@ -58,12 +57,12 @@ func NewRouter(
 	blocksRouter := api.PathPrefix("").Subrouter()
 	blocksRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))
 
-	blocksRouter.HandleFunc("/notes/{note_id}/blocks", blocks.CreateBlock).Methods("POST")
-	blocksRouter.HandleFunc("/notes/{note_id}/blocks", blocks.GetBlocks).Methods("GET")
-	blocksRouter.HandleFunc("/blocks/{block_id}", blocks.GetBlock).Methods("GET")
-	blocksRouter.HandleFunc("/blocks/{block_id}", blocks.UpdateBlock).Methods("PATCH")
-	blocksRouter.HandleFunc("/blocks/{block_id}", blocks.DeleteBlock).Methods("DELETE")
-	blocksRouter.HandleFunc("/blocks/{block_id}/position", blocks.UpdateBlockPosition).Methods("PUT")
+	blocksRouter.HandleFunc("/notes/{note_id}/blocks", notes.CreateBlock).Methods("POST")
+	blocksRouter.HandleFunc("/notes/{note_id}/blocks", notes.GetBlocks).Methods("GET")
+	blocksRouter.HandleFunc("/blocks/{block_id}", notes.GetBlock).Methods("GET")
+	blocksRouter.HandleFunc("/blocks/{block_id}", notes.UpdateBlock).Methods("PATCH")
+	blocksRouter.HandleFunc("/blocks/{block_id}", notes.DeleteBlock).Methods("DELETE")
+	blocksRouter.HandleFunc("/blocks/{block_id}/position", notes.UpdateBlockPosition).Methods("PUT")
 
 	filesRouter := api.PathPrefix("/files").Subrouter()
 	filesRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))

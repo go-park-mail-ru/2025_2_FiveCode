@@ -2,15 +2,12 @@ package main
 
 import (
 	"backend/gateway_service/app"
-	"backend/gateway_service/internal/adapter"
 
-	authDelivery "backend/gateway_service/internal/delivery/auth"
-	notesDelivery "backend/gateway_service/internal/delivery/notes"
-	userDelivery "backend/gateway_service/internal/delivery/user"
+	authDelivery "backend/gateway_service/internal/auth/delivery"
+	notesDelivery "backend/gateway_service/internal/notes/delivery"
+	userDelivery "backend/gateway_service/internal/user/delivery"
 
-	fileDelivery "backend/gateway_service/file/delivery"
-	fileRepository "backend/gateway_service/file/repository"
-	fileUsecase "backend/gateway_service/file/usecase"
+	fileDelivery "backend/gateway_service/internal/file/delivery"
 
 	"backend/gateway_service/router"
 
@@ -18,6 +15,16 @@ import (
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
 	userPB "backend/user_service/pkg/user/v1"
+
+	authRepo "backend/gateway_service/internal/auth/repository"
+	fileRepo "backend/gateway_service/internal/file/repository"
+	notesRepo "backend/gateway_service/internal/notes/repository"
+	userRepo "backend/gateway_service/internal/user/repository"
+
+	authUC "backend/gateway_service/internal/auth/usecase"
+	fileUC "backend/gateway_service/internal/file/usecase"
+	notesUC "backend/gateway_service/internal/notes/usecase"
+	userUC "backend/gateway_service/internal/user/usecase"
 
 	"time"
 
@@ -32,24 +39,30 @@ func main() {
 		}
 	}()
 
-	authClient := authPB.NewAuthClient(application.AuthConn)
-	userClient := userPB.NewUserServiceClient(application.UserConn)
-	noteClient := notePB.NewNoteServiceClient(application.NotesConn)
-	blockClient := blockPB.NewBlockServiceClient(application.NotesConn)
+	authClientGRPC := authPB.NewAuthClient(application.AuthConn)
+	userClientGRPC := userPB.NewUserServiceClient(application.UserConn)
+	noteClientGRPC := notePB.NewNoteServiceClient(application.NotesConn)
+	blockClientGRPC := blockPB.NewBlockServiceClient(application.NotesConn)
 
-	sessionValidator := adapter.NewAuthGrpcAdapter(authClient)
+	gatewayAuthRepo := authRepo.NewAuthRepository(authClientGRPC)
+	gatewayUserRepo := userRepo.NewUserRepository(userClientGRPC)
+	gatewayNotesRepo := notesRepo.NewNotesRepository(noteClientGRPC, blockClientGRPC)
+
+	gatewayFileRepo := fileRepo.NewFileRepository(application.Store.Postgres.DB, application.Store.Minio.Client)
+
+	gatewayAuthUC := authUC.NewAuthUsecase(gatewayAuthRepo, gatewayUserRepo)
+	gatewayUserUC := userUC.NewUserUsecase(gatewayUserRepo, gatewayAuthRepo)
+	gatewayNotesUC := notesUC.NewNotesUsecase(gatewayNotesRepo)
+	gatewayFileUC := fileUC.NewFileUsecase(gatewayFileRepo)
 
 	sessionDuration := time.Duration(application.Config.Cookie.SessionDuration) * time.Hour
-	authHandler := authDelivery.NewAuthDelivery(authClient, userClient, sessionDuration)
 
-	userHandler := userDelivery.NewUserDelivery(userClient, authClient)
+	authHandler := authDelivery.NewAuthDelivery(gatewayAuthUC, sessionDuration)
+	userHandler := userDelivery.NewUserDelivery(gatewayUserUC)
+	notesHandler := notesDelivery.NewNotesDelivery(gatewayNotesUC)
+	fileHandler := fileDelivery.NewFileDelivery(gatewayFileUC)
 
-	notesHandler := notesDelivery.NewNotesDelivery(noteClient)
-	blocksHandler := notesDelivery.NewBlocksDelivery(blockClient)
-
-	fileRepo := fileRepository.NewFileRepository(application.Store.Postgres.DB, application.Store.Minio.Client)
-	fileUC := fileUsecase.NewFileUsecase(fileRepo)
-	fileHandler := fileDelivery.NewFileDelivery(fileUC)
+	sessionValidator := gatewayAuthRepo
 
 	mainRouter := router.NewRouter(
 		application.Config,
@@ -58,7 +71,6 @@ func main() {
 		authHandler,
 		userHandler,
 		notesHandler,
-		blocksHandler,
 		fileHandler,
 	)
 

@@ -15,8 +15,7 @@ import (
 
 //go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
 type AuthUsecase interface {
-	Login(ctx context.Context, email string, password string) (uint64, string, error)
-	Register(ctx context.Context, email string, password string) (uint64, string, error)
+	CreateSession(ctx context.Context, userID uint64) (string, error)
 	Logout(ctx context.Context, sessionID string) error
 	GetUserIDBySession(ctx context.Context, sessionID string) (uint64, error)
 	GenerateCSRFToken(ctx context.Context, sessionID string) (string, error)
@@ -39,33 +38,18 @@ func RegisterService(grpcServer *grpc.Server, usecase AuthUsecase) {
 	pb.RegisterAuthServer(grpcServer, server)
 }
 
-func (s *Server) Register(ctx context.Context, req *pb.RegisterRequest) (*pb.RegisterResponse, error) {
-	userID, sessionId, err := s.Usecase.Register(ctx, req.GetEmail(), req.GetPassword())
-	if err != nil {
-		if errors.Is(err, constants.ErrUserExists) {
-			return nil, status.Error(codes.AlreadyExists, "user with this email already exists")
-		}
-		return nil, status.Error(codes.Internal, "failed to register user")
+func (s *Server) CreateSession(ctx context.Context, req *pb.CreateSessionRequest) (*pb.CreateSessionResponse, error) {
+	if req.GetUserId() == 0 {
+		return nil, status.Error(codes.InvalidArgument, "user_id is required")
 	}
 
-	return &pb.RegisterResponse{
-		UserId:    userID,
-		SessionId: sessionId,
-	}, nil
-}
-
-func (s *Server) Login(ctx context.Context, req *pb.LoginRequest) (*pb.LoginResponse, error) {
-	userID, sessionId, err := s.Usecase.Login(ctx, req.GetEmail(), req.GetPassword())
+	sessionID, err := s.Usecase.CreateSession(ctx, req.GetUserId())
 	if err != nil {
-		if errors.Is(err, constants.ErrInvalidEmailOrPassword) {
-			return nil, status.Error(codes.Unauthenticated, "invalid email or password")
-		}
-		return nil, status.Error(codes.Internal, "failed to login user")
+		return nil, status.Error(codes.Internal, "failed to create session")
 	}
 
-	return &pb.LoginResponse{
-		UserId:    userID,
-		SessionId: sessionId,
+	return &pb.CreateSessionResponse{
+		SessionId: sessionID,
 	}, nil
 }
 

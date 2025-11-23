@@ -8,9 +8,7 @@ import "google/protobuf/empty.proto";
 
 
 service Auth {
-  rpc Register(RegisterRequest) returns (RegisterResponse) {}
-
-  rpc Login(LoginRequest) returns (LoginResponse) {}
+  rpc CreateSession (CreateSessionRequest) returns (CreateSessionResponse) {}
 
   rpc Logout(LogoutRequest) returns (google.protobuf.Empty) {}
 
@@ -20,24 +18,12 @@ service Auth {
 }
 
 
-message RegisterRequest {
-  string email = 1;
-  string password = 2;
-}
-
-message RegisterResponse {
-    uint64 user_id = 1;
-    string session_id = 2;
-  }
-
-message LoginRequest {
-  string email = 1;
-  string password = 2;
-}
-
-message LoginResponse {
+message CreateSessionRequest {
   uint64 user_id = 1;
-  string session_id = 2;
+}
+
+message CreateSessionResponse {
+  string session_id = 1;
 }
 
 message LogoutRequest {

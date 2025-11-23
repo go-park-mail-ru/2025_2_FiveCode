@@ -7,7 +7,6 @@ import (
 	"backend/gateway_service/logger"
 	"backend/notes_service/models"
 	blockPB "backend/notes_service/pkg/block/v1"
-	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -15,38 +14,14 @@ import (
 	"strconv"
 
 	"github.com/gorilla/mux"
-	"google.golang.org/grpc"
-	"google.golang.org/protobuf/types/known/emptypb"
 )
-
-//go:generate mockgen -destination=../mock/mock_block_client.go -package=mock . BlockServiceClient
-type BlockServiceClient interface {
-	GetBlocks(ctx context.Context, in *blockPB.GetBlocksRequest, opts ...grpc.CallOption) (*blockPB.GetBlocksResponse, error)
-	GetBlock(ctx context.Context, in *blockPB.GetBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
-	CreateTextBlock(ctx context.Context, in *blockPB.CreateTextBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
-	CreateCodeBlock(ctx context.Context, in *blockPB.CreateCodeBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
-	CreateAttachmentBlock(ctx context.Context, in *blockPB.CreateAttachmentBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
-	UpdateBlock(ctx context.Context, in *blockPB.UpdateBlockRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
-	DeleteBlock(ctx context.Context, in *blockPB.DeleteBlockRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-	UpdateBlockPosition(ctx context.Context, in *blockPB.UpdateBlockPositionRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
-}
-
-type BlocksDelivery struct {
-	BlockClient BlockServiceClient
-}
-
-func NewBlocksDelivery(b BlockServiceClient) *BlocksDelivery {
-	return &BlocksDelivery{
-		BlockClient: b,
-	}
-}
 
 type baseCreateBlockRequest struct {
 	Type          string  `json:"type"`
 	BeforeBlockID *uint64 `json:"before_block_id,omitempty"`
 }
 
-func (d *BlocksDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
+func (d *NotesDelivery) CreateBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 
@@ -100,9 +75,8 @@ type createCodeBlockRequest struct {
 	baseCreateBlockRequest
 }
 
-func (d *BlocksDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
+func (d *NotesDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
 	log := logger.FromContext(r.Context())
-	log.Info().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("handling create code block request")
 
 	var req createCodeBlockRequest
 	if err := apiutils.StrictUnmarshal(body, &req); err != nil {
@@ -111,13 +85,13 @@ func (d *BlocksDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	grpcResp, err := d.BlockClient.CreateCodeBlock(r.Context(), &blockPB.CreateCodeBlockRequest{
+	grpcResp, err := d.usecase.CreateCodeBlock(r.Context(), &blockPB.CreateCodeBlockRequest{
 		UserId:        userID,
 		NoteId:        noteID,
 		BeforeBlockId: req.BeforeBlockID,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to create code block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -130,7 +104,7 @@ type createTextBlockRequest struct {
 	baseCreateBlockRequest
 }
 
-func (d *BlocksDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
+func (d *NotesDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
 	log := logger.FromContext(r.Context())
 
 	var req createTextBlockRequest
@@ -140,13 +114,13 @@ func (d *BlocksDelivery) createTextBlock(w http.ResponseWriter, r *http.Request,
 		return
 	}
 
-	grpcResp, err := d.BlockClient.CreateTextBlock(r.Context(), &blockPB.CreateTextBlockRequest{
+	grpcResp, err := d.usecase.CreateTextBlock(r.Context(), &blockPB.CreateTextBlockRequest{
 		UserId:        userID,
 		NoteId:        noteID,
 		BeforeBlockId: req.BeforeBlockID,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to create text block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -160,7 +134,7 @@ type createAttachmentBlockRequest struct {
 	FileID uint64 `json:"file_id"`
 }
 
-func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
+func (d *NotesDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Request, userID, noteID uint64, body []byte) {
 	log := logger.FromContext(r.Context())
 
 	var req createAttachmentBlockRequest
@@ -176,14 +150,14 @@ func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	grpcResp, err := d.BlockClient.CreateAttachmentBlock(r.Context(), &blockPB.CreateAttachmentBlockRequest{
+	grpcResp, err := d.usecase.CreateAttachmentBlock(r.Context(), &blockPB.CreateAttachmentBlockRequest{
 		UserId:        userID,
 		NoteId:        noteID,
 		BeforeBlockId: req.BeforeBlockID,
 		FileId:        req.FileID,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to create attachment block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -192,7 +166,7 @@ func (d *BlocksDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Re
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
-func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
+func (d *NotesDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 
@@ -210,12 +184,9 @@ func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.BlockClient.GetBlocks(r.Context(), &blockPB.GetBlocksRequest{
-		UserId: userID,
-		NoteId: noteID,
-	})
+	grpcResp, err := d.usecase.GetBlocks(r.Context(), userID, noteID)
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to get blocks")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -228,7 +199,7 @@ func (d *BlocksDelivery) GetBlocks(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
+func (d *NotesDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 
@@ -246,12 +217,9 @@ func (d *BlocksDelivery) GetBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.BlockClient.GetBlock(r.Context(), &blockPB.GetBlockRequest{
-		UserId:  userID,
-		BlockId: blockID,
-	})
+	grpcResp, err := d.usecase.GetBlock(r.Context(), userID, blockID)
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to get block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -265,7 +233,7 @@ type UpdateBlockDeliveryRequest struct {
 	Content json.RawMessage `json:"content"`
 }
 
-func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
+func (d *NotesDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 
@@ -303,9 +271,9 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	grpcResp, err := d.BlockClient.UpdateBlock(r.Context(), grpcReq)
+	grpcResp, err := d.usecase.UpdateBlock(r.Context(), grpcReq)
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to update block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -314,7 +282,7 @@ func (d *BlocksDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
-func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
+func (d *NotesDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 
@@ -332,12 +300,9 @@ func (d *BlocksDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = d.BlockClient.DeleteBlock(r.Context(), &blockPB.DeleteBlockRequest{
-		UserId:  userID,
-		BlockId: blockID,
-	})
+	err = d.usecase.DeleteBlock(r.Context(), userID, blockID)
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to delete block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
@@ -349,7 +314,7 @@ type UpdateBlockPositionRequest struct {
 	BeforeBlockID *uint64 `json:"before_block_id"`
 }
 
-func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Request) {
+func (d *NotesDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	vars := mux.Vars(r)
 
@@ -380,13 +345,13 @@ func (d *BlocksDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	grpcResp, err := d.BlockClient.UpdateBlockPosition(r.Context(), &blockPB.UpdateBlockPositionRequest{
+	grpcResp, err := d.usecase.UpdateBlockPosition(r.Context(), &blockPB.UpdateBlockPositionRequest{
 		UserId:        userID,
 		BlockId:       blockID,
 		BeforeBlockId: req.BeforeBlockID,
 	})
 	if err != nil {
-		log.Error().Err(err).Msg("gRPC call to Block service failed")
+		log.Error().Err(err).Msg("failed to update block position")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}

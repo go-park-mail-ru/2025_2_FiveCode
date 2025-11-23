@@ -27,15 +27,9 @@ type RedisConfig struct {
 	DB       int
 }
 
-type ServiceConfig struct {
-	GrpcHost string `mapstructure:"grpc_host"`
-	GrpcPort int    `mapstructure:"grpc_port"`
-}
-
 type Config struct {
 	GRPCPort int `mapstructure:"grpc_port"`
 	Redis    RedisConfig
-	Services map[string]ServiceConfig `mapstructure:"services"`
 	Cors     CorsConfig               `mapstructure:"cors"`
 	Cookie   CookieConfig             `mapstructure:"cookie"`
 	CSRF     CSRFConfig               `mapstructure:"csrf"`
@@ -69,21 +63,6 @@ func Load() (*Config, error) {
 	cfg.Redis.Port = v.GetInt("REDIS_PORT")
 	cfg.Redis.Password = v.GetString("REDIS_PASSWORD")
 	cfg.Redis.DB = v.GetInt("REDIS_DB")
-
-	if cfg.Services == nil {
-		cfg.Services = make(map[string]ServiceConfig)
-	}
-
-	userService := cfg.Services["user"]
-
-	if host := v.GetString("SERVICES_USER_GRPC_HOST"); host != "" {
-		userService.GrpcHost = host
-	}
-	if port := v.GetInt("SERVICES_USER_GRPC_PORT"); port != 0 {
-		userService.GrpcPort = port
-	}
-
-	cfg.Services["user"] = userService
 
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
