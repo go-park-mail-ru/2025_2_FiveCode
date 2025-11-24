@@ -96,6 +96,8 @@ func (d *NotesDelivery) createCodeBlock(w http.ResponseWriter, r *http.Request, 
 		return
 	}
 
+	d.notifyNoteChanged(r.Context(), noteID, userID)
+
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
 
@@ -125,6 +127,8 @@ func (d *NotesDelivery) createTextBlock(w http.ResponseWriter, r *http.Request, 
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	d.notifyNoteChanged(r.Context(), noteID, userID)
 
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
@@ -163,6 +167,8 @@ func (d *NotesDelivery) createAttachmentBlock(w http.ResponseWriter, r *http.Req
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	d.notifyNoteChanged(r.Context(), noteID, userID)
 
 	apiutils.WriteJSON(w, http.StatusCreated, block)
 }
@@ -298,6 +304,8 @@ func (d *NotesDelivery) UpdateBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	d.notifyNoteChanged(r.Context(), block.NoteID, userID)
+
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }
 
@@ -319,12 +327,22 @@ func (d *NotesDelivery) DeleteBlock(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	block, err := d.usecase.GetBlock(r.Context(), userID, blockID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get block before delete")
+		apiutils.HandleGrpcError(w, err, log)
+		return
+	}
+	noteID := block.NoteID
+
 	err = d.usecase.DeleteBlock(r.Context(), userID, blockID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to delete block")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	d.notifyNoteChanged(r.Context(), noteID, userID)
 
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -370,6 +388,8 @@ func (d *NotesDelivery) UpdateBlockPosition(w http.ResponseWriter, r *http.Reque
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}
+
+	d.notifyNoteChanged(r.Context(), block.NoteID, userID)
 
 	apiutils.WriteJSON(w, http.StatusOK, block)
 }

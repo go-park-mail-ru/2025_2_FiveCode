@@ -38,7 +38,6 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		}
 	}()
 
-	// Генерируем UUID для share_uuid
 	shareUUID := uuid.New().String()
 
 	noteQuery := `

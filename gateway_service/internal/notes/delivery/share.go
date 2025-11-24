@@ -12,11 +12,6 @@ import (
 	"github.com/gorilla/mux"
 )
 
-// ============================================
-// SHARING HANDLERS
-// ============================================
-
-// AddCollaboratorRequest represents the request body for adding a collaborator
 type AddCollaboratorRequest struct {
 	UserID uint64          `json:"user_id"`
 	Role   models.NoteRole `json:"role"`
@@ -98,7 +93,6 @@ func (d *NotesDelivery) GetCollaborators(w http.ResponseWriter, r *http.Request)
 	apiutils.WriteJSON(w, http.StatusOK, response)
 }
 
-// UpdateCollaboratorRoleRequest represents the request body for updating collaborator role
 type UpdateCollaboratorRoleRequest struct {
 	Role models.NoteRole `json:"role"`
 }
@@ -193,7 +187,6 @@ func (d *NotesDelivery) RemoveCollaborator(w http.ResponseWriter, r *http.Reques
 	w.WriteHeader(http.StatusNoContent)
 }
 
-// SetPublicAccessRequest represents the request body for setting public access
 type SetPublicAccessRequest struct {
 	AccessLevel *models.NoteRole `json:"access_level"`
 }
@@ -301,7 +294,6 @@ func (d *NotesDelivery) GetSharingSettings(w http.ResponseWriter, r *http.Reques
 	apiutils.WriteJSON(w, http.StatusOK, response)
 }
 
-// ActivateAccessByLink handles activation of access via share link
 func (d *NotesDelivery) ActivateAccessByLink(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 

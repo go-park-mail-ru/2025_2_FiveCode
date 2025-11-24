@@ -111,7 +111,7 @@ func (a *App) initGRPCServer() {
 	shareRepo := ShareRepo.NewSharingRepository(a.Store.Postgres.DB)
 
 	notesUC := NoteUC.NewNoteUsecase(notesRepo, shareRepo)
-	blocksUC := BlockUC.NewBlocksUsecase(blocksRepo, notesRepo)
+	blocksUC := BlockUC.NewBlocksUsecase(blocksRepo, notesRepo, shareRepo)
 	shareUC := ShareUC.NewSharingUsecase(shareRepo, notesRepo)
 
 	server.RegisterServices(a.GRPCServer, notesUC, blocksUC, shareUC)

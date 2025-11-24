@@ -18,10 +18,6 @@ func NewSharingRepository(db *sql.DB) *SharingRepository {
 	return &SharingRepository{db: db}
 }
 
-// ============================================
-// Collaborators management
-// ============================================
-
 func (r *SharingRepository) AddCollaborator(ctx context.Context, permission *models.NotePermission) (*models.NotePermission, error) {
 	log := logger.FromContext(ctx)
 
@@ -227,10 +223,6 @@ func (r *SharingRepository) CheckCollaboratorExists(ctx context.Context, noteID,
 	return exists, nil
 }
 
-// ============================================
-// Public access management
-// ============================================
-
 func (r *SharingRepository) SetPublicAccess(ctx context.Context, noteID uint64, accessLevel *models.NoteRole) error {
 	log := logger.FromContext(ctx)
 
@@ -301,10 +293,6 @@ func (r *SharingRepository) GetPublicAccess(ctx context.Context, noteID uint64) 
 	return &role, nil
 }
 
-// ============================================
-// Note ownership and access checks
-// ============================================
-
 func (r *SharingRepository) GetNoteOwnerID(ctx context.Context, noteID uint64) (uint64, error) {
 	log := logger.FromContext(ctx)
 
@@ -353,7 +341,6 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 
 	accessInfo := &models.NoteAccessInfo{}
 
-	// Проверяем владельца
 	if ownerID == userID {
 		accessInfo.IsOwner = true
 		accessInfo.HasAccess = true
@@ -364,7 +351,6 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 
 	accessInfo.IsOwner = false
 
-	// Проверяем прямое разрешение
 	if permissionRole.Valid {
 		accessInfo.HasAccess = true
 		accessInfo.Role = models.NoteRole(permissionRole.String)
@@ -372,7 +358,6 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 		return accessInfo, nil
 	}
 
-	// Проверяем публичный доступ
 	if publicAccess.Valid {
 		accessInfo.HasAccess = true
 		accessInfo.Role = models.NoteRole(publicAccess.String)
@@ -380,7 +365,6 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 		return accessInfo, nil
 	}
 
-	// Нет доступа
 	accessInfo.HasAccess = false
 	return accessInfo, nil
 }
@@ -421,7 +405,7 @@ func (r *SharingRepository) GetUserPermission(ctx context.Context, noteID, userI
 	)
 
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, nil // Нет разрешения
+		return nil, nil
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get user permission")

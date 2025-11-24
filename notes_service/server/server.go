@@ -489,7 +489,6 @@ func (s *Server) UpdateBlockPosition(ctx context.Context, req *blockPB.UpdateBlo
 	return blockModelToProto(block), nil
 }
 
-// Конвертер для NoteRole
 func noteRoleToProto(role models.NoteRole) sharePB.NoteRole {
 	switch role {
 	case models.RoleViewer:
@@ -550,7 +549,6 @@ func noteAccessInfoModelToProto(accessInfo *models.NoteAccessInfo) *sharePB.Note
 	}
 }
 
-// Обновленные методы
 func (s *Server) AddCollaborator(ctx context.Context, req *sharePB.AddCollaboratorRequest) (*sharePB.CollaboratorResponse, error) {
 	permission, err := s.sharingUsecase.AddCollaborator(
 		ctx,
@@ -604,7 +602,7 @@ func (s *Server) GetCollaborators(ctx context.Context, req *sharePB.GetCollabora
 		collaborators[i] = &sharePB.Collaborator{
 			PermissionId: p.PermissionID,
 			UserId:       p.GrantedTo,
-			Role:         noteRoleToProto(p.Role), // Используем конвертер
+			Role:         noteRoleToProto(p.Role),
 			GrantedBy:    p.GrantedBy,
 			GrantedAt:    timestamppb.New(p.CreatedAt),
 		}
@@ -631,7 +629,7 @@ func (s *Server) UpdateCollaboratorRole(ctx context.Context, req *sharePB.Update
 		req.GetNoteId(),
 		req.GetCurrentUserId(),
 		req.GetPermissionId(),
-		noteRoleFromProto(req.GetNewRole()), // Конвертируем здесь
+		noteRoleFromProto(req.GetNewRole()),
 	)
 	if err != nil {
 		if errors.Is(err, constants.ErrNotFound) {
@@ -660,7 +658,7 @@ func (s *Server) UpdateCollaboratorRole(ctx context.Context, req *sharePB.Update
 func (s *Server) SetPublicAccess(ctx context.Context, req *sharePB.SetPublicAccessRequest) (*sharePB.PublicAccessResponse, error) {
 	var accessLevel *models.NoteRole
 	if req.AccessLevel != nil {
-		level := noteRoleFromProto(*req.AccessLevel) // Конвертируем здесь
+		level := noteRoleFromProto(*req.AccessLevel)
 		accessLevel = &level
 	}
 
@@ -680,7 +678,6 @@ func (s *Server) SetPublicAccess(ctx context.Context, req *sharePB.SetPublicAcce
 		return nil, status.Error(codes.Internal, "failed to set public access")
 	}
 
-	// Получаем обновленные настройки для ответа
 	updatedAccess, err := s.sharingUsecase.GetPublicAccess(ctx, req.GetNoteId(), req.GetCurrentUserId())
 	if err != nil {
 		return nil, status.Error(codes.Internal, "failed to get updated public access")
@@ -786,7 +783,6 @@ func (s *Server) GetSharingSettings(ctx context.Context, req *sharePB.GetSharing
 		return nil, status.Error(codes.Internal, "failed to get sharing settings")
 	}
 
-	// Конвертируем collaborators
 	collaborators := make([]*sharePB.Collaborator, len(settings.Collaborators))
 	for i, c := range settings.Collaborators {
 		collaborators[i] = &sharePB.Collaborator{
@@ -798,7 +794,6 @@ func (s *Server) GetSharingSettings(ctx context.Context, req *sharePB.GetSharing
 		}
 	}
 
-	// Конвертируем public access
 	var publicAccessLevel *sharePB.NoteRole
 	if settings.PublicAccess.AccessLevel != nil {
 		level := noteRoleToProto(*settings.PublicAccess.AccessLevel)

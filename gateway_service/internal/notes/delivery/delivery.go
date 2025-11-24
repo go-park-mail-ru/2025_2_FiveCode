@@ -2,6 +2,7 @@ package delivery
 
 import (
 	"backend/gateway_service/internal/notes/models"
+	"backend/gateway_service/internal/websocket"
 	"context"
 )
 
@@ -38,10 +39,12 @@ type NotesUsecase interface {
 
 type NotesDelivery struct {
 	usecase NotesUsecase
+	wsHub   *websocket.Hub
 }
 
-func NewNotesDelivery(usecase NotesUsecase) *NotesDelivery {
+func NewNotesDelivery(usecase NotesUsecase, wsHub *websocket.Hub) *NotesDelivery {
 	return &NotesDelivery{
 		usecase: usecase,
+		wsHub:   wsHub,
 	}
 }

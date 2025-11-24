@@ -83,7 +83,6 @@ func (u *NoteUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*
 func (u *NoteUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
 	log := logger.FromContext(ctx)
 
-	// Проверяем доступ через SharingRepository
 	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check note access for update")
@@ -95,7 +94,6 @@ func (u *NoteUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint
 		return nil, constants.ErrNoAccess
 	}
 
-	// Проверяем право на редактирование
 	if !accessInfo.CanEdit {
 		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot edit note")
 		return nil, constants.ErrNoAccess
@@ -113,7 +111,6 @@ func (u *NoteUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint
 func (u *NoteUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint64) error {
 	log := logger.FromContext(ctx)
 
-	// Проверяем доступ через SharingRepository
 	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to check note access for deletion")
@@ -125,7 +122,6 @@ func (u *NoteUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint
 		return constants.ErrNoAccess
 	}
 
-	// Удалять заметку может только владелец
 	if !accessInfo.IsOwner {
 		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("only owner can delete note")
 		return constants.ErrNoAccess

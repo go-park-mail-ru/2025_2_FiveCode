@@ -9,6 +9,7 @@ import (
 	mw "backend/gateway_service/internal/middleware"
 	notesDelivery "backend/gateway_service/internal/notes/delivery"
 	userDelivery "backend/gateway_service/internal/user/delivery"
+	"backend/gateway_service/internal/websocket"
 
 	"github.com/gorilla/mux"
 	"github.com/rs/zerolog"
@@ -22,6 +23,7 @@ func NewRouter(
 	user *userDelivery.UserDelivery,
 	notes *notesDelivery.NotesDelivery,
 	files *fileDelivery.FileDelivery,
+	wsHandler *websocket.Handler,
 ) http.Handler {
 
 	r := mux.NewRouter()
@@ -53,6 +55,10 @@ func NewRouter(
 	notesRouter.HandleFunc("/notes/{note_id}", notes.DeleteNote).Methods("DELETE")
 	notesRouter.HandleFunc("/notes/{note_id}/favorite", notes.AddFavorite).Methods("POST")
 	notesRouter.HandleFunc("/notes/{note_id}/favorite", notes.RemoveFavorite).Methods("DELETE")
+
+	wsRouter := api.PathPrefix("/ws").Subrouter()
+	wsRouter.Use(mw.AuthMiddleware(sessionValidator))
+	wsRouter.HandleFunc("/notes/{note_id}", wsHandler.HandleConnection).Methods("GET")
 
 	blocksRouter := api.PathPrefix("").Subrouter()
 	blocksRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))
