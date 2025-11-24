@@ -3,11 +3,14 @@ package server
 import (
 	"context"
 	"errors"
+	"fmt"
+	"time"
 
 	"backend/notes_service/internal/constants"
 	"backend/notes_service/internal/models"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
+	sharePB "backend/notes_service/pkg/sharing/v1"
 
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -38,25 +41,41 @@ type BlocksUsecase interface {
 	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error)
 }
 
+type SharingUsecase interface {
+	AddCollaborator(ctx context.Context, noteID, currentUserID, targetUserID uint64, role models.NoteRole) (*models.NotePermission, error)
+	GetCollaborators(ctx context.Context, noteID, currentUserID uint64) (uint64, []*models.NotePermission, *models.NoteRole, error)
+	UpdateCollaboratorRole(ctx context.Context, noteID, currentUserID, permissionID uint64, newRole models.NoteRole) (*models.NotePermission, error)
+	RemoveCollaborator(ctx context.Context, noteID, currentUserID, permissionID uint64) error
+	SetPublicAccess(ctx context.Context, noteID, currentUserID uint64, accessLevel *models.NoteRole) error
+	GetPublicAccess(ctx context.Context, noteID, currentUserID uint64) (*models.NoteRole, error)
+	GetSharingSettings(ctx context.Context, noteID, currentUserID uint64) (*models.SharingSettings, error)
+	ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.NoteAccessInfo, error)
+	CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error)
+}
+
 type Server struct {
 	notePB.UnimplementedNoteServiceServer
 	blockPB.UnimplementedBlockServiceServer
+	sharePB.UnimplementedSharingServiceServer
 
-	noteUsecase   NoteUsecase
-	blocksUsecase BlocksUsecase
+	noteUsecase    NoteUsecase
+	blocksUsecase  BlocksUsecase
+	sharingUsecase SharingUsecase
 }
 
-func NewServer(noteUC NoteUsecase, blocksUC BlocksUsecase) *Server {
+func NewServer(noteUC NoteUsecase, blocksUC BlocksUsecase, sharingUC SharingUsecase) *Server {
 	return &Server{
-		noteUsecase:   noteUC,
-		blocksUsecase: blocksUC,
+		noteUsecase:    noteUC,
+		blocksUsecase:  blocksUC,
+		sharingUsecase: sharingUC,
 	}
 }
 
-func RegisterServices(grpcServer *grpc.Server, noteUC NoteUsecase, blocksUC BlocksUsecase) {
-	server := NewServer(noteUC, blocksUC)
+func RegisterServices(grpcServer *grpc.Server, noteUC NoteUsecase, blocksUC BlocksUsecase, sharingUC SharingUsecase) {
+	server := NewServer(noteUC, blocksUC, sharingUC)
 	notePB.RegisterNoteServiceServer(grpcServer, server)
 	blockPB.RegisterBlockServiceServer(grpcServer, server)
+	sharePB.RegisterSharingServiceServer(grpcServer, server)
 }
 
 func noteModelToProto(note *models.Note) *notePB.Note {
@@ -455,4 +474,245 @@ func (s *Server) UpdateBlockPosition(ctx context.Context, req *blockPB.UpdateBlo
 	}
 
 	return blockModelToProto(block), nil
+}
+
+// Конвертер для NoteRole
+func noteRoleToProto(role models.NoteRole) sharePB.NoteRole {
+	switch role {
+	case models.RoleViewer:
+		return sharePB.NoteRole_NOTE_ROLE_VIEWER
+	case models.RoleCommenter:
+		return sharePB.NoteRole_NOTE_ROLE_COMMENTER
+	case models.RoleEditor:
+		return sharePB.NoteRole_NOTE_ROLE_EDITOR
+	default:
+		return sharePB.NoteRole_NOTE_ROLE_UNSPECIFIED
+	}
+}
+
+func noteRoleFromProto(role sharePB.NoteRole) models.NoteRole {
+	switch role {
+	case sharePB.NoteRole_NOTE_ROLE_VIEWER:
+		return models.RoleViewer
+	case sharePB.NoteRole_NOTE_ROLE_COMMENTER:
+		return models.RoleCommenter
+	case sharePB.NoteRole_NOTE_ROLE_EDITOR:
+		return models.RoleEditor
+	default:
+		return models.RoleViewer
+	}
+}
+
+func collaboratorModelToProto(collab *models.Collaborator) *sharePB.Collaborator {
+	return &sharePB.Collaborator{
+		PermissionId: collab.PermissionID,
+		UserId:       collab.UserID,
+		Role:         noteRoleToProto(collab.Role),
+		GrantedBy:    collab.GrantedBy,
+		GrantedAt:    timestamppb.New(collab.GrantedAt),
+	}
+}
+
+func publicAccessModelToProto(publicAccess *models.PublicAccess) *sharePB.PublicAccess {
+	var accessLevel *sharePB.NoteRole
+	if publicAccess.AccessLevel != nil {
+		level := noteRoleToProto(*publicAccess.AccessLevel)
+		accessLevel = &level
+	}
+
+	return &sharePB.PublicAccess{
+		NoteId:      publicAccess.NoteID,
+		AccessLevel: accessLevel,
+		ShareUrl:    publicAccess.ShareURL,
+	}
+}
+
+func noteAccessInfoModelToProto(accessInfo *models.NoteAccessInfo) *sharePB.NoteAccessResponse {
+	return &sharePB.NoteAccessResponse{
+		HasAccess:  accessInfo.HasAccess,
+		Role:       noteRoleToProto(accessInfo.Role),
+		IsOwner:    accessInfo.IsOwner,
+		CanEdit:    accessInfo.CanEdit,
+		CanComment: accessInfo.Role == models.RoleCommenter || accessInfo.Role == models.RoleEditor,
+	}
+}
+
+// Обновленные методы
+func (s *Server) AddCollaborator(ctx context.Context, req *sharePB.AddCollaboratorRequest) (*sharePB.CollaboratorResponse, error) {
+	permission, err := s.sharingUsecase.AddCollaborator(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+		req.GetUserId(),
+		noteRoleFromProto(req.GetRole()), // Конвертируем здесь
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to add collaborator")
+	}
+
+	collaborator := &models.Collaborator{
+		PermissionID: permission.PermissionID,
+		UserID:       permission.GrantedTo,
+		Role:         permission.Role,
+		GrantedBy:    permission.GrantedBy,
+		GrantedAt:    permission.CreatedAt,
+	}
+
+	return &sharePB.CollaboratorResponse{
+		PermissionId: permission.PermissionID,
+		Collaborator: collaboratorModelToProto(collaborator),
+	}, nil
+}
+
+func (s *Server) GetCollaborators(ctx context.Context, req *sharePB.GetCollaboratorsRequest) (*sharePB.GetCollaboratorsResponse, error) {
+	ownerID, permissions, publicAccessLevel, err := s.sharingUsecase.GetCollaborators(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to get collaborators")
+	}
+
+	collaborators := make([]*sharePB.Collaborator, len(permissions))
+	for i, p := range permissions {
+		collaborators[i] = &sharePB.Collaborator{
+			PermissionId: p.PermissionID,
+			UserId:       p.GrantedTo,
+			Role:         noteRoleToProto(p.Role), // Используем конвертер
+			GrantedBy:    p.GrantedBy,
+			GrantedAt:    timestamppb.New(p.CreatedAt),
+		}
+	}
+
+	var protoPublicAccessLevel *sharePB.NoteRole
+	if publicAccessLevel != nil {
+		level := noteRoleToProto(*publicAccessLevel)
+		protoPublicAccessLevel = &level
+	}
+
+	return &sharePB.GetCollaboratorsResponse{
+		NoteId:             req.GetNoteId(),
+		OwnerId:            ownerID,
+		Collaborators:      collaborators,
+		PublicAccessLevel:  protoPublicAccessLevel,
+		TotalCollaborators: int32(len(collaborators)),
+	}, nil
+}
+
+func (s *Server) UpdateCollaboratorRole(ctx context.Context, req *sharePB.UpdateCollaboratorRoleRequest) (*sharePB.CollaboratorResponse, error) {
+	permission, err := s.sharingUsecase.UpdateCollaboratorRole(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+		req.GetPermissionId(),
+		noteRoleFromProto(req.GetNewRole()), // Конвертируем здесь
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "permission not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to update collaborator role")
+	}
+
+	collaborator := &models.Collaborator{
+		PermissionID: permission.PermissionID,
+		UserID:       permission.GrantedTo,
+		Role:         permission.Role,
+		GrantedBy:    permission.GrantedBy,
+		GrantedAt:    permission.CreatedAt,
+	}
+
+	return &sharePB.CollaboratorResponse{
+		PermissionId: permission.PermissionID,
+		Collaborator: collaboratorModelToProto(collaborator),
+	}, nil
+}
+
+func (s *Server) SetPublicAccess(ctx context.Context, req *sharePB.SetPublicAccessRequest) (*sharePB.PublicAccessResponse, error) {
+	var accessLevel *models.NoteRole
+	if req.AccessLevel != nil {
+		level := noteRoleFromProto(*req.AccessLevel) // Конвертируем здесь
+		accessLevel = &level
+	}
+
+	err := s.sharingUsecase.SetPublicAccess(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+		accessLevel,
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to set public access")
+	}
+
+	// Получаем обновленные настройки для ответа
+	updatedAccess, err := s.sharingUsecase.GetPublicAccess(ctx, req.GetNoteId(), req.GetCurrentUserId())
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to get updated public access")
+	}
+
+	var protoAccessLevel *sharePB.NoteRole
+	if updatedAccess != nil {
+		level := noteRoleToProto(*updatedAccess)
+		protoAccessLevel = &level
+	}
+
+	return &sharePB.PublicAccessResponse{
+		NoteId:      req.GetNoteId(),
+		AccessLevel: protoAccessLevel,
+		ShareUrl:    fmt.Sprintf("/notes/%d", req.GetNoteId()),
+		UpdatedAt:   timestamppb.New(time.Now()),
+	}, nil
+}
+
+func (s *Server) GetPublicAccess(ctx context.Context, req *sharePB.GetPublicAccessRequest) (*sharePB.PublicAccessResponse, error) {
+	accessLevel, err := s.sharingUsecase.GetPublicAccess(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to get public access")
+	}
+
+	var protoAccessLevel *sharePB.NoteRole
+	if accessLevel != nil {
+		level := noteRoleToProto(*accessLevel)
+		protoAccessLevel = &level
+	}
+
+	return &sharePB.PublicAccessResponse{
+		NoteId:      req.GetNoteId(),
+		AccessLevel: protoAccessLevel,
+		ShareUrl:    fmt.Sprintf("/notes/%d", req.GetNoteId()),
+		UpdatedAt:   timestamppb.New(time.Now()),
+	}, nil
 }

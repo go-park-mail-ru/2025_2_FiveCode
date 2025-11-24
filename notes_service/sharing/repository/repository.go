@@ -434,3 +434,33 @@ func (r *SharingRepository) GetUserPermission(ctx context.Context, noteID, userI
 func (r *SharingRepository) CanUserShare(ctx context.Context, noteID, userID uint64) (bool, error) {
 	return r.IsNoteOwner(ctx, noteID, userID)
 }
+
+func (r *SharingRepository) UpdateIsSharedFlag(ctx context.Context, noteID uint64, isShared bool) error {
+	log := logger.FromContext(ctx)
+
+	query := `
+		UPDATE note
+		SET is_shared = $1, updated_at = NOW()
+		WHERE id = $2 AND deleted_at IS NULL
+	`
+
+	result, err := r.db.ExecContext(ctx, query, isShared, noteID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to update is_shared flag")
+		return fmt.Errorf("failed to update is_shared flag: %w", err)
+	}
+
+	rows, err := result.RowsAffected()
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get rows affected")
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rows == 0 {
+		log.Warn().Uint64("note_id", noteID).Msg("note not found for is_shared update")
+		return constants.ErrNotFound
+	}
+
+	log.Info().Uint64("note_id", noteID).Bool("is_shared", isShared).Msg("is_shared flag updated")
+	return nil
+}

@@ -26,15 +26,24 @@ type SharingRepository interface {
 	IsNoteOwner(ctx context.Context, noteID, userID uint64) (bool, error)
 	GetUserPermission(ctx context.Context, noteID, userID uint64) (*models.NotePermission, error)
 	CanUserShare(ctx context.Context, noteID, userID uint64) (bool, error)
+
+	// is_shared flag management
+	UpdateIsSharedFlag(ctx context.Context, noteID uint64, isShared bool) error
+}
+
+type NotesRepository interface {
+	GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error)
 }
 
 type SharingUsecase struct {
 	sharingRepo SharingRepository
+	notesRepo   NotesRepository
 }
 
-func NewSharingUsecase(repo SharingRepository) *SharingUsecase {
+func NewSharingUsecase(sharingRepo SharingRepository, notesRepo NotesRepository) *SharingUsecase {
 	return &SharingUsecase{
-		sharingRepo: repo,
+		sharingRepo: sharingRepo,
+		notesRepo:   notesRepo,
 	}
 }
 
@@ -73,6 +82,24 @@ func (uc *SharingUsecase) CheckNoteAccess(ctx context.Context, noteID, userID ui
 	return accessInfo, nil
 }
 
+// updateIsSharedFlag автоматически обновляет флаг is_shared на основе количества коллабораторов
+func (uc *SharingUsecase) updateIsSharedFlag(ctx context.Context, noteID uint64) error {
+	// Получаем список коллабораторов
+	collaborators, err := uc.sharingRepo.GetCollaboratorsByNoteID(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get collaborators count: %w", err)
+	}
+
+	// Если есть хотя бы один коллаборатор - is_shared = true, иначе false
+	isShared := len(collaborators) > 0
+
+	if err := uc.sharingRepo.UpdateIsSharedFlag(ctx, noteID, isShared); err != nil {
+		return fmt.Errorf("failed to update is_shared flag: %w", err)
+	}
+
+	return nil
+}
+
 func (uc *SharingUsecase) AddCollaborator(ctx context.Context, noteID, currentUserID, targetUserID uint64, role models.NoteRole) (*models.NotePermission, error) {
 	// 1. Проверяем, что текущий пользователь - владелец
 	if err := uc.validateNoteOwnership(ctx, noteID, currentUserID); err != nil {
@@ -108,6 +135,11 @@ func (uc *SharingUsecase) AddCollaborator(ctx context.Context, noteID, currentUs
 	createdPermission, err := uc.sharingRepo.AddCollaborator(ctx, permission)
 	if err != nil {
 		return nil, fmt.Errorf("failed to add collaborator: %w", err)
+	}
+
+	// 5. Обновляем флаг is_shared
+	if err := uc.updateIsSharedFlag(ctx, noteID); err != nil {
+		return nil, fmt.Errorf("failed to update is_shared flag: %w", err)
 	}
 
 	return createdPermission, nil
@@ -205,6 +237,11 @@ func (uc *SharingUsecase) RemoveCollaborator(ctx context.Context, noteID, curren
 	// 3. Удаляем разрешение
 	if err := uc.sharingRepo.RemoveCollaborator(ctx, permissionID); err != nil {
 		return fmt.Errorf("failed to remove collaborator: %w", err)
+	}
+
+	// 4. Обновляем флаг is_shared
+	if err := uc.updateIsSharedFlag(ctx, noteID); err != nil {
+		return fmt.Errorf("failed to update is_shared flag: %w", err)
 	}
 
 	return nil
@@ -311,4 +348,84 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 	}
 
 	return settings, nil
+}
+
+// ============================================
+// ActivateAccessByLink - Активация доступа по публичной ссылке
+// ============================================
+
+// ActivateAccessByLink создает note_permission при переходе по публичной ссылке
+func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.NoteAccessInfo, error) {
+	// 1. Получаем заметку по share_uuid
+	note, err := uc.notesRepo.GetNoteByShareUUID(ctx, shareUUID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get note by share_uuid: %w", err)
+	}
+
+	// 2. Проверяем, что пользователь не является владельцем
+	if note.OwnerID == userID {
+		// Владелец уже имеет полный доступ, не нужно создавать permission
+		return &models.NoteAccessInfo{
+			IsOwner:   true,
+			HasAccess: true,
+			Role:      models.RoleEditor,
+			CanEdit:   true,
+		}, nil
+	}
+
+	// 3. Проверяем, есть ли уже разрешение для этого пользователя
+	existingPermission, err := uc.sharingRepo.GetUserPermission(ctx, note.ID, userID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check existing permission: %w", err)
+	}
+
+	if existingPermission != nil {
+		// Разрешение уже существует, возвращаем текущий доступ
+		return &models.NoteAccessInfo{
+			IsOwner:   false,
+			HasAccess: true,
+			Role:      existingPermission.Role,
+			CanEdit:   existingPermission.Role == models.RoleEditor,
+		}, nil
+	}
+
+	// 4. Получаем публичный уровень доступа
+	publicAccessLevel, err := uc.sharingRepo.GetPublicAccess(ctx, note.ID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get public access level: %w", err)
+	}
+
+	if publicAccessLevel == nil {
+		// Публичный доступ не настроен
+		return &models.NoteAccessInfo{
+			IsOwner:   false,
+			HasAccess: false,
+		}, nil
+	}
+
+	// 5. Создаем permission с ролью из public_access_level
+	permission := &models.NotePermission{
+		NoteID:    note.ID,
+		GrantedBy: note.OwnerID, // Доступ предоставлен владельцем через публичную ссылку
+		GrantedTo: userID,
+		Role:      *publicAccessLevel,
+	}
+
+	createdPermission, err := uc.sharingRepo.AddCollaborator(ctx, permission)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create permission by link: %w", err)
+	}
+
+	// 6. Обновляем флаг is_shared
+	if err := uc.updateIsSharedFlag(ctx, note.ID); err != nil {
+		return nil, fmt.Errorf("failed to update is_shared flag: %w", err)
+	}
+
+	// 7. Возвращаем информацию о доступе
+	return &models.NoteAccessInfo{
+		IsOwner:   false,
+		HasAccess: true,
+		Role:      createdPermission.Role,
+		CanEdit:   createdPermission.Role == models.RoleEditor,
+	}, nil
 }

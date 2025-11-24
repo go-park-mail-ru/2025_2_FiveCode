@@ -19,6 +19,9 @@ service SharingService {
   rpc GetSharingSettings(GetSharingSettingsRequest) returns (SharingSettingsResponse);
 
   rpc CheckNoteAccess(CheckNoteAccessRequest) returns (NoteAccessResponse);
+
+  // НОВЫЙ - активация доступа при переходе по публичной ссылке
+  rpc ActivateAccessByLink(ActivateAccessByLinkRequest) returns (ActivateAccessByLinkResponse);
 }
 
 enum NoteRole {
@@ -123,4 +126,15 @@ message NoteAccessResponse {
   bool is_owner = 3;
   bool can_edit = 4;
   bool can_comment = 5;
+}
+
+message ActivateAccessByLinkRequest {
+  string share_uuid = 1;
+  uint64 user_id = 2;
+}
+
+message ActivateAccessByLinkResponse {
+  uint64 note_id = 1;
+  bool access_granted = 2;
+  NoteAccessResponse access_info = 3;
 }

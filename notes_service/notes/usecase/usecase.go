@@ -10,7 +10,8 @@ import (
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type NoteUsecase struct {
-	Repository NotesRepository
+	Repository        NotesRepository
+	SharingRepository SharingRepository
 }
 
 type NotesRepository interface {
@@ -22,12 +23,16 @@ type NotesRepository interface {
 	DeleteNote(ctx context.Context, noteID uint64) error
 	AddFavorite(ctx context.Context, userID, noteID uint64) error
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
-	SetNoteShared(ctx context.Context, noteID uint64, isShared bool) error // <- НОВЫЙ
 }
 
-func NewNoteUsecase(Repository NotesRepository) *NoteUsecase {
+type SharingRepository interface {
+	CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error)
+}
+
+func NewNoteUsecase(repository NotesRepository, sharingRepository SharingRepository) *NoteUsecase {
 	return &NoteUsecase{
-		Repository: Repository,
+		Repository:        repository,
+		SharingRepository: sharingRepository,
 	}
 }
 
@@ -54,15 +59,22 @@ func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64) (*models.No
 
 func (u *NoteUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
+
+	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
 	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get note by id from repository")
 		return nil, fmt.Errorf("failed to get note: %w", err)
-	}
-
-	if note.OwnerID != userID {
-		log.Warn().Uint64("user_id", userID).Uint64("owner_id", note.OwnerID).Msg("user access denied")
-		return nil, constants.ErrNoAccess
 	}
 
 	return note, nil
@@ -70,14 +82,22 @@ func (u *NoteUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*
 
 func (u *NoteUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error) {
 	log := logger.FromContext(ctx)
-	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
+
+	// Проверяем доступ через SharingRepository
+	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get note for update")
-		return nil, fmt.Errorf("failed to get note: %w", err)
+		log.Error().Err(err).Msg("failed to check note access for update")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
 	}
 
-	if note.OwnerID != userID {
-		log.Warn().Uint64("user_id", userID).Uint64("owner_id", note.OwnerID).Msg("user access denied for update")
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	// Проверяем право на редактирование
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot edit note")
 		return nil, constants.ErrNoAccess
 	}
 
@@ -92,14 +112,22 @@ func (u *NoteUsecase) UpdateNote(ctx context.Context, userID uint64, noteID uint
 
 func (u *NoteUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint64) error {
 	log := logger.FromContext(ctx)
-	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
+
+	// Проверяем доступ через SharingRepository
+	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
-		log.Error().Err(err).Msg("failed to get note for deletion")
-		return fmt.Errorf("failed to get note: %w", err)
+		log.Error().Err(err).Msg("failed to check note access for deletion")
+		return fmt.Errorf("failed to check note access: %w", err)
 	}
 
-	if note.OwnerID != userID {
-		log.Warn().Uint64("user_id", userID).Uint64("owner_id", note.OwnerID).Msg("user access denied for deletion")
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return constants.ErrNoAccess
+	}
+
+	// Удалять заметку может только владелец
+	if !accessInfo.IsOwner {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("only owner can delete note")
 		return constants.ErrNoAccess
 	}
 
@@ -127,14 +155,16 @@ func (u *NoteUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64)
 
 func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
-	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
+
+	// Проверяем доступ через SharingRepository
+	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note for access check")
-		return fmt.Errorf("failed to get note by id: %w", err)
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to check note access")
+		return fmt.Errorf("failed to check note access: %w", err)
 	}
 
-	if note.OwnerID != userID {
-		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Uint64("owner_id", note.OwnerID).Msg("user access denied to note")
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
 		return constants.ErrNoAccess
 	}
 
