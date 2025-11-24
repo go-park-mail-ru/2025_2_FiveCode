@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS note
     is_archived          BOOLEAN     NOT NULL DEFAULT false,
     is_shared            BOOLEAN     NOT NULL DEFAULT false,
     public_access_level  note_role   DEFAULT NULL,
+    share_uuid           UUID        DEFAULT NULL UNIQUE,
     created_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at           TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     deleted_at           TIMESTAMPTZ

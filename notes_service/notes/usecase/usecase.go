@@ -17,10 +17,12 @@ type NotesRepository interface {
 	GetNotes(ctx context.Context, userID uint64) ([]models.Note, error)
 	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
 	GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models.Note, error)
+	GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error)
 	UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
 	DeleteNote(ctx context.Context, noteID uint64) error
 	AddFavorite(ctx context.Context, userID, noteID uint64) error
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
+	SetNoteShared(ctx context.Context, noteID uint64, isShared bool) error // <- НОВЫЙ
 }
 
 func NewNoteUsecase(Repository NotesRepository) *NoteUsecase {
@@ -137,4 +139,18 @@ func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64
 	}
 
 	return nil
+}
+
+// GetNoteByShareUUID получает заметку по share_uuid (без проверки владельца)
+// Используется для активации доступа по публичной ссылке
+func (u *NoteUsecase) GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error) {
+	log := logger.FromContext(ctx)
+
+	note, err := u.Repository.GetNoteByShareUUID(ctx, shareUUID)
+	if err != nil {
+		log.Error().Err(err).Str("share_uuid", shareUUID).Msg("failed to get note by share_uuid")
+		return nil, fmt.Errorf("failed to get note by share_uuid: %w", err)
+	}
+
+	return note, nil
 }
