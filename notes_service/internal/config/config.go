@@ -17,8 +17,9 @@ type DBConfig struct {
 }
 
 type Config struct {
-	GRPCPort int `mapstructure:"grpc_port"`
-	DB       DBConfig
+	GRPCPort    int `mapstructure:"grpc_port"`
+	MetricsPort int `mapstructure:"metrics_port"`
+	DB          DBConfig
 }
 
 func Load() (*Config, error) {
@@ -52,9 +53,15 @@ func Load() (*Config, error) {
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
 	}
+	if cfg.MetricsPort == 0 {
+		cfg.MetricsPort = v.GetInt("METRICS_PORT")
+	}
 
 	if cfg.GRPCPort == 0 {
 		return nil, fmt.Errorf("GRPC_PORT is required")
+	}
+	if cfg.MetricsPort == 0 {
+		return nil, fmt.Errorf("METRICS_PORT is required")
 	}
 	if cfg.DB.Host == "" {
 		return nil, fmt.Errorf("DB_HOST is required")

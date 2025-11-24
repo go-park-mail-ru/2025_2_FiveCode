@@ -11,6 +11,7 @@ csrf:
   token_ttl_minutes: 30
 
 grpc_port: 50051
+metrics_port: 9090
 
 services:
   user:

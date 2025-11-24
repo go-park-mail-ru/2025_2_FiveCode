@@ -11,6 +11,7 @@ import (
 	userDelivery "backend/gateway_service/internal/user/delivery"
 
 	"github.com/gorilla/mux"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 )
 
@@ -70,6 +71,8 @@ func NewRouter(
 	filesRouter.HandleFunc("/upload", files.UploadFile).Methods("POST")
 	filesRouter.HandleFunc("/{file_id}", files.GetFile).Methods("GET")
 	filesRouter.HandleFunc("/{file_id}", files.DeleteFile).Methods("DELETE")
+
+	r.Handle("/metrics", promhttp.Handler()).Methods("GET")
 
 	return mw.CORS(r, conf)
 }

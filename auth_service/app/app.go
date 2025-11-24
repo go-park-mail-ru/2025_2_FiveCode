@@ -13,9 +13,11 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/http"
 	"os"
 	"time"
 
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 	"google.golang.org/grpc"
@@ -54,6 +56,7 @@ func NewApp() *App {
 
 	app.initDependencies()
 	app.initGRPCServer()
+	app.initMetrics()
 
 	return app
 }
@@ -89,8 +92,9 @@ func (a *App) initGRPCServer() {
 	a.Lis = lis
 	a.closers = append(a.closers, lis)
 
-	interceptorOpt := grpc.UnaryInterceptor(
+	interceptorOpt := grpc.ChainUnaryInterceptor(
 		interceptors.LoggingInterceptor(a.Logger, logger.ToContext),
+		interceptors.MetricsInterceptor(constants.AuthServiceName),
 	)
 
 	a.GRPCServer = grpc.NewServer(interceptorOpt)
@@ -99,6 +103,26 @@ func (a *App) initGRPCServer() {
 	authUsecase := usecase.NewAuthUsecase(authRepo, []byte(a.Config.CSRF.SecretKey))
 
 	server.RegisterService(a.GRPCServer, authUsecase)
+}
+
+func (a *App) initMetrics() {
+	a.Logger.Info().Msg("Starting metrics server...")
+
+	metricsPort := a.Config.MetricsPort
+	if metricsPort == 0 {
+		a.Logger.Fatal().Msg("metrics_port is not set in config")
+	}
+
+	go func() {
+		metricsMux := http.NewServeMux()
+		metricsMux.Handle("/metrics", promhttp.Handler())
+		
+		metricsAddr := fmt.Sprintf(":%d", metricsPort)
+		a.Logger.Info().Str("addr", metricsAddr).Msg("Metrics server is running")
+		if err := http.ListenAndServe(metricsAddr, metricsMux); err != nil {
+			a.Logger.Error().Err(err).Msg("metrics server failed")
+		}
+	}()
 }
 
 func (a *App) Run() {
