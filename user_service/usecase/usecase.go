@@ -15,8 +15,8 @@ import (
 type UserRepository interface {
 	CreateUser(ctx context.Context, email, passwordHash, username string) (uint64, error)
 	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
-	UpdateUser(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
+	UpdateUser(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	DeleteUser(ctx context.Context, userID uint64) error
 }
 
@@ -106,6 +106,20 @@ func (uc *UserUsecase) VerifyUser(ctx context.Context, email, password string) (
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(password)); err != nil {
 		return nil, constants.ErrInvalidEmailOrPassword
+	}
+
+	user.Password = ""
+
+	return user, nil
+}
+
+func (uc *UserUsecase) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
+	log := logger.FromContext(ctx)
+
+	user, err := uc.Repository.GetUserByEmail(ctx, email)
+	if err != nil {
+		log.Error().Err(err).Str("email", email).Msg("failed to get user by email from repository")
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
 	}
 
 	user.Password = ""

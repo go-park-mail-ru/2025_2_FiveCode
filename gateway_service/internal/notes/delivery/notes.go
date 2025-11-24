@@ -4,10 +4,13 @@ import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/middleware"
 	"backend/gateway_service/internal/notes/models"
+	"backend/gateway_service/internal/websocket"
 	"backend/gateway_service/logger"
+	"context"
 	"encoding/json"
 	"net/http"
 	"strconv"
+	"time"
 
 	"github.com/gorilla/mux"
 )
@@ -204,4 +207,36 @@ func (d *NotesDelivery) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 	}
 
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (d *NotesDelivery) notifyNoteChanged(ctx context.Context, noteID uint64, userID uint64) {
+	blocks, err := d.usecase.GetBlocks(ctx, userID, noteID)
+	if err != nil {
+		log := logger.FromContext(ctx)
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get blocks for ws broadcast")
+		return
+	}
+
+	message := websocket.ServerMessage{
+		Type:      websocket.MessageTypeNoteUpdate,
+		NoteID:    int(noteID),
+		UpdatedBy: int(userID),
+		UpdatedAt: time.Now(),
+		Blocks:    blocks,
+	}
+
+	data, err := json.Marshal(message)
+	if err != nil {
+		log := logger.FromContext(ctx)
+		log.Error().Err(err).Msg("failed to marshal ws message")
+		return
+	}
+
+	d.wsHub.BroadcastToNote(int(noteID), data, int(userID))
+
+	log := logger.FromContext(ctx)
+	log.Debug().
+		Uint64("note_id", noteID).
+		Uint64("updated_by", userID).
+		Msg("note update broadcasted via websocket")
 }

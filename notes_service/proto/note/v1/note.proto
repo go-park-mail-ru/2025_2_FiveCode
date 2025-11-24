@@ -11,6 +11,7 @@ service NoteService {
   rpc GetAllNotes(GetAllNotesRequest) returns (GetAllNotesResponse);
   rpc CreateNote(CreateNoteRequest) returns (Note);
   rpc GetNoteById(GetNoteByIdRequest) returns (Note);
+  rpc GetNoteByShareUUID(GetNoteByShareUUIDRequest) returns (Note);
   rpc UpdateNote(UpdateNoteRequest) returns (Note);
   rpc DeleteNote(DeleteNoteRequest) returns (google.protobuf.Empty);
   rpc AddFavorite(FavoriteRequest) returns (google.protobuf.Empty);
@@ -26,9 +27,10 @@ message Note {
   bool is_favorite = 6;
   bool is_archived = 7;
   bool is_shared = 8;
-  google.protobuf.Timestamp created_at = 9;
-  google.protobuf.Timestamp updated_at = 10;
-  optional google.protobuf.Timestamp deleted_at = 11;
+  optional string share_uuid = 9;  // НОВЫЙ - UUID для публичной ссылки
+  google.protobuf.Timestamp created_at = 10;
+  google.protobuf.Timestamp updated_at = 11;
+  optional google.protobuf.Timestamp deleted_at = 12;
 }
 
 message GetAllNotesRequest {
@@ -46,6 +48,10 @@ message CreateNoteRequest {
 message GetNoteByIdRequest {
   uint64 user_id = 1;
   uint64 note_id = 2;
+}
+
+message GetNoteByShareUUIDRequest {
+  string share_uuid = 1;
 }
 
 message UpdateNoteRequest {
