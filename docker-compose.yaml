@@ -144,7 +144,7 @@ services:
       - '--path.sysfs=/host/sys'
       - '--path.rootfs=/rootfs'
     ports:
-      - "9100:9100"
+      - "8099:9100"
     pid: "host"
     restart: unless-stopped
     volumes:
@@ -158,7 +158,7 @@ services:
     volumes:
       - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
     ports:
-      - "9090:9090"
+      - "8098:9090"
     restart: unless-stopped
     depends_on:
       gateway:
@@ -180,7 +180,7 @@ services:
     volumes:
       - grafana_data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "8097:3000"
     restart: unless-stopped
     depends_on:
       - prometheus
