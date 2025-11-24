@@ -28,6 +28,7 @@ type NoteUsecase interface {
 	DeleteNote(ctx context.Context, userID uint64, noteID uint64) error
 	AddFavorite(ctx context.Context, userID, noteID uint64) error
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
+	GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error)
 }
 
 type BlocksUsecase interface {
@@ -49,7 +50,7 @@ type SharingUsecase interface {
 	SetPublicAccess(ctx context.Context, noteID, currentUserID uint64, accessLevel *models.NoteRole) error
 	GetPublicAccess(ctx context.Context, noteID, currentUserID uint64) (*models.NoteRole, error)
 	GetSharingSettings(ctx context.Context, noteID, currentUserID uint64) (*models.SharingSettings, error)
-	ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.NoteAccessInfo, error)
+	ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.ActivateAccessResponse, error)
 	CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error)
 }
 
@@ -260,6 +261,18 @@ func (s *Server) GetNoteById(ctx context.Context, req *notePB.GetNoteByIdRequest
 			return nil, status.Error(codes.PermissionDenied, "access denied")
 		}
 		return nil, status.Error(codes.Internal, "failed to get note")
+	}
+
+	return noteModelToProto(note), nil
+}
+
+func (s *Server) GetNoteByShareUUID(ctx context.Context, req *notePB.GetNoteByShareUUIDRequest) (*notePB.Note, error) {
+	note, err := s.noteUsecase.GetNoteByShareUUID(ctx, req.GetShareUuid())
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to get note by share uuid")
 	}
 
 	return noteModelToProto(note), nil
@@ -715,4 +728,108 @@ func (s *Server) GetPublicAccess(ctx context.Context, req *sharePB.GetPublicAcce
 		ShareUrl:    fmt.Sprintf("/notes/%d", req.GetNoteId()),
 		UpdatedAt:   timestamppb.New(time.Now()),
 	}, nil
+}
+
+func (s *Server) ActivateAccessByLink(ctx context.Context, req *sharePB.ActivateAccessByLinkRequest) (*sharePB.ActivateAccessByLinkResponse, error) {
+	response, err := s.sharingUsecase.ActivateAccessByLink(
+		ctx,
+		req.GetShareUuid(),
+		req.GetUserId(),
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		return nil, status.Error(codes.Internal, "failed to activate access by link")
+	}
+
+	return &sharePB.ActivateAccessByLinkResponse{
+		NoteId:        response.NoteID,
+		AccessGranted: response.AccessGranted,
+		AccessInfo:    noteAccessInfoModelToProto(&response.AccessInfo),
+	}, nil
+}
+
+func (s *Server) RemoveCollaborator(ctx context.Context, req *sharePB.RemoveCollaboratorRequest) (*emptypb.Empty, error) {
+	err := s.sharingUsecase.RemoveCollaborator(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+		req.GetPermissionId(),
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "permission not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to remove collaborator")
+	}
+
+	return &emptypb.Empty{}, nil
+}
+
+func (s *Server) GetSharingSettings(ctx context.Context, req *sharePB.GetSharingSettingsRequest) (*sharePB.SharingSettingsResponse, error) {
+	settings, err := s.sharingUsecase.GetSharingSettings(
+		ctx,
+		req.GetNoteId(),
+		req.GetCurrentUserId(),
+	)
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to get sharing settings")
+	}
+
+	// Конвертируем collaborators
+	collaborators := make([]*sharePB.Collaborator, len(settings.Collaborators))
+	for i, c := range settings.Collaborators {
+		collaborators[i] = &sharePB.Collaborator{
+			PermissionId: c.PermissionID,
+			UserId:       c.UserID,
+			Role:         noteRoleToProto(c.Role),
+			GrantedBy:    c.GrantedBy,
+			GrantedAt:    timestamppb.New(c.GrantedAt),
+		}
+	}
+
+	// Конвертируем public access
+	var publicAccessLevel *sharePB.NoteRole
+	if settings.PublicAccess.AccessLevel != nil {
+		level := noteRoleToProto(*settings.PublicAccess.AccessLevel)
+		publicAccessLevel = &level
+	}
+
+	publicAccess := &sharePB.PublicAccess{
+		NoteId:      settings.PublicAccess.NoteID,
+		AccessLevel: publicAccessLevel,
+		ShareUrl:    settings.PublicAccess.ShareURL,
+	}
+
+	return &sharePB.SharingSettingsResponse{
+		NoteId:             settings.NoteID,
+		OwnerId:            settings.Owner.UserID,
+		PublicAccess:       publicAccess,
+		Collaborators:      collaborators,
+		TotalCollaborators: int32(settings.TotalCount),
+		IsOwner:            settings.IsOwner,
+	}, nil
+}
+
+func (s *Server) CheckNoteAccess(ctx context.Context, req *sharePB.CheckNoteAccessRequest) (*sharePB.NoteAccessResponse, error) {
+	accessInfo, err := s.sharingUsecase.CheckNoteAccess(
+		ctx,
+		req.GetNoteId(),
+		req.GetUserId(),
+	)
+	if err != nil {
+		return nil, status.Error(codes.Internal, "failed to check note access")
+	}
+
+	return noteAccessInfoModelToProto(accessInfo), nil
 }

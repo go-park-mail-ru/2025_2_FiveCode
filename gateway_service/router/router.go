@@ -64,7 +64,6 @@ func NewRouter(
 	blocksRouter.HandleFunc("/blocks/{block_id}", notes.DeleteBlock).Methods("DELETE")
 	blocksRouter.HandleFunc("/blocks/{block_id}/position", notes.UpdateBlockPosition).Methods("PUT")
 
-	// SHARING
 	sharingRouter := api.PathPrefix("").Subrouter()
 	sharingRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))
 
@@ -72,11 +71,10 @@ func NewRouter(
 	sharingRouter.HandleFunc("/notes/{note_id}/collaborators", notes.GetCollaborators).Methods("GET")
 	sharingRouter.HandleFunc("/notes/{note_id}/collaborators/{permission_id}", notes.UpdateCollaboratorRole).Methods("PATCH")
 	sharingRouter.HandleFunc("/notes/{note_id}/collaborators/{permission_id}", notes.RemoveCollaborator).Methods("DELETE")
-
 	sharingRouter.HandleFunc("/notes/{note_id}/public-access", notes.SetPublicAccess).Methods("PUT")
 	sharingRouter.HandleFunc("/notes/{note_id}/public-access", notes.GetPublicAccess).Methods("GET")
-
 	sharingRouter.HandleFunc("/notes/{note_id}/sharing", notes.GetSharingSettings).Methods("GET")
+	sharingRouter.HandleFunc("/notes/activate/{share_uuid}", notes.ActivateAccessByLink).Methods("POST")
 
 	filesRouter := api.PathPrefix("/files").Subrouter()
 	filesRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))

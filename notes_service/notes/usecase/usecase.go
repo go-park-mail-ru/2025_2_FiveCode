@@ -156,7 +156,6 @@ func (u *NoteUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64)
 func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
 
-	// Проверяем доступ через SharingRepository
 	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
 		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to check note access")
@@ -171,8 +170,6 @@ func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64
 	return nil
 }
 
-// GetNoteByShareUUID получает заметку по share_uuid (без проверки владельца)
-// Используется для активации доступа по публичной ссылке
 func (u *NoteUsecase) GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error) {
 	log := logger.FromContext(ctx)
 

@@ -350,12 +350,8 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 	return settings, nil
 }
 
-// ============================================
-// ActivateAccessByLink - Активация доступа по публичной ссылке
-// ============================================
-
 // ActivateAccessByLink создает note_permission при переходе по публичной ссылке
-func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.NoteAccessInfo, error) {
+func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.ActivateAccessResponse, error) {
 	// 1. Получаем заметку по share_uuid
 	note, err := uc.notesRepo.GetNoteByShareUUID(ctx, shareUUID)
 	if err != nil {
@@ -365,11 +361,15 @@ func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID st
 	// 2. Проверяем, что пользователь не является владельцем
 	if note.OwnerID == userID {
 		// Владелец уже имеет полный доступ, не нужно создавать permission
-		return &models.NoteAccessInfo{
-			IsOwner:   true,
-			HasAccess: true,
-			Role:      models.RoleEditor,
-			CanEdit:   true,
+		return &models.ActivateAccessResponse{
+			NoteID:        note.ID,
+			AccessGranted: true,
+			AccessInfo: models.NoteAccessInfo{
+				IsOwner:   true,
+				HasAccess: true,
+				Role:      models.RoleEditor,
+				CanEdit:   true,
+			},
 		}, nil
 	}
 
@@ -381,11 +381,15 @@ func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID st
 
 	if existingPermission != nil {
 		// Разрешение уже существует, возвращаем текущий доступ
-		return &models.NoteAccessInfo{
-			IsOwner:   false,
-			HasAccess: true,
-			Role:      existingPermission.Role,
-			CanEdit:   existingPermission.Role == models.RoleEditor,
+		return &models.ActivateAccessResponse{
+			NoteID:        note.ID,
+			AccessGranted: true,
+			AccessInfo: models.NoteAccessInfo{
+				IsOwner:   false,
+				HasAccess: true,
+				Role:      existingPermission.Role,
+				CanEdit:   existingPermission.Role == models.RoleEditor,
+			},
 		}, nil
 	}
 
@@ -397,9 +401,13 @@ func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID st
 
 	if publicAccessLevel == nil {
 		// Публичный доступ не настроен
-		return &models.NoteAccessInfo{
-			IsOwner:   false,
-			HasAccess: false,
+		return &models.ActivateAccessResponse{
+			NoteID:        note.ID,
+			AccessGranted: false,
+			AccessInfo: models.NoteAccessInfo{
+				IsOwner:   false,
+				HasAccess: false,
+			},
 		}, nil
 	}
 
@@ -421,11 +429,15 @@ func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID st
 		return nil, fmt.Errorf("failed to update is_shared flag: %w", err)
 	}
 
-	// 7. Возвращаем информацию о доступе
-	return &models.NoteAccessInfo{
-		IsOwner:   false,
-		HasAccess: true,
-		Role:      createdPermission.Role,
-		CanEdit:   createdPermission.Role == models.RoleEditor,
+	// 7. Возвращаем информацию о доступе с note_id
+	return &models.ActivateAccessResponse{
+		NoteID:        note.ID,
+		AccessGranted: true,
+		AccessInfo: models.NoteAccessInfo{
+			IsOwner:   false,
+			HasAccess: true,
+			Role:      createdPermission.Role,
+			CanEdit:   createdPermission.Role == models.RoleEditor,
+		},
 	}, nil
 }

@@ -37,6 +37,13 @@ type NoteAccessInfo struct {
 	HasAccess bool     `json:"has_access"`
 }
 
+// ActivateAccessResponse содержит результат активации доступа по ссылке
+type ActivateAccessResponse struct {
+	NoteID        uint64         `json:"note_id"`
+	AccessGranted bool           `json:"access_granted"`
+	AccessInfo    NoteAccessInfo `json:"access_info"`
+}
+
 // Collaborator represents a user who has access to a note
 type Collaborator struct {
 	PermissionID uint64    `json:"permission_id"`
