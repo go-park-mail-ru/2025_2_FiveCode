@@ -1,10 +1,13 @@
 package store
 
 import (
+	"backend/pkg/metrics"
+	"context"
 	"database/sql"
 	"errors"
 	"fmt"
 	"path/filepath"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	"github.com/golang-migrate/migrate/v4/database/postgres"
@@ -12,8 +15,82 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type dbWrapper struct {
+	*sql.DB
+}
+
+func (d *dbWrapper) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	start := time.Now()
+	row := d.DB.QueryRowContext(ctx, query, args...)
+	metrics.RecordDBQueryDuration(start, "query", "db")
+	return row
+}
+
+func (d *dbWrapper) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	start := time.Now()
+	result, err := d.DB.ExecContext(ctx, query, args...)
+	if err != nil {
+		metrics.RecordDBQueryError("exec", "db")
+	} else {
+		metrics.RecordDBQueryDuration(start, "exec", "db")
+	}
+	return result, err
+}
+
+func (d *dbWrapper) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	start := time.Now()
+	rows, err := d.DB.QueryContext(ctx, query, args...)
+	if err != nil {
+		metrics.RecordDBQueryError("query", "db")
+	} else {
+		metrics.RecordDBQueryDuration(start, "query", "db")
+	}
+	return rows, err
+}
+
+func (d *dbWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*txWrapper, error) {
+	tx, err := d.DB.BeginTx(ctx, opts)
+	if err != nil {
+		return nil, err
+	}
+	return &txWrapper{Tx: tx}, nil
+}
+
+type txWrapper struct {
+	*sql.Tx
+}
+
+func (t *txWrapper) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	start := time.Now()
+	row := t.Tx.QueryRowContext(ctx, query, args...)
+	metrics.RecordDBQueryDuration(start, "query", "db")
+	return row
+}
+
+func (t *txWrapper) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	start := time.Now()
+	result, err := t.Tx.ExecContext(ctx, query, args...)
+	if err != nil {
+		metrics.RecordDBQueryError("exec", "db")
+	} else {
+		metrics.RecordDBQueryDuration(start, "exec", "db")
+	}
+	return result, err
+}
+
+func (t *txWrapper) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	start := time.Now()
+	rows, err := t.Tx.QueryContext(ctx, query, args...)
+	if err != nil {
+		metrics.RecordDBQueryError("query", "db")
+	} else {
+		metrics.RecordDBQueryDuration(start, "query", "db")
+	}
+	return rows, err
+}
+
 type PostgresDB struct {
-	DB *sql.DB
+	DB *dbWrapper
 }
 
 func NewPostgresDB(host string, port int, user, password, dbname, sslmode string) (*PostgresDB, error) {
@@ -29,7 +106,7 @@ func NewPostgresDB(host string, port int, user, password, dbname, sslmode string
 		return nil, fmt.Errorf("failed to ping database: %w", err)
 	}
 
-	return &PostgresDB{DB: db}, nil
+	return &PostgresDB{DB: &dbWrapper{DB: db}}, nil
 }
 
 func (p *PostgresDB) Close() error {
@@ -37,7 +114,7 @@ func (p *PostgresDB) Close() error {
 }
 
 func (p *PostgresDB) RunMigrations(migrationsPath string) error {
-	driver, err := postgres.WithInstance(p.DB, &postgres.Config{})
+	driver, err := postgres.WithInstance(p.DB.DB, &postgres.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to create migrate driver: %w", err)
 	}

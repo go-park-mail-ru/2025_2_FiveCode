@@ -2,6 +2,7 @@ package app
 
 import (
 	"backend/pkg/interceptors"
+	"backend/pkg/metrics"
 	"backend/pkg/store"
 	"backend/user_service/internal/config"
 	"backend/user_service/internal/constants"
@@ -122,8 +123,8 @@ func (a *App) initMetrics() {
 
 	go func() {
 		metricsMux := http.NewServeMux()
-		metricsMux.Handle("/metrics", promhttp.Handler())
-		
+		metricsMux.Handle("/metrics", promhttp.HandlerFor(metrics.Registry(), promhttp.HandlerOpts{}))
+
 		metricsAddr := fmt.Sprintf(":%d", metricsPort)
 		a.Logger.Info().Str("addr", metricsAddr).Msg("Metrics server is running")
 		if err := http.ListenAndServe(metricsAddr, metricsMux); err != nil {

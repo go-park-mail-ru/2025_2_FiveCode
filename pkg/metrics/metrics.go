@@ -2,41 +2,52 @@ package metrics
 
 import (
 	"strconv"
+	"time"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promauto"
 )
 
 type metrics struct {
-	httpHits          *prometheus.CounterVec
-	httpErrors        *prometheus.CounterVec
-	httpResponseTime  *prometheus.HistogramVec
-	grpcHits          *prometheus.CounterVec
-	grpcErrors        *prometheus.CounterVec
-	grpcResponseTime  *prometheus.HistogramVec
+	httpHits         *prometheus.CounterVec
+	httpErrors       *prometheus.CounterVec
+	httpResponseTime *prometheus.HistogramVec
+	grpcHits         *prometheus.CounterVec
+	grpcErrors       *prometheus.CounterVec
+	grpcResponseTime *prometheus.HistogramVec
+	dbQueryDuration  *prometheus.HistogramVec
+	dbQueryErrors    *prometheus.CounterVec
 }
 
 var (
 	defaultMetrics *metrics
+	registry       = prometheus.NewRegistry()
 )
 
 func init() {
+	registry.MustRegister(
+		prometheus.NewProcessCollector(prometheus.ProcessCollectorOpts{}),
+		prometheus.NewGoCollector(),
+	)
+
+	factory := promauto.With(registry)
+
 	defaultMetrics = &metrics{
-		httpHits: promauto.NewCounterVec(
+		httpHits: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "http_requests_total",
 				Help: "Total number of HTTP requests",
 			},
 			[]string{"method", "path", "service"},
 		),
-		httpErrors: promauto.NewCounterVec(
+		httpErrors: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "http_errors_total",
 				Help: "Total number of HTTP errors",
 			},
 			[]string{"method", "path", "code", "service"},
 		),
-		httpResponseTime: promauto.NewHistogramVec(
+		httpResponseTime: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "http_request_duration_seconds",
 				Help:    "HTTP request duration in seconds",
@@ -44,21 +55,21 @@ func init() {
 			},
 			[]string{"method", "path", "service"},
 		),
-		grpcHits: promauto.NewCounterVec(
+		grpcHits: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "grpc_requests_total",
 				Help: "Total number of gRPC requests",
 			},
 			[]string{"method", "service"},
 		),
-		grpcErrors: promauto.NewCounterVec(
+		grpcErrors: factory.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "grpc_errors_total",
 				Help: "Total number of gRPC errors",
 			},
 			[]string{"method", "code", "service"},
 		),
-		grpcResponseTime: promauto.NewHistogramVec(
+		grpcResponseTime: factory.NewHistogramVec(
 			prometheus.HistogramOpts{
 				Name:    "grpc_request_duration_seconds",
 				Help:    "gRPC request duration in seconds",
@@ -66,7 +77,26 @@ func init() {
 			},
 			[]string{"method", "service"},
 		),
+		dbQueryDuration: factory.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "db_query_duration_seconds",
+				Help:    "Database query duration in seconds",
+				Buckets: prometheus.DefBuckets,
+			},
+			[]string{"operation", "table"},
+		),
+		dbQueryErrors: factory.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "db_query_errors_total",
+				Help: "Total number of database query errors",
+			},
+			[]string{"operation", "table"},
+		),
 	}
+}
+
+func Registry() *prometheus.Registry {
+	return registry
 }
 
 type httpMetrics struct {
@@ -117,4 +147,13 @@ func (g *grpcMetrics) IncreaseErr(method string, code int) {
 
 func (g *grpcMetrics) RecordResponseTime(method string, durationSeconds float64) {
 	g.m.grpcResponseTime.WithLabelValues(method, g.service).Observe(durationSeconds)
+}
+
+func RecordDBQueryDuration(start time.Time, operation, table string) {
+	duration := time.Since(start).Seconds()
+	defaultMetrics.dbQueryDuration.WithLabelValues(operation, table).Observe(duration)
+}
+
+func RecordDBQueryError(operation, table string) {
+	defaultMetrics.dbQueryErrors.WithLabelValues(operation, table).Inc()
 }

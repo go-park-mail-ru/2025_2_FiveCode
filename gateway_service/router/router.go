@@ -9,6 +9,7 @@ import (
 	mw "backend/gateway_service/internal/middleware"
 	notesDelivery "backend/gateway_service/internal/notes/delivery"
 	userDelivery "backend/gateway_service/internal/user/delivery"
+	"backend/pkg/metrics"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -72,7 +73,7 @@ func NewRouter(
 	filesRouter.HandleFunc("/{file_id}", files.GetFile).Methods("GET")
 	filesRouter.HandleFunc("/{file_id}", files.DeleteFile).Methods("DELETE")
 
-	r.Handle("/metrics", promhttp.Handler()).Methods("GET")
+	r.Handle("/metrics", promhttp.HandlerFor(metrics.Registry(), promhttp.HandlerOpts{})).Methods("GET")
 
 	return mw.CORS(r, conf)
 }
