@@ -1,1 +1,2 @@
 grpc_port: 50053
+metrics_port: 9091

@@ -28,11 +28,12 @@ type RedisConfig struct {
 }
 
 type Config struct {
-	GRPCPort int `mapstructure:"grpc_port"`
-	Redis    RedisConfig
-	Cors     CorsConfig   `mapstructure:"cors"`
-	Cookie   CookieConfig `mapstructure:"cookie"`
-	CSRF     CSRFConfig   `mapstructure:"csrf"`
+	GRPCPort    int `mapstructure:"grpc_port"`
+	MetricsPort int `mapstructure:"metrics_port"`
+	Redis       RedisConfig
+	Cors        CorsConfig   `mapstructure:"cors"`
+	Cookie      CookieConfig `mapstructure:"cookie"`
+	CSRF        CSRFConfig   `mapstructure:"csrf"`
 }
 
 func Load() (*Config, error) {
@@ -69,6 +70,9 @@ func Load() (*Config, error) {
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
 	}
+	if cfg.MetricsPort == 0 {
+		cfg.MetricsPort = v.GetInt("METRICS_PORT")
+	}
 
 	if cfg.CSRF.SecretKey == "" {
 		cfg.CSRF.SecretKey = v.GetString("CSRF_SECRET_KEY")
@@ -76,6 +80,9 @@ func Load() (*Config, error) {
 
 	if cfg.GRPCPort == 0 {
 		return nil, fmt.Errorf("GRPC_PORT is required")
+	}
+	if cfg.MetricsPort == 0 {
+		return nil, fmt.Errorf("METRICS_PORT is required")
 	}
 	if cfg.Redis.Host == "" {
 		return nil, fmt.Errorf("REDIS_HOST is required")

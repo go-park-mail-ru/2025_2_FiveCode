@@ -3,8 +3,10 @@ package middleware
 import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/config"
+	"backend/gateway_service/internal/constants"
 	"backend/gateway_service/internal/utils"
 	"backend/gateway_service/logger"
+	"backend/pkg/metrics"
 
 	"bytes"
 	"context"
@@ -105,6 +107,8 @@ func realIP(r *http.Request) string {
 const maxBodyLogSize = 1024
 
 func AccessLogMiddleware(next http.Handler) http.Handler {
+	m := metrics.NewHTTPMetrics(constants.GatewayServiceName)
+	
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		log := logger.FromContext(r.Context())
@@ -118,6 +122,17 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 		defer func() {
 			duration := time.Since(start)
 			status := wInt.statusCode
+
+			if r.URL.Path != "/metrics" {
+				method := r.Method
+				path := r.URL.Path
+				m.IncreaseHits(method, path)
+				m.RecordResponseTime(method, path, duration.Seconds())
+				
+				if status >= 400 {
+					m.IncreaseErr(method, path, status)
+				}
+			}
 
 			var logEvent *zerolog.Event
 			msg := ""

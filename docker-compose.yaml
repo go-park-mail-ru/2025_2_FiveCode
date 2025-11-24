@@ -54,6 +54,8 @@ services:
       REDIS_HOST: "redis"
       SERVICES_USER_GRPC_HOST: "user"
       SERVICES_USER_GRPC_PORT: "50052"
+    ports:
+      - "9094:9090"
     restart: unless-stopped
     depends_on:
       redis:
@@ -73,6 +75,8 @@ services:
       DB_PORT: "5432"
       DB_NAME: "user_db"
       DB_SSLMODE: "${DB_SSLMODE}"
+    ports:
+      - "9096:9092"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -90,6 +94,8 @@ services:
       DB_PORT: "5432"
       DB_NAME: "notes_db"
       DB_SSLMODE: "${DB_SSLMODE}"
+    ports:
+      - "9095:9091"
     restart: unless-stopped
     depends_on:
       postgres:
@@ -130,7 +136,57 @@ services:
       notes:
         condition: service_started
 
+  node_exporter:
+    image: prom/node-exporter:latest
+    container_name: node_exporter
+    command:
+      - '--path.procfs=/host/proc'
+      - '--path.sysfs=/host/sys'
+      - '--path.rootfs=/rootfs'
+    ports:
+      - "8099:9100"
+    pid: "host"
+    restart: unless-stopped
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+      - /:/rootfs:ro
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: prometheus
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "8098:9090"
+    restart: unless-stopped
+    depends_on:
+      gateway:
+        condition: service_started
+      auth:
+        condition: service_started
+      user:
+        condition: service_started
+      notes:
+        condition: service_started
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER:-admin}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+      GF_USERS_ALLOW_SIGN_UP: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "8097:3000"
+    restart: unless-stopped
+    depends_on:
+      - prometheus
+
 volumes:
   minio_data:
   postgres_data:
   redis_data:
+  grafana_data:
