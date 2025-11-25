@@ -35,6 +35,7 @@ type NotesRepository interface {
 
 type UserRepository interface {
 	GetUserIDByEmail(ctx context.Context, email string) (uint64, error)
+	GetUser(ctx context.Context, userID uint64) (*models.User, error)
 }
 
 type NotesUsecase struct {
