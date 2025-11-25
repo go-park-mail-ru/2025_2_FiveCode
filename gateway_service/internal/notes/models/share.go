@@ -5,6 +5,7 @@ import "time"
 type NoteRole string
 
 const (
+	RoleOwner     NoteRole = "owner"
 	RoleEditor    NoteRole = "editor"
 	RoleCommenter NoteRole = "commenter"
 	RoleViewer    NoteRole = "viewer"

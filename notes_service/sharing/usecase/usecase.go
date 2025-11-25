@@ -3,6 +3,7 @@ package usecase
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"backend/notes_service/internal/models"
 )
@@ -154,7 +155,19 @@ func (uc *SharingUsecase) GetCollaborators(ctx context.Context, noteID, currentU
 		return 0, nil, nil, fmt.Errorf("failed to get public access: %w", err)
 	}
 
-	return ownerID, permissions, publicAccess, nil
+	ownerPermission := &models.NotePermission{
+		PermissionID: 0,
+		NoteID:       noteID,
+		GrantedTo:    ownerID,
+		GrantedBy:    ownerID,
+		Role:         models.RoleOwner,
+		CreatedAt:    time.Now(),
+		UpdatedAt:    time.Now(),
+	}
+
+	allPermissions := append([]*models.NotePermission{ownerPermission}, permissions...)
+
+	return ownerID, allPermissions, publicAccess, nil
 }
 
 func (uc *SharingUsecase) UpdateCollaboratorRole(ctx context.Context, noteID, currentUserID, permissionID uint64, newRole models.NoteRole) (*models.NotePermission, error) {
@@ -255,7 +268,17 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 		return nil, fmt.Errorf("failed to get public access: %w", err)
 	}
 
-	collaborators := make([]models.Collaborator, 0, len(permissions))
+	ownerCollaborator := models.Collaborator{
+		PermissionID: 0,
+		UserID:       ownerID,
+		Role:         models.RoleOwner,
+		GrantedBy:    ownerID,
+		GrantedAt:    time.Now(),
+	}
+
+	collaborators := make([]models.Collaborator, 0, len(permissions)+1)
+	collaborators = append(collaborators, ownerCollaborator)
+
 	for _, p := range permissions {
 		collaborators = append(collaborators, models.Collaborator{
 			PermissionID: p.PermissionID,
