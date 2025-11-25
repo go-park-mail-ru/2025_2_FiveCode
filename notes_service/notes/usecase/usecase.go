@@ -50,6 +50,23 @@ func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64, parentNoteI
 	log := logger.FromContext(ctx)
 
 	if parentNoteID != nil && *parentNoteID > 0 {
+
+		accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, *parentNoteID, userID)
+		if err != nil {
+			log.Error().Err(err).Uint64("parent_note_id", *parentNoteID).Msg("failed to check access")
+			return nil, fmt.Errorf("failed to check access: %w", err)
+		}
+
+		if !accessInfo.HasAccess {
+			log.Warn().Uint64("user_id", userID).Uint64("parent_note_id", *parentNoteID).Msg("no access to parent note")
+			return nil, fmt.Errorf("no access to parent note")
+		}
+
+		if !accessInfo.CanEdit {
+			log.Warn().Uint64("user_id", userID).Uint64("parent_note_id", *parentNoteID).Str("role", string(accessInfo.Role)).Msg("user cannot create sub-note: editor rights required")
+			return nil, fmt.Errorf("no access to parent note")
+		}
+
 		parentNote, err := u.Repository.GetNoteById(ctx, *parentNoteID, userID)
 		if err != nil {
 			log.Error().Err(err).Uint64("parent_note_id", *parentNoteID).Msg("parent note not found")
@@ -60,16 +77,6 @@ func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64, parentNoteI
 			log.Warn().Uint64("parent_note_id", *parentNoteID).Msg("attempt to create sub-note of a sub-note")
 			return nil, fmt.Errorf("cannot create sub-note of a sub-note: maximum nesting level is 1")
 		}
-
-		hasAccess, err := u.checkSubNoteAccess(ctx, userID, *parentNoteID)
-		if err != nil {
-			log.Error().Err(err).Uint64("parent_note_id", *parentNoteID).Msg("failed to check access")
-			return nil, fmt.Errorf("failed to check access: %w", err)
-		}
-		if !hasAccess {
-			log.Warn().Uint64("user_id", userID).Uint64("parent_note_id", *parentNoteID).Msg("no access to parent note")
-			return nil, fmt.Errorf("no access to parent note")
-		}
 	}
 
 	note, err := u.Repository.CreateNote(ctx, userID, parentNoteID)
@@ -79,19 +86,6 @@ func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64, parentNoteI
 	}
 
 	return note, nil
-}
-
-func (u *NoteUsecase) checkSubNoteAccess(ctx context.Context, userID, noteID uint64) (bool, error) {
-	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
-	if err != nil {
-		return false, err
-	}
-
-	if note.OwnerID == userID {
-		return true, nil
-	}
-
-	return false, nil
 }
 
 func (u *NoteUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
@@ -173,20 +167,6 @@ func (u *NoteUsecase) DeleteNote(ctx context.Context, userID uint64, noteID uint
 }
 
 func (u *NoteUsecase) AddFavorite(ctx context.Context, userID, noteID uint64) error {
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return err
-	}
-	return u.Repository.AddFavorite(ctx, userID, noteID)
-}
-
-func (u *NoteUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64) error {
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return err
-	}
-	return u.Repository.RemoveFavorite(ctx, userID, noteID)
-}
-
-func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
 
 	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
@@ -200,7 +180,24 @@ func (u *NoteUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64
 		return constants.ErrNoAccess
 	}
 
-	return nil
+	return u.Repository.AddFavorite(ctx, userID, noteID)
+}
+
+func (u *NoteUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64) error {
+	log := logger.FromContext(ctx)
+
+	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to check note access")
+		return fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return constants.ErrNoAccess
+	}
+
+	return u.Repository.RemoveFavorite(ctx, userID, noteID)
 }
 
 func (u *NoteUsecase) GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error) {
