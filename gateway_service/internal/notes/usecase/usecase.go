@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"backend/gateway_service/internal/notes/models"
+	userModels "backend/gateway_service/internal/user/models"
 	"context"
 )
 
@@ -35,7 +36,7 @@ type NotesRepository interface {
 
 type UserRepository interface {
 	GetUserIDByEmail(ctx context.Context, email string) (uint64, error)
-	GetUser(ctx context.Context, userID uint64) (*models.User, error)
+	GetUser(ctx context.Context, userID uint64) (*userModels.User, error)
 }
 
 type NotesUsecase struct {

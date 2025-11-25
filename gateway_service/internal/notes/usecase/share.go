@@ -2,6 +2,7 @@ package usecase
 
 import (
 	"backend/gateway_service/internal/notes/models"
+	"backend/gateway_service/internal/utils"
 	"context"
 	"fmt"
 )
@@ -79,11 +80,29 @@ func (u *NotesUsecase) RemoveCollaborator(ctx context.Context, currentUserID, no
 }
 
 func (u *NotesUsecase) SetPublicAccess(ctx context.Context, input *models.SetPublicAccessInput) (*models.PublicAccessResponse, error) {
-	return u.repo.SetPublicAccess(ctx, input)
+	resp, err := u.repo.SetPublicAccess(ctx, input)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.ShareURL != "" {
+		resp.ShareURL = utils.TransformShareURL(resp.ShareURL)
+	}
+
+	return resp, nil
 }
 
 func (u *NotesUsecase) GetPublicAccess(ctx context.Context, currentUserID, noteID uint64) (*models.PublicAccessResponse, error) {
-	return u.repo.GetPublicAccess(ctx, currentUserID, noteID)
+	resp, err := u.repo.GetPublicAccess(ctx, currentUserID, noteID)
+	if err != nil {
+		return nil, err
+	}
+
+	if resp.ShareURL != "" {
+		resp.ShareURL = utils.TransformShareURL(resp.ShareURL)
+	}
+
+	return resp, nil
 }
 
 func (u *NotesUsecase) GetSharingSettings(ctx context.Context, currentUserID, noteID uint64) (*models.SharingSettingsResponse, error) {
@@ -108,6 +127,10 @@ func (u *NotesUsecase) GetSharingSettings(ctx context.Context, currentUserID, no
 		resp.OwnerEmail = owner.Email
 		resp.OwnerUsername = owner.Username
 		resp.OwnerAvatarFileID = owner.AvatarFileID
+	}
+
+	if resp.PublicAccess.ShareURL != "" {
+		resp.PublicAccess.ShareURL = utils.TransformShareURL(resp.PublicAccess.ShareURL)
 	}
 
 	return resp, nil
