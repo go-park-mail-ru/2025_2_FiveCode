@@ -11,6 +11,7 @@ type Note struct {
 	IsFavorite   bool       `json:"is_favorite"`
 	IsArchived   bool       `json:"is_archived"`
 	IsShared     bool       `json:"is_shared"`
+	ShareUUID    *string    `json:"share_uuid,omitempty"`
 	CreatedAt    time.Time  `json:"created_at"`
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`

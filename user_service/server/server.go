@@ -18,6 +18,7 @@ import (
 type UserUsecase interface {
 	CreateUser(ctx context.Context, email, password, username string) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
 	UpdateUser(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error)
 	DeleteUser(ctx context.Context, userID uint64) error
 	VerifyUser(ctx context.Context, email, password string) (*models.User, error)
@@ -141,4 +142,20 @@ func modelUserToProto(u *models.User) *user.User {
 		protoUser.UpdatedAt = timestamppb.New(*u.UpdatedAt)
 	}
 	return protoUser
+}
+
+func (s *Server) GetUserByEmail(ctx context.Context, req *user.GetUserByEmailRequest) (*user.User, error) {
+	log := logger.FromContext(ctx)
+	log.Info().Str("email", req.GetEmail()).Msg("gRPC GetUserByEmail request")
+
+	userModel, err := s.Usecase.GetUserByEmail(ctx, req.GetEmail())
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "user not found")
+		}
+		log.Error().Err(err).Msg("failed to get user by email")
+		return nil, status.Error(codes.Internal, "failed to get user by email")
+	}
+
+	return modelUserToProto(userModel), nil
 }

@@ -5,6 +5,7 @@ import (
 	"backend/gateway_service/internal/utils"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
+	sharePB "backend/notes_service/pkg/sharing/v1"
 	"context"
 
 	"google.golang.org/grpc"
@@ -32,19 +33,31 @@ type BlockClient interface {
 	UpdateBlockPosition(ctx context.Context, in *blockPB.UpdateBlockPositionRequest, opts ...grpc.CallOption) (*blockPB.Block, error)
 }
 
-type NotesRepository struct {
-	noteClient  NoteClient
-	blockClient BlockClient
+type SharingClient interface {
+	AddCollaborator(ctx context.Context, in *sharePB.AddCollaboratorRequest, opts ...grpc.CallOption) (*sharePB.CollaboratorResponse, error)
+	GetCollaborators(ctx context.Context, in *sharePB.GetCollaboratorsRequest, opts ...grpc.CallOption) (*sharePB.GetCollaboratorsResponse, error)
+	UpdateCollaboratorRole(ctx context.Context, in *sharePB.UpdateCollaboratorRoleRequest, opts ...grpc.CallOption) (*sharePB.CollaboratorResponse, error)
+	RemoveCollaborator(ctx context.Context, in *sharePB.RemoveCollaboratorRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SetPublicAccess(ctx context.Context, in *sharePB.SetPublicAccessRequest, opts ...grpc.CallOption) (*sharePB.PublicAccessResponse, error)
+	GetPublicAccess(ctx context.Context, in *sharePB.GetPublicAccessRequest, opts ...grpc.CallOption) (*sharePB.PublicAccessResponse, error)
+	GetSharingSettings(ctx context.Context, in *sharePB.GetSharingSettingsRequest, opts ...grpc.CallOption) (*sharePB.SharingSettingsResponse, error)
+	CheckNoteAccess(ctx context.Context, in *sharePB.CheckNoteAccessRequest, opts ...grpc.CallOption) (*sharePB.NoteAccessResponse, error)
+	ActivateAccessByLink(ctx context.Context, in *sharePB.ActivateAccessByLinkRequest, opts ...grpc.CallOption) (*sharePB.ActivateAccessByLinkResponse, error)
 }
 
-func NewNotesRepository(n NoteClient, b BlockClient) *NotesRepository {
+type NotesRepository struct {
+	noteClient    NoteClient
+	blockClient   BlockClient
+	sharingClient SharingClient
+}
+
+func NewNotesRepository(n NoteClient, b BlockClient, s SharingClient) *NotesRepository {
 	return &NotesRepository{
-		noteClient:  n,
-		blockClient: b,
+		noteClient:    n,
+		blockClient:   b,
+		sharingClient: s,
 	}
 }
-
-// --- Note Methods ---
 
 func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error) {
 	resp, err := r.noteClient.GetAllNotes(ctx, &notePB.GetAllNotesRequest{UserId: userID})
@@ -213,4 +226,101 @@ func (r *NotesRepository) UpdateBlockPosition(ctx context.Context, userID, block
 		return nil, err
 	}
 	return utils.MapProtoToBlock(resp), nil
+}
+
+func (r *NotesRepository) AddCollaborator(ctx context.Context, input *models.AddCollaboratorInput) (*models.CollaboratorResponse, error) {
+	resp, err := r.sharingClient.AddCollaborator(ctx, &sharePB.AddCollaboratorRequest{
+		CurrentUserId: input.CurrentUserID,
+		NoteId:        input.NoteID,
+		UserId:        input.UserID,
+		Role:          utils.MapModelRoleToProto(input.Role),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToCollaboratorResponse(resp), nil
+}
+
+func (r *NotesRepository) GetCollaborators(ctx context.Context, currentUserID, noteID uint64) (*models.GetCollaboratorsResponse, error) {
+	resp, err := r.sharingClient.GetCollaborators(ctx, &sharePB.GetCollaboratorsRequest{
+		CurrentUserId: currentUserID,
+		NoteId:        noteID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToGetCollaboratorsResponse(resp), nil
+}
+
+func (r *NotesRepository) UpdateCollaboratorRole(ctx context.Context, input *models.UpdateCollaboratorRoleInput) (*models.CollaboratorResponse, error) {
+	resp, err := r.sharingClient.UpdateCollaboratorRole(ctx, &sharePB.UpdateCollaboratorRoleRequest{
+		CurrentUserId: input.CurrentUserID,
+		NoteId:        input.NoteID,
+		PermissionId:  input.PermissionID,
+		NewRole:       utils.MapModelRoleToProto(input.NewRole),
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToCollaboratorResponse(resp), nil
+}
+
+func (r *NotesRepository) RemoveCollaborator(ctx context.Context, currentUserID, noteID, permissionID uint64) error {
+	_, err := r.sharingClient.RemoveCollaborator(ctx, &sharePB.RemoveCollaboratorRequest{
+		CurrentUserId: currentUserID,
+		NoteId:        noteID,
+		PermissionId:  permissionID,
+	})
+	return err
+}
+
+func (r *NotesRepository) SetPublicAccess(ctx context.Context, input *models.SetPublicAccessInput) (*models.PublicAccessResponse, error) {
+	var accessLevel *sharePB.NoteRole
+	if input.AccessLevel != nil {
+		level := utils.MapModelRoleToProto(*input.AccessLevel)
+		accessLevel = &level
+	}
+
+	resp, err := r.sharingClient.SetPublicAccess(ctx, &sharePB.SetPublicAccessRequest{
+		CurrentUserId: input.CurrentUserID,
+		NoteId:        input.NoteID,
+		AccessLevel:   accessLevel,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToPublicAccessResponse(resp), nil
+}
+
+func (r *NotesRepository) GetPublicAccess(ctx context.Context, currentUserID, noteID uint64) (*models.PublicAccessResponse, error) {
+	resp, err := r.sharingClient.GetPublicAccess(ctx, &sharePB.GetPublicAccessRequest{
+		CurrentUserId: currentUserID,
+		NoteId:        noteID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToPublicAccessResponse(resp), nil
+}
+
+func (r *NotesRepository) GetSharingSettings(ctx context.Context, currentUserID, noteID uint64) (*models.SharingSettingsResponse, error) {
+	resp, err := r.sharingClient.GetSharingSettings(ctx, &sharePB.GetSharingSettingsRequest{
+		CurrentUserId: currentUserID,
+		NoteId:        noteID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToSharingSettingsResponse(resp), nil
+}
+
+func (r *NotesRepository) ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.ActivateAccessResponse, error) {
+	resp, err := r.sharingClient.ActivateAccessByLink(ctx, &sharePB.ActivateAccessByLinkRequest{
+		ShareUuid: shareUUID,
+		UserId:    userID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return utils.MapProtoToActivateAccessResponse(resp), nil
 }

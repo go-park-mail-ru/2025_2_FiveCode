@@ -11,8 +11,9 @@ import (
 )
 
 type BlocksUsecase struct {
-	BlocksRepo BlocksRepository
-	NotesRepo  NotesRepository
+	BlocksRepo  BlocksRepository
+	NotesRepo   NotesRepository
+	SharingRepo SharingRepository
 }
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
@@ -34,10 +35,15 @@ type NotesRepository interface {
 	GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models.Note, error)
 }
 
-func NewBlocksUsecase(blocksRepo BlocksRepository, notesRepo NotesRepository) *BlocksUsecase {
+type SharingRepository interface {
+	CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error)
+}
+
+func NewBlocksUsecase(blocksRepo BlocksRepository, notesRepo NotesRepository, sharingRepo SharingRepository) *BlocksUsecase {
 	return &BlocksUsecase{
-		BlocksRepo: blocksRepo,
-		NotesRepo:  notesRepo,
+		BlocksRepo:  blocksRepo,
+		NotesRepo:   notesRepo,
+		SharingRepo: sharingRepo,
 	}
 }
 
@@ -257,14 +263,15 @@ func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID
 
 func (u *BlocksUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
 	log := logger.FromContext(ctx)
-	note, err := u.NotesRepo.GetNoteById(ctx, noteID, userID)
+
+	access, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
 	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note for access check")
-		return fmt.Errorf("failed to get note by id: %w", err)
+		log.Error().Err(err).Uint64("note_id", noteID).Uint64("user_id", userID).Msg("failed to check note access")
+		return fmt.Errorf("failed to check note access: %w", err)
 	}
 
-	if note.OwnerID != userID {
-		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Uint64("owner_id", note.OwnerID).Msg("user access denied to note")
+	if !access.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
 		return constants.ErrNoAccess
 	}
 

@@ -2,10 +2,13 @@ package utils
 
 import (
 	noteModels "backend/gateway_service/internal/notes/models"
+	shareModels "backend/gateway_service/internal/notes/models"
 	userModels "backend/gateway_service/internal/user/models"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
+	sharePB "backend/notes_service/pkg/sharing/v1"
 	userPB "backend/user_service/pkg/user/v1"
+	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
 // Note
@@ -162,4 +165,146 @@ func MapProtoToUser(p *userPB.User) *userModels.User {
 		u.UpdatedAt = &t
 	}
 	return u
+}
+
+func MapProtoRoleToModel(role sharePB.NoteRole) shareModels.NoteRole {
+	switch role {
+	case sharePB.NoteRole_NOTE_ROLE_VIEWER:
+		return shareModels.RoleViewer
+	case sharePB.NoteRole_NOTE_ROLE_COMMENTER:
+		return shareModels.RoleCommenter
+	case sharePB.NoteRole_NOTE_ROLE_EDITOR:
+		return shareModels.RoleEditor
+	default:
+		return shareModels.RoleViewer
+	}
+}
+
+func MapModelRoleToProto(role shareModels.NoteRole) sharePB.NoteRole {
+	switch role {
+	case shareModels.RoleViewer:
+		return sharePB.NoteRole_NOTE_ROLE_VIEWER
+	case shareModels.RoleCommenter:
+		return sharePB.NoteRole_NOTE_ROLE_COMMENTER
+	case shareModels.RoleEditor:
+		return sharePB.NoteRole_NOTE_ROLE_EDITOR
+	default:
+		return sharePB.NoteRole_NOTE_ROLE_UNSPECIFIED
+	}
+}
+
+// ============================================
+// Collaborator Mapping
+// ============================================
+
+func MapProtoToCollaborator(proto *sharePB.Collaborator) shareModels.Collaborator {
+	return shareModels.Collaborator{
+		PermissionID: proto.PermissionId,
+		UserID:       proto.UserId,
+		Role:         MapProtoRoleToModel(proto.Role),
+		GrantedBy:    proto.GrantedBy,
+		GrantedAt:    proto.GrantedAt.AsTime(),
+	}
+}
+
+func MapProtoToCollaboratorResponse(proto *sharePB.CollaboratorResponse) *shareModels.CollaboratorResponse {
+	return &shareModels.CollaboratorResponse{
+		PermissionID: proto.PermissionId,
+		Collaborator: MapProtoToCollaborator(proto.Collaborator),
+	}
+}
+
+// ============================================
+// GetCollaborators Response Mapping
+// ============================================
+
+func MapProtoToGetCollaboratorsResponse(proto *sharePB.GetCollaboratorsResponse) *shareModels.GetCollaboratorsResponse {
+	collaborators := make([]shareModels.Collaborator, len(proto.Collaborators))
+	for i, c := range proto.Collaborators {
+		collaborators[i] = MapProtoToCollaborator(c)
+	}
+
+	var publicAccessLevel *shareModels.NoteRole
+	if proto.PublicAccessLevel != nil {
+		role := MapProtoRoleToModel(*proto.PublicAccessLevel)
+		publicAccessLevel = &role
+	}
+
+	return &shareModels.GetCollaboratorsResponse{
+		NoteID:             proto.NoteId,
+		OwnerID:            proto.OwnerId,
+		Collaborators:      collaborators,
+		PublicAccessLevel:  publicAccessLevel,
+		TotalCollaborators: int(proto.TotalCollaborators),
+	}
+}
+
+// ============================================
+// PublicAccess Mapping
+// ============================================
+
+func MapProtoToPublicAccessResponse(proto *sharePB.PublicAccessResponse) *shareModels.PublicAccessResponse {
+	var accessLevel *shareModels.NoteRole
+	if proto.AccessLevel != nil {
+		role := MapProtoRoleToModel(*proto.AccessLevel)
+		accessLevel = &role
+	}
+
+	return &shareModels.PublicAccessResponse{
+		NoteID:      proto.NoteId,
+		AccessLevel: accessLevel,
+		ShareURL:    proto.ShareUrl,
+		UpdatedAt:   proto.UpdatedAt.AsTime(),
+	}
+}
+
+// ============================================
+// SharingSettings Mapping
+// ============================================
+
+func MapProtoToSharingSettingsResponse(proto *sharePB.SharingSettingsResponse) *shareModels.SharingSettingsResponse {
+	collaborators := make([]shareModels.Collaborator, len(proto.Collaborators))
+	for i, c := range proto.Collaborators {
+		collaborators[i] = MapProtoToCollaborator(c)
+	}
+
+	var publicAccessLevel *shareModels.NoteRole
+	if proto.PublicAccess.AccessLevel != nil {
+		role := MapProtoRoleToModel(*proto.PublicAccess.AccessLevel)
+		publicAccessLevel = &role
+	}
+
+	publicAccess := shareModels.PublicAccess{
+		NoteID:      proto.PublicAccess.NoteId,
+		AccessLevel: publicAccessLevel,
+		ShareURL:    proto.PublicAccess.ShareUrl,
+		UpdatedAt:   timestamppb.Now().AsTime(),
+	}
+
+	return &shareModels.SharingSettingsResponse{
+		NoteID:             proto.NoteId,
+		OwnerID:            proto.OwnerId,
+		PublicAccess:       publicAccess,
+		Collaborators:      collaborators,
+		TotalCollaborators: int(proto.TotalCollaborators),
+		IsOwner:            proto.IsOwner,
+	}
+}
+
+func MapProtoToNoteAccessInfo(proto *sharePB.NoteAccessResponse) shareModels.NoteAccessInfo {
+	return shareModels.NoteAccessInfo{
+		HasAccess:  proto.HasAccess,
+		Role:       MapProtoRoleToModel(proto.Role),
+		IsOwner:    proto.IsOwner,
+		CanEdit:    proto.CanEdit,
+		CanComment: proto.CanComment,
+	}
+}
+
+func MapProtoToActivateAccessResponse(proto *sharePB.ActivateAccessByLinkResponse) *shareModels.ActivateAccessResponse {
+	return &shareModels.ActivateAccessResponse{
+		NoteID:        proto.NoteId,
+		AccessGranted: proto.AccessGranted,
+		AccessInfo:    MapProtoToNoteAccessInfo(proto.AccessInfo),
+	}
 }

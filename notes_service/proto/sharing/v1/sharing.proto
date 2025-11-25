@@ -1,0 +1,140 @@
+syntax = "proto3";
+
+package sharing;
+
+option go_package = "backend/notes_service/pkg/sharing/v1";
+
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/empty.proto";
+
+service SharingService {
+  rpc AddCollaborator(AddCollaboratorRequest) returns (CollaboratorResponse);
+  rpc GetCollaborators(GetCollaboratorsRequest) returns (GetCollaboratorsResponse);
+  rpc UpdateCollaboratorRole(UpdateCollaboratorRoleRequest) returns (CollaboratorResponse);
+  rpc RemoveCollaborator(RemoveCollaboratorRequest) returns (google.protobuf.Empty);
+
+  rpc SetPublicAccess(SetPublicAccessRequest) returns (PublicAccessResponse);
+  rpc GetPublicAccess(GetPublicAccessRequest) returns (PublicAccessResponse);
+
+  rpc GetSharingSettings(GetSharingSettingsRequest) returns (SharingSettingsResponse);
+
+  rpc CheckNoteAccess(CheckNoteAccessRequest) returns (NoteAccessResponse);
+
+  // НОВЫЙ - активация доступа при переходе по публичной ссылке
+  rpc ActivateAccessByLink(ActivateAccessByLinkRequest) returns (ActivateAccessByLinkResponse);
+}
+
+enum NoteRole {
+  NOTE_ROLE_UNSPECIFIED = 0;
+  NOTE_ROLE_VIEWER = 1;
+  NOTE_ROLE_COMMENTER = 2;
+  NOTE_ROLE_EDITOR = 3;
+}
+
+message Collaborator {
+  uint64 permission_id = 1;
+  uint64 user_id = 2;
+  NoteRole role = 3;
+  uint64 granted_by = 4;
+  google.protobuf.Timestamp granted_at = 5;
+}
+
+message PublicAccess {
+  uint64 note_id = 1;
+  optional NoteRole access_level = 2;
+  string share_url = 3;
+}
+
+message AddCollaboratorRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+  uint64 user_id = 3;
+  NoteRole role = 4;
+}
+
+message CollaboratorResponse {
+  uint64 permission_id = 1;
+  Collaborator collaborator = 2;
+}
+
+message GetCollaboratorsRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+}
+
+message GetCollaboratorsResponse {
+  uint64 note_id = 1;
+  uint64 owner_id = 2;
+  repeated Collaborator collaborators = 3;
+  optional NoteRole public_access_level = 4;
+  int32 total_collaborators = 5;
+}
+
+message UpdateCollaboratorRoleRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+  uint64 permission_id = 3;
+  NoteRole new_role = 4;
+}
+
+message RemoveCollaboratorRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+  uint64 permission_id = 3;
+}
+
+message SetPublicAccessRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+  optional NoteRole access_level = 3;
+}
+
+message PublicAccessResponse {
+  uint64 note_id = 1;
+  optional NoteRole access_level = 2;
+  string share_url = 3;
+  google.protobuf.Timestamp updated_at = 4;
+}
+
+message GetPublicAccessRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+}
+
+message GetSharingSettingsRequest {
+  uint64 current_user_id = 1;
+  uint64 note_id = 2;
+}
+
+message SharingSettingsResponse {
+  uint64 note_id = 1;
+  uint64 owner_id = 2;
+  PublicAccess public_access = 3;
+  repeated Collaborator collaborators = 4;
+  int32 total_collaborators = 5;
+  bool is_owner = 6;
+}
+
+message CheckNoteAccessRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+}
+
+message NoteAccessResponse {
+  bool has_access = 1;
+  NoteRole role = 2;
+  bool is_owner = 3;
+  bool can_edit = 4;
+  bool can_comment = 5;
+}
+
+message ActivateAccessByLinkRequest {
+  string share_uuid = 1;
+  uint64 user_id = 2;
+}
+
+message ActivateAccessByLinkResponse {
+  uint64 note_id = 1;
+  bool access_granted = 2;
+  NoteAccessResponse access_info = 3;
+}

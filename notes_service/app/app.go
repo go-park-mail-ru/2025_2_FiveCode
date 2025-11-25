@@ -9,6 +9,8 @@ import (
 	NoteRepo "backend/notes_service/notes/repository"
 	NoteUC "backend/notes_service/notes/usecase"
 	"backend/notes_service/server"
+	ShareRepo "backend/notes_service/sharing/repository"
+	ShareUC "backend/notes_service/sharing/usecase"
 	"backend/pkg/interceptors"
 	"backend/pkg/metrics"
 	"backend/pkg/store"
@@ -111,11 +113,13 @@ func (a *App) initGRPCServer() {
 
 	notesRepo := NoteRepo.NewNotesRepository(a.Store.Postgres.DB)
 	blocksRepo := BlockRepo.NewBlocksRepository(a.Store.Postgres.DB)
+	shareRepo := ShareRepo.NewSharingRepository(a.Store.Postgres.DB)
 
-	notesUC := NoteUC.NewNoteUsecase(notesRepo)
-	blocksUC := BlockUC.NewBlocksUsecase(blocksRepo, notesRepo)
+	notesUC := NoteUC.NewNoteUsecase(notesRepo, shareRepo)
+	blocksUC := BlockUC.NewBlocksUsecase(blocksRepo, notesRepo, shareRepo)
+	shareUC := ShareUC.NewSharingUsecase(shareRepo, notesRepo)
 
-	server.RegisterServices(a.GRPCServer, notesUC, blocksUC)
+	server.RegisterServices(a.GRPCServer, notesUC, blocksUC, shareUC)
 }
 
 func (a *App) initMetrics() {
