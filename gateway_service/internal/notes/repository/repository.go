@@ -81,8 +81,13 @@ func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) ([]mod
 	return notes, nil
 }
 
-func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
-	resp, err := r.noteClient.CreateNote(ctx, &notePB.CreateNoteRequest{UserId: userID})
+func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error) {
+	req := &notePB.CreateNoteRequest{
+		UserId:       userID,
+		ParentNoteId: parentNoteID,
+	}
+
+	resp, err := r.noteClient.CreateNote(ctx, req)
 	if err != nil {
 		return nil, err
 	}

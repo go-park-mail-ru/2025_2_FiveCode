@@ -34,6 +34,10 @@ func (d *NotesDelivery) GetAllNotes(w http.ResponseWriter, r *http.Request) {
 	apiutils.WriteJSON(w, http.StatusOK, notes)
 }
 
+type CreateNoteRequest struct {
+	ParentNoteID *uint64 `json:"parent_note_id,omitempty"`
+}
+
 func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 	log := logger.FromContext(r.Context())
 	userID, ok := middleware.GetUserID(r.Context())
@@ -43,7 +47,16 @@ func (d *NotesDelivery) CreateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	note, err := d.usecase.CreateNote(r.Context(), userID)
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close request body")
+		}
+	}()
+
+	var req CreateNoteRequest
+	_ = json.NewDecoder(r.Body).Decode(&req)
+
+	note, err := d.usecase.CreateNote(r.Context(), userID, req.ParentNoteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create note")
 		apiutils.HandleGrpcError(w, err, log)

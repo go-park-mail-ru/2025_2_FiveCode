@@ -24,7 +24,7 @@ func NewNotesRepository(db store.DB) *NotesRepository {
 	}
 }
 
-func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
+func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
 	now := time.Now().UTC()
 
@@ -34,7 +34,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		return nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil {
+		if err := tx.Rollback(); err != nil && err != sql.ErrTxDone {
 			log.Error().Err(err).Msg("failed to rollback transaction")
 		}
 	}()
@@ -42,22 +42,29 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	shareUUID := uuid.New().String()
 
 	noteQuery := `
-		INSERT INTO note (owner_id, title, is_archived, is_shared, share_uuid, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
-		RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
-		          is_archived, is_shared, share_uuid, created_at, updated_at, deleted_at
-	`
+        INSERT INTO note (owner_id, parent_note_id, title, is_archived, is_shared, share_uuid, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
+                  is_archived, is_shared, share_uuid, created_at, updated_at, deleted_at
+    `
 	defaultTitle := "Новая заметка"
 
 	note := &models.Note{}
-	var parentNoteID, iconFileID sql.NullInt64
+	var parentNoteIDResult, iconFileID sql.NullInt64
 	var shareUUIDResult sql.NullString
 	var deletedAt sql.NullTime
 
-	err = tx.QueryRowContext(ctx, noteQuery, userID, defaultTitle, false, false, shareUUID, now, now).Scan(
+	var parentNoteIDParam interface{}
+	if parentNoteID != nil && *parentNoteID > 0 {
+		parentNoteIDParam = *parentNoteID
+	} else {
+		parentNoteIDParam = nil
+	}
+
+	err = tx.QueryRowContext(ctx, noteQuery, userID, parentNoteIDParam, defaultTitle, false, false, shareUUID, now, now).Scan(
 		&note.ID,
 		&note.OwnerID,
-		&parentNoteID,
+		&parentNoteIDResult,
 		&note.Title,
 		&iconFileID,
 		&note.IsArchived,
@@ -73,10 +80,10 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	}
 
 	blockQuery := `
-		INSERT INTO block (note_id, type, position, last_edited_by, created_at, updated_at) 
-		VALUES ($1, 'text', 1.0, $2, $3, $4)
-		RETURNING id
-	`
+        INSERT INTO block (note_id, type, position, last_edited_by, created_at, updated_at) 
+        VALUES ($1, 'text', 1.0, $2, $3, $4)
+        RETURNING id
+    `
 	var blockID uint64
 	err = tx.QueryRowContext(ctx, blockQuery, note.ID, userID, now, now).Scan(&blockID)
 	if err != nil {
@@ -85,8 +92,8 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 	}
 
 	textQuery := `
-		INSERT INTO block_text (block_id, text, created_at, updated_at) VALUES ($1, '', $2, $3)
-	`
+        INSERT INTO block_text (block_id, text, created_at, updated_at) VALUES ($1, '', $2, $3)
+    `
 	_, err = tx.ExecContext(ctx, textQuery, blockID, now, now)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create initial block_text entry")
@@ -98,8 +105,8 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64) (*model
 		return nil, fmt.Errorf("failed to commit create note transaction: %w", err)
 	}
 
-	if parentNoteID.Valid {
-		val := uint64(parentNoteID.Int64)
+	if parentNoteIDResult.Valid {
+		val := uint64(parentNoteIDResult.Int64)
 		note.ParentNoteID = &val
 	}
 	if iconFileID.Valid {

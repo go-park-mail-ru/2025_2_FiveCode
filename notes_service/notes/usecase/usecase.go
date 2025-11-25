@@ -46,15 +46,53 @@ func (u *NoteUsecase) GetAllNotes(ctx context.Context, userID uint64) ([]models.
 	return notes, nil
 }
 
-func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64) (*models.Note, error) {
+func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error) {
 	log := logger.FromContext(ctx)
-	note, err := u.Repository.CreateNote(ctx, userID)
+
+	if parentNoteID != nil && *parentNoteID > 0 {
+		parentNote, err := u.Repository.GetNoteById(ctx, *parentNoteID, userID)
+		if err != nil {
+			log.Error().Err(err).Uint64("parent_note_id", *parentNoteID).Msg("parent note not found")
+			return nil, fmt.Errorf("parent note not found: %w", err)
+		}
+
+		if parentNote.ParentNoteID != nil {
+			log.Warn().Uint64("parent_note_id", *parentNoteID).Msg("attempt to create sub-note of a sub-note")
+			return nil, fmt.Errorf("cannot create sub-note of a sub-note: maximum nesting level is 1")
+		}
+
+		// Проверяем права доступа пользователя к parent note
+		hasAccess, err := u.checkSubNoteAccess(ctx, userID, *parentNoteID)
+		if err != nil {
+			log.Error().Err(err).Uint64("parent_note_id", *parentNoteID).Msg("failed to check access")
+			return nil, fmt.Errorf("failed to check access: %w", err)
+		}
+		if !hasAccess {
+			log.Warn().Uint64("user_id", userID).Uint64("parent_note_id", *parentNoteID).Msg("no access to parent note")
+			return nil, fmt.Errorf("no access to parent note")
+		}
+	}
+
+	note, err := u.Repository.CreateNote(ctx, userID, parentNoteID)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to create note in repository")
 		return nil, fmt.Errorf("failed to create note: %w", err)
 	}
 
 	return note, nil
+}
+
+func (u *NoteUsecase) checkSubNoteAccess(ctx context.Context, userID, noteID uint64) (bool, error) {
+	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
+	if err != nil {
+		return false, err
+	}
+
+	if note.OwnerID == userID {
+		return true, nil
+	}
+
+	return false, nil
 }
 
 func (u *NoteUsecase) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
