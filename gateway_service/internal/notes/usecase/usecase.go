@@ -7,7 +7,7 @@ import (
 
 type NotesRepository interface {
 	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
-	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
+	CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error)
 	GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error)
 	UpdateNote(ctx context.Context, input *models.UpdateNoteInput) (*models.Note, error)
 	DeleteNote(ctx context.Context, userID, noteID uint64) error

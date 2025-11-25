@@ -16,7 +16,7 @@ type NoteUsecase struct {
 
 type NotesRepository interface {
 	GetNotes(ctx context.Context, userID uint64) ([]models.Note, error)
-	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
+	CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error)
 	GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models.Note, error)
 	GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error)
 	UpdateNote(ctx context.Context, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
@@ -61,7 +61,6 @@ func (u *NoteUsecase) CreateNote(ctx context.Context, userID uint64, parentNoteI
 			return nil, fmt.Errorf("cannot create sub-note of a sub-note: maximum nesting level is 1")
 		}
 
-		// Проверяем права доступа пользователя к parent note
 		hasAccess, err := u.checkSubNoteAccess(ctx, userID, *parentNoteID)
 		if err != nil {
 			log.Error().Err(err).Uint64("parent_note_id", *parentNoteID).Msg("failed to check access")

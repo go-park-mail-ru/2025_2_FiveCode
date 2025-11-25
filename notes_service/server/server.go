@@ -23,7 +23,7 @@ import (
 //go:generate mockgen -source=server.go -destination=../mock/mock_server.go -package=mock
 type NoteUsecase interface {
 	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
-	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
+	CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error)
 	GetNoteById(ctx context.Context, userID uint64, noteID uint64) (*models.Note, error)
 	UpdateNote(ctx context.Context, userID uint64, noteID uint64, title *string, isArchived *bool) (*models.Note, error)
 	DeleteNote(ctx context.Context, userID uint64, noteID uint64) error
