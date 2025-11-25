@@ -43,6 +43,7 @@ message GetAllNotesResponse {
 
 message CreateNoteRequest {
   uint64 user_id = 1;
+  optional uint64 parent_note_id = 2;
 }
 
 message GetNoteByIdRequest {

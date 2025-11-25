@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"backend/notes_service/internal/constants"
@@ -243,8 +244,17 @@ func (s *Server) GetAllNotes(ctx context.Context, req *notePB.GetAllNotesRequest
 }
 
 func (s *Server) CreateNote(ctx context.Context, req *notePB.CreateNoteRequest) (*notePB.Note, error) {
-	note, err := s.noteUsecase.CreateNote(ctx, req.GetUserId())
+	note, err := s.noteUsecase.CreateNote(ctx, req.GetUserId(), req.ParentNoteId)
 	if err != nil {
+		if strings.Contains(err.Error(), "parent note not found") {
+			return nil, status.Error(codes.NotFound, "parent note not found")
+		}
+		if strings.Contains(err.Error(), "cannot create sub-note of a sub-note") {
+			return nil, status.Error(codes.InvalidArgument, "cannot create sub-note of a sub-note: maximum nesting level is 1")
+		}
+		if strings.Contains(err.Error(), "no access") {
+			return nil, status.Error(codes.PermissionDenied, "no access to parent note")
+		}
 		return nil, status.Error(codes.Internal, "failed to create note")
 	}
 

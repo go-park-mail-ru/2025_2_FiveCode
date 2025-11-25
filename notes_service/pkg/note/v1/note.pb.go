@@ -7,13 +7,14 @@
 package v1
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -246,6 +247,7 @@ func (x *GetAllNotesResponse) GetNotes() []*Note {
 type CreateNoteRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	ParentNoteId  *uint64                `protobuf:"varint,2,opt,name=parent_note_id,json=parentNoteId,proto3,oneof" json:"parent_note_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -283,6 +285,13 @@ func (*CreateNoteRequest) Descriptor() ([]byte, []int) {
 func (x *CreateNoteRequest) GetUserId() uint64 {
 	if x != nil {
 		return x.UserId
+	}
+	return 0
+}
+
+func (x *CreateNoteRequest) GetParentNoteId() uint64 {
+	if x != nil && x.ParentNoteId != nil {
+		return *x.ParentNoteId
 	}
 	return 0
 }
@@ -589,9 +598,11 @@ const file_proto_note_v1_note_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\"7\n" +
 	"\x13GetAllNotesResponse\x12 \n" +
 	"\x05notes\x18\x01 \x03(\v2\n" +
-	".note.NoteR\x05notes\",\n" +
+	".note.NoteR\x05notes\"j\n" +
 	"\x11CreateNoteRequest\x12\x17\n" +
-	"\auser_id\x18\x01 \x01(\x04R\x06userId\"F\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12)\n" +
+	"\x0eparent_note_id\x18\x02 \x01(\x04H\x00R\fparentNoteId\x88\x01\x01B\x11\n" +
+	"\x0f_parent_note_id\"F\n" +
 	"\x12GetNoteByIdRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x17\n" +
 	"\anote_id\x18\x02 \x01(\x04R\x06noteId\":\n" +
@@ -689,6 +700,7 @@ func file_proto_note_v1_note_proto_init() {
 		return
 	}
 	file_proto_note_v1_note_proto_msgTypes[0].OneofWrappers = []any{}
+	file_proto_note_v1_note_proto_msgTypes[3].OneofWrappers = []any{}
 	file_proto_note_v1_note_proto_msgTypes[6].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
