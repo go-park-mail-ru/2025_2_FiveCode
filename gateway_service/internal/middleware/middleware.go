@@ -7,7 +7,7 @@ import (
 	"backend/gateway_service/internal/utils"
 	"backend/gateway_service/logger"
 	"backend/pkg/metrics"
-
+	"bufio"
 	"bytes"
 	"context"
 	"errors"
@@ -93,6 +93,13 @@ func (w *responseWriterInterceptor) WriteHeader(statusCode int) {
 	w.ResponseWriter.WriteHeader(statusCode)
 }
 
+func (w *responseWriterInterceptor) Hijack() (net.Conn, *bufio.ReadWriter, error) {
+	if h, ok := w.ResponseWriter.(http.Hijacker); ok {
+		return h.Hijack()
+	}
+	return nil, nil, errors.New("response writer does not support hijacking")
+}
+
 func realIP(r *http.Request) string {
 	ip := r.Header.Get("X-Forwarded-For")
 	if ip == "" {
@@ -108,14 +115,17 @@ const maxBodyLogSize = 1024
 
 func AccessLogMiddleware(next http.Handler) http.Handler {
 	m := metrics.NewHTTPMetrics(constants.GatewayServiceName)
-	
+
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		start := time.Now()
 		log := logger.FromContext(r.Context())
 
-		bodyBytes, _ := io.ReadAll(r.Body)
-		r.Body.Close()
-		r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		var bodyBytes []byte
+		if r.Header.Get("Upgrade") == "" {
+			bodyBytes, _ = io.ReadAll(r.Body)
+			r.Body.Close()
+			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+		}
 
 		wInt := &responseWriterInterceptor{ResponseWriter: w, statusCode: http.StatusOK}
 
@@ -128,7 +138,7 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 				path := r.URL.Path
 				m.IncreaseHits(method, path)
 				m.RecordResponseTime(method, path, duration.Seconds())
-				
+
 				if status >= 400 {
 					m.IncreaseErr(method, path, status)
 				}
@@ -174,7 +184,7 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 }
 
 type SessionValidator interface {
-    ValidateSession(ctx context.Context, sessionID string) (uint64, error)
+	ValidateSession(ctx context.Context, sessionID string) (uint64, error)
 }
 
 func AuthMiddleware(sessionValidator SessionValidator) mux.MiddlewareFunc {
@@ -194,7 +204,7 @@ func AuthMiddleware(sessionValidator SessionValidator) mux.MiddlewareFunc {
 			userID, err := sessionValidator.ValidateSession(r.Context(), session.Value)
 			if err != nil {
 				log.Warn().Err(err).Msg("session validation failed")
-				
+
 				apiutils.WriteError(w, http.StatusUnauthorized, "session expired or invalid")
 				return
 			}
