@@ -23,4 +23,5 @@ type ServerMessage struct {
 	UpdatedAt time.Time   `json:"updated_at,omitempty"`
 	Blocks    interface{} `json:"blocks,omitempty"`
 	Message   string      `json:"message,omitempty"`
+	Title     string      `json:"title,omitempty"`
 }

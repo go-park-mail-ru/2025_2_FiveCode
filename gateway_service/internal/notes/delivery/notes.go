@@ -135,6 +135,8 @@ func (d *NotesDelivery) UpdateNote(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	d.notifyNoteChanged(r.Context(), noteID, userID)
+
 	apiutils.WriteJSON(w, http.StatusOK, note)
 }
 
@@ -210,10 +212,17 @@ func (d *NotesDelivery) RemoveFavorite(w http.ResponseWriter, r *http.Request) {
 }
 
 func (d *NotesDelivery) notifyNoteChanged(ctx context.Context, noteID uint64, userID uint64) {
+	log := logger.FromContext(ctx)
+
 	blocks, err := d.usecase.GetBlocks(ctx, userID, noteID)
 	if err != nil {
-		log := logger.FromContext(ctx)
 		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get blocks for ws broadcast")
+		return
+	}
+
+	note, err := d.usecase.GetNoteById(ctx, userID, noteID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note for ws broadcast")
 		return
 	}
 
@@ -223,18 +232,17 @@ func (d *NotesDelivery) notifyNoteChanged(ctx context.Context, noteID uint64, us
 		UpdatedBy: int(userID),
 		UpdatedAt: time.Now(),
 		Blocks:    blocks,
+		Title:     note.Title,
 	}
 
 	data, err := json.Marshal(message)
 	if err != nil {
-		log := logger.FromContext(ctx)
 		log.Error().Err(err).Msg("failed to marshal ws message")
 		return
 	}
 
 	d.wsHub.BroadcastToNote(int(noteID), data, int(userID))
 
-	log := logger.FromContext(ctx)
 	log.Debug().
 		Uint64("note_id", noteID).
 		Uint64("updated_by", userID).

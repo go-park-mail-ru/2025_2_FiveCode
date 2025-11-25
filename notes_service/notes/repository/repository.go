@@ -120,12 +120,14 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 	log := logger.FromContext(ctx)
 
 	query := `
-		SELECT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id,
+		SELECT DISTINCT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id,
 		       n.is_archived, n.is_shared, n.share_uuid, n.created_at, n.updated_at,
 		       f.user_id IS NOT NULL AS is_favorite
 		FROM note n
 		LEFT JOIN favorite f ON n.id = f.note_id AND f.user_id = $1
-		WHERE n.owner_id = $1 AND n.deleted_at IS NULL
+		LEFT JOIN note_permission np ON n.id = np.note_id AND np.granted_to = $1
+		WHERE (n.owner_id = $1 OR np.note_permission_id IS NOT NULL) 
+		  AND n.deleted_at IS NULL
 		ORDER BY n.updated_at DESC
 	`
 
