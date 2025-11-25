@@ -555,7 +555,7 @@ func (s *Server) AddCollaborator(ctx context.Context, req *sharePB.AddCollaborat
 		req.GetNoteId(),
 		req.GetCurrentUserId(),
 		req.GetUserId(),
-		noteRoleFromProto(req.GetRole()), // Конвертируем здесь
+		noteRoleFromProto(req.GetRole()),
 	)
 	if err != nil {
 		if errors.Is(err, constants.ErrNotFound) {

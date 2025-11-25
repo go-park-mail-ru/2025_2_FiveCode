@@ -71,7 +71,7 @@ type ActivateAccessResponse struct {
 type AddCollaboratorInput struct {
 	CurrentUserID uint64   `json:"current_user_id"`
 	NoteID        uint64   `json:"note_id"`
-	UserID        uint64   `json:"user_id"`
+	Email         string   `json:"email"`
 	Role          NoteRole `json:"role"`
 }
 

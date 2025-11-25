@@ -131,8 +131,6 @@ func (r *NotesRepository) RemoveFavorite(ctx context.Context, userID, noteID uin
 	return err
 }
 
-// --- Block Methods ---
-
 func (r *NotesRepository) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error) {
 	resp, err := r.blockClient.GetBlocks(ctx, &blockPB.GetBlocksRequest{UserId: userID, NoteId: noteID})
 	if err != nil {
@@ -240,12 +238,12 @@ func (r *NotesRepository) UpdateBlockPosition(ctx context.Context, userID, block
 	return utils.MapProtoToBlock(resp), nil
 }
 
-func (r *NotesRepository) AddCollaborator(ctx context.Context, input *models.AddCollaboratorInput) (*models.CollaboratorResponse, error) {
+func (r *NotesRepository) AddCollaborator(ctx context.Context, currentUserID, noteID, targetUserID uint64, role models.NoteRole) (*models.CollaboratorResponse, error) {
 	resp, err := r.sharingClient.AddCollaborator(ctx, &sharePB.AddCollaboratorRequest{
-		CurrentUserId: input.CurrentUserID,
-		NoteId:        input.NoteID,
-		UserId:        input.UserID,
-		Role:          utils.MapModelRoleToProto(input.Role),
+		CurrentUserId: currentUserID,
+		NoteId:        noteID,
+		UserId:        targetUserID,
+		Role:          utils.MapModelRoleToProto(role),
 	})
 	if err != nil {
 		return nil, err

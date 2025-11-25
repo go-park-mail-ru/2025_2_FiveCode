@@ -6,7 +6,6 @@ import (
 )
 
 type NotesRepository interface {
-	// Notes methods
 	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
 	CreateNote(ctx context.Context, userID uint64) (*models.Note, error)
 	GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error)
@@ -15,7 +14,6 @@ type NotesRepository interface {
 	AddFavorite(ctx context.Context, userID, noteID uint64) error
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 
-	// Blocks methods
 	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error)
 	GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error)
 	CreateTextBlock(ctx context.Context, input *models.CreateTextBlockInput) (*models.Block, error)
@@ -25,8 +23,7 @@ type NotesRepository interface {
 	DeleteBlock(ctx context.Context, userID, blockID uint64) error
 	UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error)
 
-	// Sharing methods
-	AddCollaborator(ctx context.Context, input *models.AddCollaboratorInput) (*models.CollaboratorResponse, error)
+	AddCollaborator(ctx context.Context, currentUserID, noteID, targetUserID uint64, role models.NoteRole) (*models.CollaboratorResponse, error)
 	GetCollaborators(ctx context.Context, currentUserID, noteID uint64) (*models.GetCollaboratorsResponse, error)
 	UpdateCollaboratorRole(ctx context.Context, input *models.UpdateCollaboratorRoleInput) (*models.CollaboratorResponse, error)
 	RemoveCollaborator(ctx context.Context, currentUserID, noteID, permissionID uint64) error
@@ -36,10 +33,18 @@ type NotesRepository interface {
 	ActivateAccessByLink(ctx context.Context, shareUUID string, userID uint64) (*models.ActivateAccessResponse, error)
 }
 
-type NotesUsecase struct {
-	repo NotesRepository
+type UserRepository interface {
+	GetUserIDByEmail(ctx context.Context, email string) (uint64, error)
 }
 
-func NewNotesUsecase(repo NotesRepository) *NotesUsecase {
-	return &NotesUsecase{repo: repo}
+type NotesUsecase struct {
+	repo     NotesRepository
+	userRepo UserRepository
+}
+
+func NewNotesUsecase(repo NotesRepository, userRepo UserRepository) *NotesUsecase {
+	return &NotesUsecase{
+		repo:     repo,
+		userRepo: userRepo,
+	}
 }

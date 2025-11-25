@@ -2,7 +2,7 @@ package app
 
 import (
 	"backend/gateway_service/internal/config"
-	"backend/gateway_service/internal/websocket" // ДОБАВИЛИ
+	"backend/gateway_service/internal/websocket"
 	"backend/gateway_service/logger"
 	"backend/gateway_service/router"
 	"backend/pkg/store"
@@ -52,7 +52,7 @@ type App struct {
 
 	Handler http.Handler
 
-	WsHub *websocket.Hub // ДОБАВИЛИ
+	WsHub *websocket.Hub
 
 	closers []io.Closer
 }
@@ -78,7 +78,7 @@ func NewApp() *App {
 	}
 
 	app.initDependencies()
-	app.initWebSocket() // ДОБАВИЛИ
+	app.initWebSocket()
 	app.initHTTPHandler()
 
 	return app
@@ -147,7 +147,7 @@ func (a *App) initHTTPHandler() {
 	// Usecases
 	gatewayAuthUC := authUC.NewAuthUsecase(gatewayAuthRepo, gatewayUserRepo)
 	gatewayUserUC := userUC.NewUserUsecase(gatewayUserRepo, gatewayAuthRepo)
-	gatewayNotesUC := notesUC.NewNotesUsecase(gatewayNotesRepo)
+	gatewayNotesUC := notesUC.NewNotesUsecase(gatewayNotesRepo, gatewayUserRepo)
 	gatewayFileUC := fileUC.NewFileUsecase(gatewayFileRepo)
 
 	// Handlers

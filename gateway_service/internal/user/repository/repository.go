@@ -5,16 +5,19 @@ import (
 	"backend/gateway_service/internal/utils"
 	userPB "backend/user_service/pkg/user/v1"
 	"context"
+	"fmt"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
 type UserClient interface {
 	GetUser(ctx context.Context, in *userPB.GetUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
+	GetUserByEmail(ctx context.Context, in *userPB.GetUserByEmailRequest, opts ...grpc.CallOption) (*userPB.User, error) // ДОБАВИЛИ
 	UpdateUser(ctx context.Context, in *userPB.UpdateUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
 	DeleteUser(ctx context.Context, in *userPB.DeleteUserRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
-
 	VerifyUser(ctx context.Context, in *userPB.VerifyUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
 	CreateUser(ctx context.Context, in *userPB.CreateUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
 }
@@ -35,6 +38,20 @@ func (r *UserRepository) GetUser(ctx context.Context, userID uint64) (*models.Us
 		return nil, err
 	}
 	return utils.MapProtoToUser(resp), nil
+}
+
+func (r *UserRepository) GetUserIDByEmail(ctx context.Context, email string) (uint64, error) {
+	resp, err := r.client.GetUserByEmail(ctx, &userPB.GetUserByEmailRequest{
+		Email: email,
+	})
+	if err != nil {
+		if st, ok := status.FromError(err); ok && st.Code() == codes.NotFound {
+			return 0, fmt.Errorf("user not found with email: %s", email)
+		}
+		return 0, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	return resp.Id, nil
 }
 
 func (r *UserRepository) UpdateUser(ctx context.Context, input *models.UpdateUserInput) (*models.User, error) {

@@ -13,8 +13,8 @@ import (
 )
 
 type AddCollaboratorRequest struct {
-	UserID uint64          `json:"user_id"`
-	Role   models.NoteRole `json:"role"`
+	Email string          `json:"email"` // БЫЛО: UserID uint64
+	Role  models.NoteRole `json:"role"`
 }
 
 func (d *NotesDelivery) AddCollaborator(w http.ResponseWriter, r *http.Request) {
@@ -48,16 +48,22 @@ func (d *NotesDelivery) AddCollaborator(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
+	if req.Email == "" {
+		log.Warn().Msg("email is required")
+		apiutils.WriteError(w, http.StatusBadRequest, "email is required")
+		return
+	}
+
 	input := &models.AddCollaboratorInput{
 		CurrentUserID: currentUserID,
 		NoteID:        noteID,
-		UserID:        req.UserID,
+		Email:         req.Email,
 		Role:          req.Role,
 	}
 
 	response, err := d.usecase.AddCollaborator(r.Context(), input)
 	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to add collaborator")
+		log.Error().Err(err).Uint64("note_id", noteID).Str("email", req.Email).Msg("failed to add collaborator")
 		apiutils.HandleGrpcError(w, err, log)
 		return
 	}

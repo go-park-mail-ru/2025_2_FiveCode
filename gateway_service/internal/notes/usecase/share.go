@@ -3,10 +3,16 @@ package usecase
 import (
 	"backend/gateway_service/internal/notes/models"
 	"context"
+	"fmt"
 )
 
 func (u *NotesUsecase) AddCollaborator(ctx context.Context, input *models.AddCollaboratorInput) (*models.CollaboratorResponse, error) {
-	return u.repo.AddCollaborator(ctx, input)
+	targetUserID, err := u.userRepo.GetUserIDByEmail(ctx, input.Email)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get user by email: %w", err)
+	}
+
+	return u.repo.AddCollaborator(ctx, input.CurrentUserID, input.NoteID, targetUserID, input.Role)
 }
 
 func (u *NotesUsecase) GetCollaborators(ctx context.Context, currentUserID, noteID uint64) (*models.GetCollaboratorsResponse, error) {
