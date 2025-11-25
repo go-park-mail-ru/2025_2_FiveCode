@@ -52,5 +52,5 @@ func TransformShareURL(shareUUID string) string {
 
 	baseURL = strings.TrimSuffix(baseURL, "/")
 
-	return fmt.Sprintf("%s/share/%s", baseURL, shareUUID)
+	return fmt.Sprintf("%sshare/%s", baseURL, shareUUID)
 }

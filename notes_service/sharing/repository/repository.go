@@ -266,32 +266,40 @@ func (r *SharingRepository) SetPublicAccess(ctx context.Context, noteID uint64, 
 	return nil
 }
 
-func (r *SharingRepository) GetPublicAccess(ctx context.Context, noteID uint64) (*models.NoteRole, error) {
+func (r *SharingRepository) GetPublicAccess(ctx context.Context, noteID uint64) (*models.NoteRole, string, error) {
 	log := logger.FromContext(ctx)
 
 	query := `
-		SELECT public_access_level
-		FROM note
-		WHERE id = $1 AND deleted_at IS NULL
-	`
+        SELECT public_access_level, share_uuid
+        FROM note
+        WHERE id = $1 AND deleted_at IS NULL
+    `
 
 	var accessLevel sql.NullString
-	err := r.db.QueryRowContext(ctx, query, noteID).Scan(&accessLevel)
+	var shareUUID sql.NullString
+
+	err := r.db.QueryRowContext(ctx, query, noteID).Scan(&accessLevel, &shareUUID)
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Warn().Uint64("note_id", noteID).Msg("note not found")
-		return nil, constants.ErrNotFound
+		return nil, "", constants.ErrNotFound
 	}
 	if err != nil {
 		log.Error().Err(err).Msg("failed to get public access")
-		return nil, fmt.Errorf("failed to get public access: %w", err)
+		return nil, "", fmt.Errorf("failed to get public access: %w", err)
 	}
 
-	if !accessLevel.Valid {
-		return nil, nil
+	var role *models.NoteRole
+	if accessLevel.Valid {
+		r := models.NoteRole(accessLevel.String)
+		role = &r
 	}
 
-	role := models.NoteRole(accessLevel.String)
-	return &role, nil
+	uuid := ""
+	if shareUUID.Valid {
+		uuid = shareUUID.String
+	}
+
+	return role, uuid, nil
 }
 
 func (r *SharingRepository) GetNoteOwnerID(ctx context.Context, noteID uint64) (uint64, error) {

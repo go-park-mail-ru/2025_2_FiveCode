@@ -17,7 +17,7 @@ type SharingRepository interface {
 	CheckCollaboratorExists(ctx context.Context, noteID, userID uint64) (bool, error)
 
 	SetPublicAccess(ctx context.Context, noteID uint64, accessLevel *models.NoteRole) error
-	GetPublicAccess(ctx context.Context, noteID uint64) (*models.NoteRole, error)
+	GetPublicAccess(ctx context.Context, noteID uint64) (*models.NoteRole, string, error) // возвращает (accessLevel, shareUUID, error)
 
 	GetNoteOwnerID(ctx context.Context, noteID uint64) (uint64, error)
 	CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error)
@@ -150,7 +150,7 @@ func (uc *SharingUsecase) GetCollaborators(ctx context.Context, noteID, currentU
 		return 0, nil, nil, fmt.Errorf("failed to get collaborators: %w", err)
 	}
 
-	publicAccess, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
+	publicAccess, _, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
 	if err != nil {
 		return 0, nil, nil, fmt.Errorf("failed to get public access: %w", err)
 	}
@@ -239,7 +239,7 @@ func (uc *SharingUsecase) GetPublicAccess(ctx context.Context, noteID, currentUs
 		return nil, err
 	}
 
-	accessLevel, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
+	accessLevel, _, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public access: %w", err)
 	}
@@ -263,7 +263,7 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 		return nil, fmt.Errorf("failed to get collaborators: %w", err)
 	}
 
-	publicAccessLevel, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
+	publicAccessLevel, shareUUID, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public access: %w", err)
 	}
@@ -296,7 +296,7 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 	publicAccess := models.PublicAccess{
 		NoteID:      noteID,
 		AccessLevel: publicAccessLevel,
-		ShareURL:    fmt.Sprintf("/notes/%d", noteID),
+		ShareURL:    shareUUID,
 	}
 
 	isOwner := (currentUserID == ownerID)
@@ -326,7 +326,7 @@ func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID st
 			AccessInfo: models.NoteAccessInfo{
 				IsOwner:   true,
 				HasAccess: true,
-				Role:      models.RoleEditor,
+				Role:      models.RoleOwner,
 				CanEdit:   true,
 			},
 		}, nil
@@ -350,7 +350,7 @@ func (uc *SharingUsecase) ActivateAccessByLink(ctx context.Context, shareUUID st
 		}, nil
 	}
 
-	publicAccessLevel, err := uc.sharingRepo.GetPublicAccess(ctx, note.ID)
+	publicAccessLevel, _, err := uc.sharingRepo.GetPublicAccess(ctx, note.ID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public access level: %w", err)
 	}
