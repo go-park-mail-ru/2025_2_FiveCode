@@ -4,6 +4,7 @@ import (
 	"backend/notes_service/internal/constants"
 	"backend/notes_service/internal/models"
 	"backend/notes_service/logger"
+	"backend/pkg/store"
 	"context"
 	"database/sql"
 	"errors"
@@ -14,10 +15,10 @@ import (
 )
 
 type NotesRepository struct {
-	db *sql.DB
+	db store.DB
 }
 
-func NewNotesRepository(db *sql.DB) *NotesRepository {
+func NewNotesRepository(db store.DB) *NotesRepository {
 	return &NotesRepository{
 		db: db,
 	}

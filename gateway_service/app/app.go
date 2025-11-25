@@ -118,13 +118,11 @@ func (a *App) initDependencies() {
 	a.NotesConn = a.mustConnectGrpc("notes")
 }
 
-// ДОБАВИЛИ новый метод
 func (a *App) initWebSocket() {
 	a.Logger.Info().Msg("Initializing WebSocket Hub...")
 
 	a.WsHub = websocket.NewHub(&a.Logger)
 
-	// Запускаем Hub в отдельной горутине
 	go a.WsHub.Run()
 
 	a.Logger.Info().Msg("WebSocket Hub started successfully")
@@ -143,8 +141,8 @@ func (a *App) initHTTPHandler() {
 	// Repositories
 	gatewayAuthRepo := authRepo.NewAuthRepository(authClientGRPC)
 	gatewayUserRepo := userRepo.NewUserRepository(userClientGRPC)
-	gatewayNotesRepo := notesRepo.NewNotesRepository(noteClientGRPC, blockClientGRPC, shareClientGRPC)
-	gatewayFileRepo := fileRepo.NewFileRepository(a.Store.Postgres.DB, a.Store.Minio.Client)
+	gatewayFileRepo := fileRepo.NewFileRepository(a.Store.Postgres.DB.GetSQLDB(), a.Store.Minio.Client)
+	gatewayNotesRepo := notesRepo.NewNotesRepository(noteClientGRPC, blockClientGRPC, shareClientGRPC, gatewayFileRepo)
 
 	// Usecases
 	gatewayAuthUC := authUC.NewAuthUsecase(gatewayAuthRepo, gatewayUserRepo)

@@ -14,7 +14,7 @@ func TransformMinioURL(internalURL string) string {
 	internalEndpoint := viper.GetString("MINIO_ENDPOINT")
 	publicEndpoint := viper.GetString("MINIO_PUBLIC_ENDPOINT")
 
-	if internalEndpoint == "" || publicEndpoint == "" {
+	if internalEndpoint == "" && publicEndpoint == "" {
 		return internalURL
 	}
 

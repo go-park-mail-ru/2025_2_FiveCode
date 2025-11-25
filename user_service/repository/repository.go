@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"backend/pkg/store"
 	"backend/user_service/internal/constants"
 	"backend/user_service/internal/models"
 	"backend/user_service/logger"
@@ -13,10 +14,10 @@ import (
 )
 
 type UserRepository struct {
-	db *sql.DB
+	db store.DB
 }
 
-func NewUserRepository(db *sql.DB) *UserRepository {
+func NewUserRepository(db store.DB) *UserRepository {
 	return &UserRepository{
 		db: db,
 	}

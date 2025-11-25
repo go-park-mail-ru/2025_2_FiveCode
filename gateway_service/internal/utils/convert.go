@@ -8,6 +8,7 @@ import (
 	notePB "backend/notes_service/pkg/note/v1"
 	sharePB "backend/notes_service/pkg/sharing/v1"
 	userPB "backend/user_service/pkg/user/v1"
+
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 

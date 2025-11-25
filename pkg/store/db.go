@@ -15,6 +15,23 @@ import (
 	_ "github.com/lib/pq"
 )
 
+type Tx interface {
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	Commit() error
+	Rollback() error
+}
+
+type DB interface {
+	QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row
+	ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error)
+	BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error)
+	Close() error
+	GetSQLDB() *sql.DB
+}
+
 type dbWrapper struct {
 	*sql.DB
 }
@@ -48,12 +65,16 @@ func (d *dbWrapper) QueryContext(ctx context.Context, query string, args ...inte
 	return rows, err
 }
 
-func (d *dbWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (*txWrapper, error) {
+func (d *dbWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (Tx, error) {
 	tx, err := d.DB.BeginTx(ctx, opts)
 	if err != nil {
 		return nil, err
 	}
 	return &txWrapper{Tx: tx}, nil
+}
+
+func (d *dbWrapper) GetSQLDB() *sql.DB {
+	return d.DB
 }
 
 type txWrapper struct {
@@ -89,8 +110,16 @@ func (t *txWrapper) QueryContext(ctx context.Context, query string, args ...inte
 	return rows, err
 }
 
+func (t *txWrapper) Commit() error {
+	return t.Tx.Commit()
+}
+
+func (t *txWrapper) Rollback() error {
+	return t.Tx.Rollback()
+}
+
 type PostgresDB struct {
-	DB *dbWrapper
+	DB DB
 }
 
 func NewPostgresDB(host string, port int, user, password, dbname, sslmode string) (*PostgresDB, error) {
@@ -114,7 +143,7 @@ func (p *PostgresDB) Close() error {
 }
 
 func (p *PostgresDB) RunMigrations(migrationsPath string) error {
-	driver, err := postgres.WithInstance(p.DB.DB, &postgres.Config{})
+	driver, err := postgres.WithInstance(p.DB.GetSQLDB(), &postgres.Config{})
 	if err != nil {
 		return fmt.Errorf("failed to create migrate driver: %w", err)
 	}

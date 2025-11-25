@@ -3,8 +3,8 @@ package repository
 import (
 	"backend/notes_service/internal/constants"
 	"backend/notes_service/internal/models"
-	"backend/notes_service/internal/utils"
 	"backend/notes_service/logger"
+	"backend/pkg/store"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -16,10 +16,10 @@ import (
 )
 
 type BlocksRepository struct {
-	db *sql.DB
+	db store.DB
 }
 
-func NewBlocksRepository(db *sql.DB) *BlocksRepository {
+func NewBlocksRepository(db store.DB) *BlocksRepository {
 	return &BlocksRepository{db: db}
 }
 
@@ -474,14 +474,9 @@ func (r *BlocksRepository) getAttachmentContentsBatch(ctx context.Context, block
 	query := `
 		SELECT 
 		    ba.block_id,
-		    f.url,
-		    f.mime_type,
-		    f.size_bytes,
-		    f.width,
-		    f.height,
+		    ba.file_id,
 		    ba.caption
 		FROM block_attachment ba
-		JOIN file f ON ba.file_id = f.id
 		WHERE ba.block_id = ANY($1)
 	`
 
@@ -499,34 +494,26 @@ func (r *BlocksRepository) getAttachmentContentsBatch(ctx context.Context, block
 	contents := make(map[uint64]models.AttachmentContent)
 	for rows.Next() {
 		var blockID uint64
-		var url, mimeType string
-		var sizeBytes int
-		var width, height sql.NullInt64
+		var fileID int64
 		var caption sql.NullString
 
-		if err := rows.Scan(&blockID, &url, &mimeType, &sizeBytes, &width, &height, &caption); err != nil {
+		if err := rows.Scan(&blockID, &fileID, &caption); err != nil {
 			log.Error().Err(err).Msg("failed to scan attachment content")
 			return nil, fmt.Errorf("failed to scan attachment content: %w", err)
 		}
 
 		content := models.AttachmentContent{
-			URL:       utils.TransformMinioURL(url),
-			MimeType:  mimeType,
-			SizeBytes: sizeBytes,
+			URL:       fmt.Sprintf("file:%d", fileID),
+			MimeType:  "application/octet-stream",
+			SizeBytes: 0,
 		}
 
 		if caption.Valid {
 			captionStr := caption.String
 			content.Caption = &captionStr
 		}
-		if width.Valid {
-			widthInt := int(width.Int64)
-			content.Width = &widthInt
-		}
-		if height.Valid {
-			heightInt := int(height.Int64)
-			content.Height = &heightInt
-		}
+		
+		// Ширину и высоту пока оставляем null, Gateway их заполнит
 
 		contents[blockID] = content
 	}

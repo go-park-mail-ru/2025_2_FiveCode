@@ -4,6 +4,7 @@ import (
 	"backend/notes_service/internal/constants"
 	"backend/notes_service/internal/models"
 	"backend/notes_service/logger"
+	"backend/pkg/store"
 	"context"
 	"database/sql"
 	"errors"
@@ -11,10 +12,10 @@ import (
 )
 
 type SharingRepository struct {
-	db *sql.DB
+	db store.DB
 }
 
-func NewSharingRepository(db *sql.DB) *SharingRepository {
+func NewSharingRepository(db store.DB) *SharingRepository {
 	return &SharingRepository{db: db}
 }
 

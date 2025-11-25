@@ -1,16 +1,23 @@
 package repository
 
 import (
+	fileModels "backend/gateway_service/internal/file/models"
 	"backend/gateway_service/internal/notes/models"
 	"backend/gateway_service/internal/utils"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
 	sharePB "backend/notes_service/pkg/sharing/v1"
 	"context"
+	"strconv"
+	"strings"
 
 	"google.golang.org/grpc"
 	"google.golang.org/protobuf/types/known/emptypb"
 )
+
+type FileRepository interface {
+	GetFileByID(ctx context.Context, fileID uint64) (*fileModels.File, error)
+}
 
 type NoteClient interface {
 	GetAllNotes(ctx context.Context, in *notePB.GetAllNotesRequest, opts ...grpc.CallOption) (*notePB.GetAllNotesResponse, error)
@@ -49,13 +56,15 @@ type NotesRepository struct {
 	noteClient    NoteClient
 	blockClient   BlockClient
 	sharingClient SharingClient
+	fileRepo      FileRepository
 }
 
-func NewNotesRepository(n NoteClient, b BlockClient, s SharingClient) *NotesRepository {
+func NewNotesRepository(n NoteClient, b BlockClient, s SharingClient, f FileRepository) *NotesRepository {
 	return &NotesRepository{
 		noteClient:    n,
 		blockClient:   b,
 		sharingClient: s,
+		fileRepo:      f,
 	}
 }
 
@@ -133,6 +142,7 @@ func (r *NotesRepository) GetBlocks(ctx context.Context, userID, noteID uint64) 
 	blocks := make([]models.Block, len(resp.Blocks))
 	for i, pbBlock := range resp.Blocks {
 		blocks[i] = *utils.MapProtoToBlock(pbBlock)
+		r.enrichBlockWithFile(ctx, &blocks[i])
 	}
 	return blocks, nil
 }
@@ -179,7 +189,9 @@ func (r *NotesRepository) CreateAttachmentBlock(ctx context.Context, input *mode
 	if err != nil {
 		return nil, err
 	}
-	return utils.MapProtoToBlock(resp), nil
+	block := utils.MapProtoToBlock(resp)
+	r.enrichBlockWithFile(ctx, block)
+	return block, nil
 }
 
 func (r *NotesRepository) UpdateBlock(ctx context.Context, userID uint64, input *models.UpdateBlockInput) (*models.Block, error) {
@@ -323,4 +335,31 @@ func (r *NotesRepository) ActivateAccessByLink(ctx context.Context, shareUUID st
 		return nil, err
 	}
 	return utils.MapProtoToActivateAccessResponse(resp), nil
+}
+
+func (r *NotesRepository) enrichBlockWithFile(ctx context.Context, block *models.Block) {
+	if block.Type != models.BlockTypeAttachment {
+		return
+	}
+
+	content, ok := block.Content.(models.AttachmentContent)
+	if !ok {
+		return
+	}
+
+	if strings.HasPrefix(content.URL, "file:") {
+		idStr := strings.TrimPrefix(content.URL, "file:")
+		fileID, err := strconv.ParseUint(idStr, 10, 64)
+		if err == nil {
+			file, err := r.fileRepo.GetFileByID(ctx, fileID)
+			if err == nil {
+				content.URL = utils.TransformMinioURL(file.URL)
+				content.MimeType = file.MimeType
+				content.SizeBytes = int(file.SizeBytes)
+				content.Width = file.Width
+				content.Height = file.Height
+				block.Content = content
+			}
+		}
+	}
 }

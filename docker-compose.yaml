@@ -118,6 +118,7 @@ services:
       DB_SSLMODE: "${DB_SSLMODE}"
       
       MINIO_ENDPOINT: "minio:9000"
+      MINIO_PUBLIC_ENDPOINT: "${MINIO_PUBLIC_ENDPOINT}"
       
       SERVICES_AUTH_GRPC_HOST: "auth"
       SERVICES_AUTH_GRPC_PORT: "50051"
