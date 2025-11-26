@@ -6,6 +6,7 @@ import (
 	"backend/user_service/logger"
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"golang.org/x/crypto/bcrypt"
@@ -32,6 +33,13 @@ func NewUserUsecase(UserRepository UserRepository) *UserUsecase {
 
 func (uc *UserUsecase) UpdateUser(ctx context.Context, userID uint64, username *string, password *string, avatarFileID *uint64) (*models.User, error) {
 	log := logger.FromContext(ctx)
+
+	if username != nil {
+		if !verifyUsername(*username) {
+			log.Warn().Str("username", *username).Msg("invalid username format")
+			return nil, constants.ErrInvalidUsername
+		}
+	}
 
 	if password != nil {
 		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(*password), bcrypt.DefaultCost)
@@ -81,6 +89,15 @@ func (uc *UserUsecase) CreateUser(ctx context.Context, email, password, username
 
 	if username == "" {
 		username = strings.Split(email, "@")[0]
+		username = strings.Split(username, ".")[0]
+		if !verifyUsername(username) {
+			username = constants.DefaultUsername
+		}
+	}
+
+	if !verifyUsername(username) {
+		log.Warn().Str("username", username).Msg("invalid username format")
+		return nil, constants.ErrInvalidUsername
 	}
 
 	hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
@@ -125,4 +142,13 @@ func (uc *UserUsecase) GetUserByEmail(ctx context.Context, email string) (*model
 	user.Password = ""
 
 	return user, nil
+}
+
+var usernameRegex = regexp.MustCompile(`^[a-zA-Z0-9_]+$`)
+
+func verifyUsername(username string) bool {
+	if len(username) < 1 || len(username) > 40 || !usernameRegex.MatchString(username) {
+		return false
+	}
+	return true
 }

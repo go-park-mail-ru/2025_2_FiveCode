@@ -160,10 +160,10 @@ func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID uint64, req *mod
 
 		for i := range textContent.Formats {
 			if textContent.Formats[i].Size == 0 {
-				textContent.Formats[i].Size = 12
+				textContent.Formats[i].Size = constants.DefaultTextSize
 			}
 			if textContent.Formats[i].Font == "" {
-				textContent.Formats[i].Font = models.FontInter
+				textContent.Formats[i].Font = constants.DefaultTextFont
 			}
 		}
 
@@ -425,7 +425,7 @@ func optimizeFormats(text string, formats []models.BlockTextFormat) []models.Blo
 
 func isDefaultFormat(f models.BlockTextFormat) bool {
 	return !f.Bold && !f.Italic && !f.Underline && !f.Strikethrough &&
-		f.Link == nil && f.Font == models.FontInter && f.Size == 12
+		f.Link == nil && f.Font == constants.DefaultTextFont && f.Size == constants.DefaultTextSize
 }
 
 func formatsEqual(f1, f2 models.BlockTextFormat) bool {
@@ -452,8 +452,8 @@ func stylesEqual(f1, f2 models.BlockTextFormat) bool {
 
 func mergeFormats(formats map[int]models.BlockTextFormat) models.BlockTextFormat {
 	result := models.BlockTextFormat{
-		Font: models.FontInter,
-		Size: 12,
+		Font: constants.DefaultTextFont,
+		Size: constants.DefaultTextSize,
 	}
 
 	for _, f := range formats {
