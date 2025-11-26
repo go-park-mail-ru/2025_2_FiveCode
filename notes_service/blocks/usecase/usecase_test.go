@@ -1,161 +1,317 @@
 package usecase
 
 import (
-	"backend/blocks/repository"
-	"backend/models"
-	models2 "backend/pkg/models"
+	"backend/notes_service/blocks/mock"
+	"backend/notes_service/blocks/repository"
+	"backend/notes_service/internal/constants"
+	"backend/notes_service/internal/models"
 	"context"
-	"fmt"
 	"testing"
 
+	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-// minimal fake repos used by tests
-type bu_fakeBlocksRepo struct{}
+func TestBlocksUsecase_CreateTextBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-func (b *bu_fakeBlocksRepo) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
-	return &models.BlockWithContent{Block: models2.Block{ID: 10, NoteID: noteID, Position: position}}, nil
-}
-func (b *bu_fakeBlocksRepo) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error) {
-	return &models.BlockWithContent{Block: models2.Block{ID: 11, NoteID: noteID, Position: position}}, nil
-}
-func (b *bu_fakeBlocksRepo) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
-	return []models.BlockWithContent{}, nil
-}
-func (b *bu_fakeBlocksRepo) GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error) {
-	return &models.BlockWithContent{Block: models2.Block{ID: blockID, NoteID: 1, Position: 1.0}}, nil
-}
-func (b *bu_fakeBlocksRepo) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models2.BlockTextFormat) (*models.BlockWithContent, error) {
-	return &models.BlockWithContent{Block: models2.Block{ID: blockID}}, nil
-}
-func (b *bu_fakeBlocksRepo) UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models2.Block, error) {
-	return &models2.Block{ID: blockID, Position: position}, nil
-}
-func (b *bu_fakeBlocksRepo) DeleteBlock(ctx context.Context, blockID uint64) error { return nil }
-func (b *bu_fakeBlocksRepo) GetBlockNoteID(ctx context.Context, blockID uint64) (uint64, error) {
-	return 1, nil
-}
-func (b *bu_fakeBlocksRepo) GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]repository.BlockPositionInfo, error) {
-	return []repository.BlockPositionInfo{{ID: 1, Position: 1.0}, {ID: 2, Position: 2.0}}, nil
-}
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
 
-type bu_fakeNotesRepo struct{ owner uint64 }
-
-func (f *bu_fakeNotesRepo) GetNoteById(ctx context.Context, noteID uint64, userID uint64) (*models2.Note, error) {
-	return &models2.Note{ID: noteID, OwnerID: f.owner}, nil
-}
-
-// errBlocksRepo simulates repository errors for blocks usecase tests
-type errBlocksRepo struct{}
-
-func (r *errBlocksRepo) CreateTextBlock(ctx context.Context, noteID uint64, position float64, userID uint64) (*models.BlockWithContent, error) {
-	return nil, nil
-}
-func (r *errBlocksRepo) CreateAttachmentBlock(ctx context.Context, noteID uint64, position float64, fileID uint64, userID uint64) (*models.BlockWithContent, error) {
-	return nil, nil
-}
-func (r *errBlocksRepo) GetBlocksByNoteID(ctx context.Context, noteID uint64) ([]models.BlockWithContent, error) {
-	return nil, nil
-}
-func (r *errBlocksRepo) GetBlockByID(ctx context.Context, blockID uint64) (*models.BlockWithContent, error) {
-	return nil, nil
-}
-func (r *errBlocksRepo) UpdateBlockText(ctx context.Context, blockID uint64, text string, formats []models2.BlockTextFormat) (*models.BlockWithContent, error) {
-	return nil, fmt.Errorf("upd")
-}
-func (r *errBlocksRepo) UpdateBlockPosition(ctx context.Context, blockID uint64, position float64) (*models2.Block, error) {
-	return nil, fmt.Errorf("pos")
-}
-func (r *errBlocksRepo) DeleteBlock(ctx context.Context, blockID uint64) error {
-	return fmt.Errorf("del")
-}
-func (r *errBlocksRepo) GetBlockNoteID(ctx context.Context, blockID uint64) (uint64, error) {
-	return 0, fmt.Errorf("nb")
-}
-func (r *errBlocksRepo) GetBlocksByNoteIDForPositionCalc(ctx context.Context, noteID uint64, excludeBlockID uint64) ([]repository.BlockPositionInfo, error) {
-	return nil, fmt.Errorf("poscalc")
-}
-
-func TestBlocksUsecase_CreateAndPosition(t *testing.T) {
-	blocksRepo := &bu_fakeBlocksRepo{}
-	notesRepo := &bu_fakeNotesRepo{owner: 1}
-	u := NewBlocksUsecase(blocksRepo, notesRepo)
-
-	// Create text block
-	b, err := u.CreateTextBlock(context.Background(), 1, 1, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(10), b.ID)
-
-	// Update position
-	nb, err := u.UpdateBlockPosition(context.Background(), 1, 10, nil)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(10), nb.ID)
-}
-
-func TestBlocksUsecase_CreateAttachment_FileIDRequired(t *testing.T) {
-	blocksRepo := &bu_fakeBlocksRepo{}
-	notesRepo := &bu_fakeNotesRepo{owner: 1}
-	u := NewBlocksUsecase(blocksRepo, notesRepo)
-
-	_, err := u.CreateAttachmentBlock(context.Background(), 1, 1, nil, 0)
-	assert.Error(t, err)
-}
-
-func TestBlocksUsecase_AccessDeniedAndPositionCalc(t *testing.T) {
-	// note owner differs so access denied
-	blocksRepo := &bu_fakeBlocksRepo{}
-	notesRepo := &bu_fakeNotesRepo{owner: 2}
-	u := NewBlocksUsecase(blocksRepo, notesRepo)
-
-	_, err := u.CreateTextBlock(context.Background(), 1, 1, nil)
-	if !assert.Error(t, err) {
-		t.Fatalf("expected access denied error")
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	block := &models.Block{
+		BaseBlock: models.BaseBlock{ID: 100, NoteID: noteID, Type: "text", Position: 1.0},
 	}
 
-	// test calculatePosition when beforeBlock not found
-	// use fake notes repo with correct owner
-	notesRepo2 := &bu_fakeNotesRepo{owner: 1}
-	u2 := NewBlocksUsecase(blocksRepo, notesRepo2)
+	t.Run("Success", func(t *testing.T) {
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, uint64(0)).Return([]repository.BlockPositionInfo{}, nil)
+		mockBlocksRepo.EXPECT().CreateTextBlock(ctx, noteID, 1.0, userID).Return(block, nil)
 
-	// beforeBlock points to non-existing id -> should return error from calculatePosition wrapped
-	before := uint64(999)
-	_, err = u2.CreateTextBlock(context.Background(), 1, 1, &before)
-	assert.Error(t, err)
+		res, err := usecase.CreateTextBlock(ctx, userID, noteID, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, block, res)
+	})
+
+	t.Run("NoAccess", func(t *testing.T) {
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: false}, nil)
+
+		_, err := usecase.CreateTextBlock(ctx, userID, noteID, nil)
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrNoAccess, err)
+	})
 }
 
-func TestBlocksUsecase_UpdateAndDelete_ErrorFlows(t *testing.T) {
-	// use package-level errBlocksRepo that simulates repository errors
-	notesRepo := &bu_fakeNotesRepo{owner: 1}
-	er := &errBlocksRepo{}
-	u := NewBlocksUsecase(er, notesRepo)
+func TestBlocksUsecase_GetBlocks(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// Update text should propagate error
-	_, err := u.UpdateBlock(context.Background(), 1, 1, "x", nil)
-	assert.Error(t, err)
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
 
-	// Update position should propagate error
-	_, err = u.UpdateBlockPosition(context.Background(), 1, 1, nil)
-	assert.Error(t, err)
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	blocks := []models.Block{
+		{BaseBlock: models.BaseBlock{ID: 1, NoteID: noteID}},
+	}
 
-	// Delete should propagate error
-	err = u.DeleteBlock(context.Background(), 1, 1)
-	assert.Error(t, err)
+	t.Run("Success", func(t *testing.T) {
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockBlocksRepo.EXPECT().GetBlocksByNoteID(ctx, noteID).Return(blocks, nil)
+
+		res, err := usecase.GetBlocks(ctx, userID, noteID)
+		assert.NoError(t, err)
+		assert.Equal(t, blocks, res)
+	})
 }
 
-// more coverage: calculatePosition branches
-func TestBlocksUsecase_CalculatePositionVarious(t *testing.T) {
-	blocksRepo := &bu_fakeBlocksRepo{}
-	notesRepo := &bu_fakeNotesRepo{owner: 1}
-	u := NewBlocksUsecase(blocksRepo, notesRepo)
+func TestBlocksUsecase_GetBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// nil before -> position should be > 0
-	b, err := u.CreateTextBlock(context.Background(), 1, 0, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, b)
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
 
-	// middle insertion: before exists in fake GetBlocksByNoteIDForPositionCalc
-	before := uint64(2)
-	_, err = u.CreateTextBlock(context.Background(), 1, 0, &before)
-	assert.NoError(t, err)
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	blockID := uint64(100)
+	block := &models.Block{BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID}}
+
+	t.Run("Success", func(t *testing.T) {
+		mockBlocksRepo.EXPECT().GetBlockByID(ctx, blockID).Return(block, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+
+		res, err := usecase.GetBlock(ctx, userID, blockID)
+		assert.NoError(t, err)
+		assert.Equal(t, block, res)
+	})
+}
+
+func TestBlocksUsecase_DeleteBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
+
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	blockID := uint64(100)
+
+	t.Run("Success", func(t *testing.T) {
+		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockBlocksRepo.EXPECT().DeleteBlock(ctx, blockID).Return(nil)
+
+		err := usecase.DeleteBlock(ctx, userID, blockID)
+		assert.NoError(t, err)
+	})
+}
+
+func TestBlocksUsecase_UpdateBlockPosition(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
+
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	blockID := uint64(100)
+	block := &models.Block{BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Position: 1.5}}
+
+	t.Run("Success", func(t *testing.T) {
+		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, blockID).Return([]repository.BlockPositionInfo{
+			{ID: 1, Position: 1.0},
+			{ID: 2, Position: 2.0},
+		}, nil)
+		mockBlocksRepo.EXPECT().UpdateBlockPosition(ctx, blockID, 3.0).Return(block, nil)
+
+		res, err := usecase.UpdateBlockPosition(ctx, userID, blockID, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, block, res)
+	})
+}
+
+func TestBlocksUsecase_CreateAttachmentBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
+
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	fileID := uint64(123)
+	block := &models.Block{
+		BaseBlock: models.BaseBlock{ID: 100, NoteID: noteID, Type: models.BlockTypeAttachment, Position: 1.0},
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, uint64(0)).Return([]repository.BlockPositionInfo{}, nil)
+		mockBlocksRepo.EXPECT().CreateAttachmentBlock(ctx, noteID, 1.0, fileID, userID).Return(block, nil)
+
+		res, err := usecase.CreateAttachmentBlock(ctx, userID, noteID, nil, fileID)
+		assert.NoError(t, err)
+		assert.Equal(t, block, res)
+	})
+
+	t.Run("MissingFileID", func(t *testing.T) {
+		_, err := usecase.CreateAttachmentBlock(ctx, userID, noteID, nil, 0)
+		assert.Error(t, err)
+	})
+}
+
+func TestBlocksUsecase_CreateCodeBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
+
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	block := &models.Block{
+		BaseBlock: models.BaseBlock{ID: 100, NoteID: noteID, Type: models.BlockTypeCode, Position: 1.0},
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, uint64(0)).Return([]repository.BlockPositionInfo{}, nil)
+		mockBlocksRepo.EXPECT().CreateCodeBlock(ctx, noteID, 1.0, userID).Return(block, nil)
+
+		res, err := usecase.CreateCodeBlock(ctx, userID, noteID, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, block, res)
+	})
+}
+
+func TestBlocksUsecase_UpdateBlock(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockBlocksRepo := mock.NewMockBlocksRepository(ctrl)
+	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
+	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
+	usecase := NewBlocksUsecase(mockBlocksRepo, mockNotesRepo, mockSharingRepo)
+
+	ctx := context.Background()
+	userID := uint64(1)
+	noteID := uint64(10)
+	blockID := uint64(100)
+
+	t.Run("UpdateTextBlock_Success", func(t *testing.T) {
+		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		
+		existingBlock := &models.Block{
+			BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Type: models.BlockTypeText},
+		}
+		mockBlocksRepo.EXPECT().GetBlockByID(ctx, blockID).Return(existingBlock, nil)
+
+		content := models.UpdateTextContent{
+			Text: "updated text",
+			Formats: []models.BlockTextFormat{
+				{StartOffset: 0, EndOffset: 5, Bold: true},
+			},
+		}
+		req := &models.UpdateBlockRequest{
+			BlockID: blockID,
+			Content: content,
+		}
+
+		mockBlocksRepo.EXPECT().UpdateBlockText(ctx, blockID, content.Text, gomock.Any()).Return(existingBlock, nil)
+
+		res, err := usecase.UpdateBlock(ctx, userID, req)
+		assert.NoError(t, err)
+		assert.Equal(t, existingBlock, res)
+	})
+
+	t.Run("UpdateCodeBlock_Success", func(t *testing.T) {
+		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		
+		existingBlock := &models.Block{
+			BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Type: models.BlockTypeCode},
+		}
+		mockBlocksRepo.EXPECT().GetBlockByID(ctx, blockID).Return(existingBlock, nil)
+
+		content := models.UpdateCodeContent{
+			Code:     "console.log()",
+			Language: "javascript",
+		}
+		req := &models.UpdateBlockRequest{
+			BlockID: blockID,
+			Content: content,
+		}
+
+		mockBlocksRepo.EXPECT().UpdateCodeBlock(ctx, blockID, content.Language, content.Code).Return(existingBlock, nil)
+
+		res, err := usecase.UpdateBlock(ctx, userID, req)
+		assert.NoError(t, err)
+		assert.Equal(t, existingBlock, res)
+	})
+
+	t.Run("UpdateAttachmentBlock_Fail", func(t *testing.T) {
+		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		
+		existingBlock := &models.Block{
+			BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Type: models.BlockTypeAttachment},
+		}
+		mockBlocksRepo.EXPECT().GetBlockByID(ctx, blockID).Return(existingBlock, nil)
+
+		req := &models.UpdateBlockRequest{BlockID: blockID}
+
+		_, err := usecase.UpdateBlock(ctx, userID, req)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "updating attachment blocks is not supported")
+	})
+}
+
+func TestOptimizeFormats(t *testing.T) {
+	text := "hello world"
+	formats := []models.BlockTextFormat{
+		{StartOffset: 0, EndOffset: 5, Bold: true, Font: models.FontInter, Size: 12},
+		{StartOffset: 0, EndOffset: 5, Italic: true, Font: models.FontInter, Size: 12},
+		{StartOffset: 6, EndOffset: 11, Underline: true, Font: models.FontInter, Size: 12},
+	}
+
+	optimized := optimizeFormats(text, formats)
+	assert.NotEmpty(t, optimized)
+	
+	assert.Equal(t, 0, optimized[0].StartOffset)
+	assert.Equal(t, 5, optimized[0].EndOffset)
+	assert.True(t, optimized[0].Bold)
+	assert.True(t, optimized[0].Italic)
+
+	assert.Equal(t, 6, optimized[1].StartOffset)
+	assert.Equal(t, 11, optimized[1].EndOffset)
+	assert.True(t, optimized[1].Underline)
 }

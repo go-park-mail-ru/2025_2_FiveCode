@@ -1,265 +1,268 @@
 package usecase
 
 import (
-	"backend/pkg/logger"
-	"backend/pkg/models"
-	"backend/user/mock"
+	"backend/user_service/internal/constants"
+	"backend/user_service/internal/models"
+	"backend/user_service/mock"
 	"context"
 	"errors"
 	"testing"
 	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
+	"golang.org/x/crypto/bcrypt"
 )
 
-func TestUserUsecase_GetUserBySession(t *testing.T) {
+func TestUserUsecase_CreateUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock.NewMockUserRepository(ctrl)
-	mockAuthRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewUserUsecase(mockUserRepo, mockAuthRepo)
+	mockRepo := mock.NewMockUserRepository(ctrl)
+	usecase := NewUserUsecase(mockRepo)
 
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+	email := "test@example.com"
+	password := "password"
+	username := "testuser"
+	userID := uint64(1)
+	now := time.Now()
 
-	tests := []struct {
-		name          string
-		sessionID     string
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:      "success",
-			sessionID: "test-session",
-			setupMocks: func() {
-				mockAuthRepo.EXPECT().GetUserIDBySession(ctx, "test-session").Return(uint64(1), nil)
-				mockUserRepo.EXPECT().GetUserByID(ctx, uint64(1)).Return(&models.User{
-					ID:        1,
-					Email:     "test@example.com",
-					Username:  "testuser",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedUser: &models.User{
-				ID:        1,
-				Email:     "test@example.com",
-				Username:  "testuser",
-				CreatedAt: time.Now(),
-			},
-			expectedError: nil,
-		},
-		{
-			name:      "auth repo error",
-			sessionID: "invalid-session",
-			setupMocks: func() {
-				mockAuthRepo.EXPECT().GetUserIDBySession(ctx, "invalid-session").Return(uint64(0), errors.New("session not found"))
-			},
-			expectedUser:  nil,
-			expectedError: errors.New("failed to get user ID by session"),
-		},
-		{
-			name:      "user repo error",
-			sessionID: "test-session",
-			setupMocks: func() {
-				mockAuthRepo.EXPECT().GetUserIDBySession(ctx, "test-session").Return(uint64(1), nil)
-				mockUserRepo.EXPECT().GetUserByID(ctx, uint64(1)).Return(nil, errors.New("user not found"))
-			},
-			expectedUser:  nil,
-			expectedError: errors.New("failed to get user"),
-		},
+	expectedUser := &models.User{
+		ID:        userID,
+		Email:     email,
+		Username:  username,
+		CreatedAt: now,
+		UpdatedAt: &now,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := usecase.GetUserBySession(ctx, tt.sessionID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-				assert.Nil(t, user)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-			}
-		})
-	}
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			CreateUser(ctx, email, gomock.Any(), username).
+			Return(userID, nil)
+
+		mockRepo.EXPECT().
+			GetUserByID(ctx, userID).
+			Return(expectedUser, nil)
+
+		user, err := usecase.CreateUser(ctx, email, password, username)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUser, user)
+	})
+
+	t.Run("CreateUser_Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			CreateUser(ctx, email, gomock.Any(), username).
+			Return(uint64(0), errors.New("db error"))
+
+		user, err := usecase.CreateUser(ctx, email, password, username)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
+
+	t.Run("GetUserByID_Error_After_Create", func(t *testing.T) {
+		mockRepo.EXPECT().
+			CreateUser(ctx, email, gomock.Any(), username).
+			Return(userID, nil)
+
+		mockRepo.EXPECT().
+			GetUserByID(ctx, userID).
+			Return(nil, errors.New("db error"))
+
+		user, err := usecase.CreateUser(ctx, email, password, username)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
 }
 
-func TestUserUsecase_UpdateProfile(t *testing.T) {
+func TestUserUsecase_GetUserByID(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock.NewMockUserRepository(ctrl)
-	mockAuthRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewUserUsecase(mockUserRepo, mockAuthRepo)
+	mockRepo := mock.NewMockUserRepository(ctrl)
+	usecase := NewUserUsecase(mockRepo)
 
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-
-	tests := []struct {
-		name          string
-		username      *string
-		password      *string
-		avatarFileID  *uint64
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:         "update username",
-			username:     stringPtr("newusername"),
-			password:     nil,
-			avatarFileID: nil,
-			setupMocks: func() {
-				mockUserRepo.EXPECT().UpdateProfile(ctx, stringPtr("newusername"), gomock.Any(), nil).Return(&models.User{
-					ID:        1,
-					Username:  "newusername",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Username: "newusername",
-			},
-			expectedError: nil,
-		},
-		{
-			name:         "update password",
-			username:     nil,
-			password:     stringPtr("newpassword123"),
-			avatarFileID: nil,
-			setupMocks: func() {
-				mockUserRepo.EXPECT().UpdateProfile(ctx, nil, gomock.Any(), nil).Return(&models.User{
-					ID:        1,
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedUser: &models.User{
-				ID: 1,
-			},
-			expectedError: nil,
-		},
-		{
-			name:         "update avatar",
-			username:     nil,
-			password:     nil,
-			avatarFileID: uint64Ptr(10),
-			setupMocks: func() {
-				mockUserRepo.EXPECT().UpdateProfile(ctx, nil, nil, uint64Ptr(10)).Return(&models.User{
-					ID:           1,
-					AvatarFileID: uint64Ptr(10),
-					CreatedAt:    time.Now(),
-				}, nil)
-			},
-			expectedUser: &models.User{
-				ID:           1,
-				AvatarFileID: uint64Ptr(10),
-			},
-			expectedError: nil,
-		},
-		{
-			name:         "repository error",
-			username:     stringPtr("newusername"),
-			password:     nil,
-			avatarFileID: nil,
-			setupMocks: func() {
-				mockUserRepo.EXPECT().UpdateProfile(ctx, stringPtr("newusername"), gomock.Any(), nil).Return(nil, errors.New("database error"))
-			},
-			expectedUser:  nil,
-			expectedError: errors.New("failed to update profile"),
-		},
+	userID := uint64(1)
+	expectedUser := &models.User{
+		ID:       userID,
+		Username: "testuser",
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := usecase.UpdateProfile(ctx, tt.username, tt.password, tt.avatarFileID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-				assert.Nil(t, user)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, user)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-			}
-		})
-	}
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByID(ctx, userID).
+			Return(expectedUser, nil)
+
+		user, err := usecase.GetUserByID(ctx, userID)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUser, user)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByID(ctx, userID).
+			Return(nil, errors.New("db error"))
+
+		user, err := usecase.GetUserByID(ctx, userID)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
 }
 
-func TestUserUsecase_GetProfile(t *testing.T) {
+func TestUserUsecase_UpdateUser(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
-	mockUserRepo := mock.NewMockUserRepository(ctrl)
-	mockAuthRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewUserUsecase(mockUserRepo, mockAuthRepo)
+	mockRepo := mock.NewMockUserRepository(ctrl)
+	usecase := NewUserUsecase(mockRepo)
 
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+	userID := uint64(1)
+	newUsername := "newusername"
+	newPassword := "newpassword"
+	newAvatar := uint64(123)
 
-	tests := []struct {
-		name          string
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name: "success",
-			setupMocks: func() {
-				mockUserRepo.EXPECT().GetProfile(ctx).Return(&models.User{
-					ID:        1,
-					Email:     "test@example.com",
-					Username:  "testuser",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Email:    "test@example.com",
-				Username: "testuser",
-			},
-			expectedError: nil,
-		},
-		{
-			name: "repository error",
-			setupMocks: func() {
-				mockUserRepo.EXPECT().GetProfile(ctx).Return(nil, errors.New("database error"))
-			},
-			expectedUser:  nil,
-			expectedError: errors.New("failed to get profile"),
-		},
+	expectedUser := &models.User{
+		ID:           userID,
+		Username:     newUsername,
+		AvatarFileID: &newAvatar,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := usecase.GetProfile(ctx)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-				assert.Nil(t, user)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-			}
-		})
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			UpdateUser(ctx, userID, &newUsername, gomock.Any(), &newAvatar).
+			Return(expectedUser, nil)
+
+		user, err := usecase.UpdateUser(ctx, userID, &newUsername, &newPassword, &newAvatar)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUser, user)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			UpdateUser(ctx, userID, &newUsername, gomock.Any(), &newAvatar).
+			Return(nil, errors.New("db error"))
+
+		user, err := usecase.UpdateUser(ctx, userID, &newUsername, &newPassword, &newAvatar)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
+}
+
+func TestUserUsecase_DeleteUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mock.NewMockUserRepository(ctrl)
+	usecase := NewUserUsecase(mockRepo)
+
+	ctx := context.Background()
+	userID := uint64(1)
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			DeleteUser(ctx, userID).
+			Return(nil)
+
+		err := usecase.DeleteUser(ctx, userID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			DeleteUser(ctx, userID).
+			Return(errors.New("db error"))
+
+		err := usecase.DeleteUser(ctx, userID)
+		assert.Error(t, err)
+	})
+}
+
+func TestUserUsecase_VerifyUser(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mock.NewMockUserRepository(ctrl)
+	usecase := NewUserUsecase(mockRepo)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	password := "password"
+
+	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
+	hashedPasswordStr := string(hashedPassword)
+
+	expectedUser := &models.User{
+		ID:       1,
+		Email:    email,
+		Password: hashedPasswordStr,
 	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(expectedUser, nil)
+
+		user, err := usecase.VerifyUser(ctx, email, password)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUser.ID, user.ID)
+		assert.Empty(t, user.Password)
+	})
+
+	t.Run("WrongPassword", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(expectedUser, nil)
+
+		user, err := usecase.VerifyUser(ctx, email, "wrongpassword")
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrInvalidEmailOrPassword, err)
+		assert.Nil(t, user)
+	})
+
+	t.Run("UserNotFound", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(nil, constants.ErrNotFound)
+
+		user, err := usecase.VerifyUser(ctx, email, password)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
 }
 
-func stringPtr(s string) *string {
-	return &s
-}
+func TestUserUsecase_GetUserByEmail(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-func uint64Ptr(u uint64) *uint64 {
-	return &u
+	mockRepo := mock.NewMockUserRepository(ctrl)
+	usecase := NewUserUsecase(mockRepo)
+
+	ctx := context.Background()
+	email := "test@example.com"
+	expectedUser := &models.User{
+		ID:    1,
+		Email: email,
+	}
+
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(expectedUser, nil)
+
+		user, err := usecase.GetUserByEmail(ctx, email)
+		assert.NoError(t, err)
+		assert.Equal(t, expectedUser.ID, user.ID)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserByEmail(ctx, email).
+			Return(nil, errors.New("db error"))
+
+		user, err := usecase.GetUserByEmail(ctx, email)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
 }
