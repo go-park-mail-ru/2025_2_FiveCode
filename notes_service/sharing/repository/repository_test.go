@@ -318,8 +318,8 @@ func TestSharingRepository_CheckNoteAccess(t *testing.T) {
 	userID := uint64(2)
 
 	t.Run("Success_Editor", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"owner_id", "public_access_level", "role"}).
-			AddRow(1, nil, "editor")
+		rows := sqlmock.NewRows([]string{"owner_id", "role"}).
+			AddRow(1, "editor")
 
 		mock.ExpectQuery(`SELECT (.+) FROM note n`).
 			WithArgs(noteID, userID).
@@ -333,8 +333,8 @@ func TestSharingRepository_CheckNoteAccess(t *testing.T) {
 	})
 
 	t.Run("Success_Owner", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"owner_id", "public_access_level", "role"}).
-			AddRow(userID, nil, nil)
+		rows := sqlmock.NewRows([]string{"owner_id", "role"}).
+			AddRow(userID, nil)
 
 		mock.ExpectQuery(`SELECT (.+) FROM note n`).
 			WithArgs(noteID, userID).
