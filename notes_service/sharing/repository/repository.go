@@ -325,20 +325,18 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 	log := logger.FromContext(ctx)
 
 	query := `
-		SELECT 
-			n.owner_id,
-			n.public_access_level,
-			np.role
-		FROM note n
-		LEFT JOIN note_permission np ON n.id = np.note_id AND np.granted_to = $2
-		WHERE n.id = $1 AND n.deleted_at IS NULL
-	`
+        SELECT 
+            n.owner_id,
+            np.role
+        FROM note n
+        LEFT JOIN note_permission np ON n.id = np.note_id AND np.granted_to = $2
+        WHERE n.id = $1 AND n.deleted_at IS NULL
+    `
 
 	var ownerID uint64
-	var publicAccess sql.NullString
 	var permissionRole sql.NullString
 
-	err := r.db.QueryRowContext(ctx, query, noteID, userID).Scan(&ownerID, &publicAccess, &permissionRole)
+	err := r.db.QueryRowContext(ctx, query, noteID, userID).Scan(&ownerID, &permissionRole)
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Warn().Uint64("note_id", noteID).Msg("note not found for access check")
 		return &models.NoteAccessInfo{HasAccess: false}, nil
@@ -363,13 +361,6 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 	if permissionRole.Valid {
 		accessInfo.HasAccess = true
 		accessInfo.Role = models.NoteRole(permissionRole.String)
-		accessInfo.CanEdit = (accessInfo.Role == models.RoleEditor)
-		return accessInfo, nil
-	}
-
-	if publicAccess.Valid {
-		accessInfo.HasAccess = true
-		accessInfo.Role = models.NoteRole(publicAccess.String)
 		accessInfo.CanEdit = (accessInfo.Role == models.RoleEditor)
 		return accessInfo, nil
 	}
