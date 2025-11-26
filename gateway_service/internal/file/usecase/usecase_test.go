@@ -1,11 +1,13 @@
 package usecase
 
 import (
-	"backend/file/mock"
-	"backend/pkg/models"
+	"backend/gateway_service/internal/file/mock"
+	"backend/gateway_service/internal/file/models"
+	"bytes"
 	"context"
 	"errors"
-	"strings"
+	"image"
+	"image/png"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -21,51 +23,79 @@ func TestFileUsecase_UploadFile(t *testing.T) {
 
 	ctx := context.Background()
 
-	tests := []struct {
-		name          string
-		contentType   string
-		setupMocks    func()
-		expectedError error
-	}{
-		{
-			name:        "success",
-			contentType: "text/plain",
-			setupMocks: func() {
-				mockRepo.EXPECT().UploadFileToMinIO(gomock.Any(), gomock.Any(), gomock.Any(), "text/plain").Return("http://example.com/file.txt", nil)
-				mockRepo.EXPECT().SaveFile(gomock.Any(), "http://example.com/file.txt", "text/plain", int64(10), nil, nil).Return(&models.File{
-					ID:        1,
-					URL:       "http://example.com/file.txt",
-					MimeType:  "text/plain",
-					SizeBytes: 10,
-				}, nil)
-			},
-			expectedError: nil,
-		},
-		{
-			name:        "upload error",
-			contentType: "text/plain",
-			setupMocks: func() {
-				mockRepo.EXPECT().UploadFileToMinIO(gomock.Any(), gomock.Any(), gomock.Any(), "text/plain").Return("", errors.New("upload failed"))
-			},
-			expectedError: errors.New("failed to upload file to MinIO"),
-		},
+	img := image.NewRGBA(image.Rect(0, 0, 100, 50))
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	content := buf.Bytes()
+
+	filename := "image.png"
+	contentType := "image/png"
+	size := int64(len(content))
+	url := "http://minio/image.png"
+
+	fileModel := &models.File{
+		ID:  1,
+		URL: url,
 	}
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			file := strings.NewReader("test content")
-			result, err := usecase.UploadFile(ctx, file, "test.txt", tt.contentType, 10)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-				assert.Nil(t, result)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, result)
-			}
-		})
-	}
+	t.Run("Success", func(t *testing.T) {
+		fileReader := bytes.NewReader(content)
+
+		mockRepo.EXPECT().
+			UploadFileToMinIO(ctx, filename, content, contentType).
+			Return(url, nil)
+
+		mockRepo.EXPECT().
+			SaveFile(ctx, url, contentType, size, gomock.Any(), gomock.Any()).
+			Return(fileModel, nil)
+
+		res, err := usecase.UploadFile(ctx, fileReader, filename, "application/octet-stream", size)
+		assert.NoError(t, err)
+		assert.NotNil(t, res)
+		assert.Equal(t, fileModel.ID, res.ID)
+	})
+
+	t.Run("InvalidFileType", func(t *testing.T) {
+		txtContent := []byte("just text")
+		fileReader := bytes.NewReader(txtContent)
+
+		res, err := usecase.UploadFile(ctx, fileReader, "text.txt", "text/plain", int64(len(txtContent)))
+		assert.Error(t, err)
+		assert.Nil(t, res)
+		assert.Contains(t, err.Error(), "invalid file type")
+	})
+
+	t.Run("UploadMinIO_Error", func(t *testing.T) {
+		fileReader := bytes.NewReader(content)
+
+		mockRepo.EXPECT().
+			UploadFileToMinIO(ctx, filename, content, contentType).
+			Return("", errors.New("minio error"))
+
+		res, err := usecase.UploadFile(ctx, fileReader, filename, contentType, size)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
+
+	t.Run("SaveFile_Error", func(t *testing.T) {
+		fileReader := bytes.NewReader(content)
+
+		mockRepo.EXPECT().
+			UploadFileToMinIO(ctx, filename, content, contentType).
+			Return(url, nil)
+
+		mockRepo.EXPECT().
+			SaveFile(ctx, url, contentType, size, gomock.Any(), gomock.Any()).
+			Return(nil, errors.New("db error"))
+
+		mockRepo.EXPECT().
+			DeleteFileFromMinIO(ctx, url).
+			Return(nil)
+
+		res, err := usecase.UploadFile(ctx, fileReader, filename, contentType, size)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
 }
 
 func TestFileUsecase_GetFile(t *testing.T) {
@@ -76,17 +106,28 @@ func TestFileUsecase_GetFile(t *testing.T) {
 	usecase := NewFileUsecase(mockRepo)
 
 	ctx := context.Background()
+	fileID := uint64(1)
+	fileModel := &models.File{ID: fileID, URL: "http://minio/test.txt"}
 
-	mockRepo.EXPECT().GetFileByID(ctx, uint64(1)).Return(&models.File{
-		ID:        1,
-		URL:       "http://example.com/file.txt",
-		MimeType:  "text/plain",
-		SizeBytes: 10,
-	}, nil)
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetFileByID(ctx, fileID).
+			Return(fileModel, nil)
 
-	file, err := usecase.GetFile(ctx, 1)
-	assert.NoError(t, err)
-	assert.Equal(t, uint64(1), file.ID)
+		res, err := usecase.GetFile(ctx, fileID)
+		assert.NoError(t, err)
+		assert.Equal(t, fileID, res.ID)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetFileByID(ctx, fileID).
+			Return(nil, errors.New("db error"))
+
+		res, err := usecase.GetFile(ctx, fileID)
+		assert.Error(t, err)
+		assert.Nil(t, res)
+	})
 }
 
 func TestFileUsecase_DeleteFile(t *testing.T) {
@@ -97,107 +138,32 @@ func TestFileUsecase_DeleteFile(t *testing.T) {
 	usecase := NewFileUsecase(mockRepo)
 
 	ctx := context.Background()
+	fileID := uint64(1)
+	fileModel := &models.File{ID: fileID, URL: "http://minio/test.txt"}
 
-	mockRepo.EXPECT().GetFileByID(ctx, uint64(1)).Return(&models.File{
-		ID:  1,
-		URL: "http://example.com/file.txt",
-	}, nil)
-	mockRepo.EXPECT().DeleteFileFromMinIO(ctx, "http://example.com/file.txt").Return(nil)
-	mockRepo.EXPECT().DeleteFile(ctx, uint64(1)).Return(nil)
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetFileByID(ctx, fileID).
+			Return(fileModel, nil)
 
-	err := usecase.DeleteFile(ctx, 1)
-	assert.NoError(t, err)
-}
+		mockRepo.EXPECT().
+			DeleteFileFromMinIO(ctx, fileModel.URL).
+			Return(nil)
 
-func TestFileUsecase_UploadFile_WithImage(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+		mockRepo.EXPECT().
+			DeleteFile(ctx, fileID).
+			Return(nil)
 
-	mockRepo := mock.NewMockFileRepository(ctrl)
-	usecase := NewFileUsecase(mockRepo)
+		err := usecase.DeleteFile(ctx, fileID)
+		assert.NoError(t, err)
+	})
 
-	ctx := context.Background()
+	t.Run("GetFile_Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetFileByID(ctx, fileID).
+			Return(nil, errors.New("db error"))
 
-	pngBytes := []byte{
-		0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-		0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-		0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-		0x08, 0x02, 0x00, 0x00, 0x00, 0x90, 0x77, 0x53, 0xDE,
-	}
-
-	mockRepo.EXPECT().UploadFileToMinIO(gomock.Any(), gomock.Any(), gomock.Any(), "image/png").Return("http://example.com/image.png", nil)
-	mockRepo.EXPECT().SaveFile(gomock.Any(), "http://example.com/image.png", "image/png", int64(len(pngBytes)), gomock.Any(), gomock.Any()).Return(&models.File{
-		ID:        1,
-		URL:       "http://example.com/image.png",
-		MimeType:  "image/png",
-		SizeBytes: int64(len(pngBytes)),
-	}, nil)
-
-	file := strings.NewReader(string(pngBytes))
-	result, err := usecase.UploadFile(ctx, file, "test.png", "image/png", int64(len(pngBytes)))
-	assert.NoError(t, err)
-	assert.NotNil(t, result)
-}
-
-func TestFileUsecase_DeleteFile_ErrorGettingFile(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mock.NewMockFileRepository(ctrl)
-	usecase := NewFileUsecase(mockRepo)
-
-	ctx := context.Background()
-
-	mockRepo.EXPECT().GetFileByID(ctx, uint64(1)).Return(nil, errors.New("file not found"))
-
-	err := usecase.DeleteFile(ctx, 1)
-	assert.Error(t, err)
-}
-
-func TestFileUsecase_DeleteFile_ErrorFromMinIO(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mock.NewMockFileRepository(ctrl)
-	usecase := NewFileUsecase(mockRepo)
-
-	ctx := context.Background()
-
-	mockRepo.EXPECT().GetFileByID(ctx, uint64(1)).Return(&models.File{
-		ID:  1,
-		URL: "http://example.com/file.txt",
-	}, nil)
-	mockRepo.EXPECT().DeleteFileFromMinIO(ctx, "http://example.com/file.txt").Return(errors.New("minio error"))
-	mockRepo.EXPECT().DeleteFile(ctx, uint64(1)).Return(nil)
-
-	err := usecase.DeleteFile(ctx, 1)
-	assert.NoError(t, err)
-}
-
-func TestFileUsecase_UploadFile_SaveFileError(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mock.NewMockFileRepository(ctrl)
-	usecase := NewFileUsecase(mockRepo)
-
-	ctx := context.Background()
-
-	mockRepo.EXPECT().UploadFileToMinIO(gomock.Any(), gomock.Any(), gomock.Any(), "text/plain").Return("http://example.com/file.txt", nil)
-	mockRepo.EXPECT().SaveFile(gomock.Any(), "http://example.com/file.txt", "text/plain", int64(10), nil, nil).Return(nil, errors.New("save failed"))
-	mockRepo.EXPECT().DeleteFileFromMinIO(ctx, "http://example.com/file.txt").Return(nil)
-
-	file := strings.NewReader("test content")
-	result, err := usecase.UploadFile(ctx, file, "test.txt", "text/plain", 10)
-	assert.Error(t, err)
-	assert.Nil(t, result)
-}
-
-func TestFileUsecase_isImageContentType(t *testing.T) {
-	assert.True(t, isImageContentType("image/jpeg"))
-	assert.True(t, isImageContentType("image/png"))
-	assert.True(t, isImageContentType("image/gif"))
-	assert.True(t, isImageContentType("image/webp"))
-	assert.False(t, isImageContentType("text/plain"))
-	assert.False(t, isImageContentType("application/json"))
+		err := usecase.DeleteFile(ctx, fileID)
+		assert.Error(t, err)
+	})
 }

@@ -1,11 +1,12 @@
 package delivery
 
 import (
-	"backend/file/mock"
-	namederrors "backend/named_errors"
-	"backend/pkg/models"
+	"backend/gateway_service/internal/constants"
+	"backend/gateway_service/internal/file/delivery/mock"
+	"backend/gateway_service/internal/file/models"
 	"bytes"
-	"context"
+	"errors"
+	"fmt"
 	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
@@ -23,28 +24,56 @@ func TestFileDelivery_UploadFile(t *testing.T) {
 	mockUsecase := mock.NewMockFileUsecase(ctrl)
 	delivery := NewFileDelivery(mockUsecase)
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	part, _ := writer.CreateFormFile("file", "test.txt")
-	part.Write([]byte("test content"))
-	writer.Close()
+	t.Run("Success", func(t *testing.T) {
+		body := new(bytes.Buffer)
+		writer := multipart.NewWriter(body)
+		part, _ := writer.CreateFormFile("file", "test.txt")
+		part.Write([]byte("test content"))
+		writer.Close()
 
-	mockUsecase.EXPECT().UploadFile(gomock.Any(), gomock.Any(), "test.txt", gomock.Any(), gomock.Any()).Return(&models.File{
-		ID:        1,
-		URL:       "http://example.com/file.txt",
-		MimeType:  "text/plain",
-		SizeBytes: 12,
-	}, nil)
+		req, _ := http.NewRequest(http.MethodPost, "/upload", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		rr := httptest.NewRecorder()
 
-	req := httptest.NewRequest("POST", "/files", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	ctx := context.Background()
-	req = req.WithContext(ctx)
-	rr := httptest.NewRecorder()
+		file := &models.File{ID: 1, URL: "http://test.com/test.txt", SizeBytes: 12}
+		mockUsecase.EXPECT().UploadFile(gomock.Any(), gomock.Any(), "test.txt", gomock.Any(), gomock.Any()).Return(file, nil)
 
-	delivery.UploadFile(rr, req)
+		delivery.UploadFile(rr, req)
 
-	assert.Equal(t, http.StatusCreated, rr.Code)
+		assert.Equal(t, http.StatusCreated, rr.Code)
+	})
+
+	t.Run("MissingFile", func(t *testing.T) {
+		body := new(bytes.Buffer)
+		writer := multipart.NewWriter(body)
+		writer.Close()
+
+		req, _ := http.NewRequest(http.MethodPost, "/upload", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		rr := httptest.NewRecorder()
+
+		delivery.UploadFile(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("UsecaseError", func(t *testing.T) {
+		body := new(bytes.Buffer)
+		writer := multipart.NewWriter(body)
+		part, _ := writer.CreateFormFile("file", "test.txt")
+		part.Write([]byte("test content"))
+		writer.Close()
+
+		req, _ := http.NewRequest(http.MethodPost, "/upload", body)
+		req.Header.Set("Content-Type", writer.FormDataContentType())
+		rr := httptest.NewRecorder()
+
+		mockUsecase.EXPECT().UploadFile(gomock.Any(), gomock.Any(), "test.txt", gomock.Any(), gomock.Any()).Return(nil, errors.New("usecase error"))
+
+		delivery.UploadFile(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
 }
 
 func TestFileDelivery_GetFile(t *testing.T) {
@@ -54,38 +83,54 @@ func TestFileDelivery_GetFile(t *testing.T) {
 	mockUsecase := mock.NewMockFileUsecase(ctrl)
 	delivery := NewFileDelivery(mockUsecase)
 
-	mockUsecase.EXPECT().GetFile(gomock.Any(), uint64(1)).Return(&models.File{
-		ID:        1,
-		URL:       "http://example.com/file.txt",
-		MimeType:  "text/plain",
-		SizeBytes: 10,
-	}, nil)
+	fileID := uint64(1)
+	file := &models.File{ID: fileID, URL: "http://test.com/test.txt"}
 
-	req := httptest.NewRequest("GET", "/files/1", nil)
-	req = mux.SetURLVars(req, map[string]string{"file_id": "1"})
-	rr := httptest.NewRecorder()
+	t.Run("Success", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/files/%d", fileID), nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": fmt.Sprintf("%d", fileID)})
+		rr := httptest.NewRecorder()
 
-	delivery.GetFile(rr, req)
+		mockUsecase.EXPECT().GetFile(gomock.Any(), fileID).Return(file, nil)
 
-	assert.Equal(t, http.StatusOK, rr.Code)
-}
+		delivery.GetFile(rr, req)
 
-func TestFileDelivery_GetFile_NotFound(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+		assert.Equal(t, http.StatusOK, rr.Code)
+	})
 
-	mockUsecase := mock.NewMockFileUsecase(ctrl)
-	delivery := NewFileDelivery(mockUsecase)
+	t.Run("NotFound", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/files/%d", fileID), nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": fmt.Sprintf("%d", fileID)})
+		rr := httptest.NewRecorder()
 
-	mockUsecase.EXPECT().GetFile(gomock.Any(), uint64(999)).Return(nil, namederrors.ErrNotFound)
+		mockUsecase.EXPECT().GetFile(gomock.Any(), fileID).Return(nil, constants.ErrNotFound)
 
-	req := httptest.NewRequest("GET", "/files/999", nil)
-	req = mux.SetURLVars(req, map[string]string{"file_id": "999"})
-	rr := httptest.NewRecorder()
+		delivery.GetFile(rr, req)
 
-	delivery.GetFile(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
 
-	assert.Equal(t, http.StatusNotFound, rr.Code)
+	t.Run("InvalidID", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, "/files/invalid", nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": "invalid"})
+		rr := httptest.NewRecorder()
+
+		delivery.GetFile(rr, req)
+
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
+
+	t.Run("UsecaseError", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodGet, fmt.Sprintf("/files/%d", fileID), nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": fmt.Sprintf("%d", fileID)})
+		rr := httptest.NewRecorder()
+
+		mockUsecase.EXPECT().GetFile(gomock.Any(), fileID).Return(nil, errors.New("usecase error"))
+
+		delivery.GetFile(rr, req)
+
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
 }
 
 func TestFileDelivery_DeleteFile(t *testing.T) {
@@ -95,69 +140,51 @@ func TestFileDelivery_DeleteFile(t *testing.T) {
 	mockUsecase := mock.NewMockFileUsecase(ctrl)
 	delivery := NewFileDelivery(mockUsecase)
 
-	mockUsecase.EXPECT().DeleteFile(gomock.Any(), uint64(1)).Return(nil)
+	fileID := uint64(1)
 
-	req := httptest.NewRequest("DELETE", "/files/1", nil)
-	req = mux.SetURLVars(req, map[string]string{"file_id": "1"})
-	rr := httptest.NewRecorder()
+	t.Run("Success", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/files/%d", fileID), nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": fmt.Sprintf("%d", fileID)})
+		rr := httptest.NewRecorder()
 
-	delivery.DeleteFile(rr, req)
+		mockUsecase.EXPECT().DeleteFile(gomock.Any(), fileID).Return(nil)
 
-	assert.Equal(t, http.StatusNoContent, rr.Code)
-}
+		delivery.DeleteFile(rr, req)
 
-func TestFileDelivery_DeleteFile_NotFound(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+		assert.Equal(t, http.StatusNoContent, rr.Code)
+	})
 
-	mockUsecase := mock.NewMockFileUsecase(ctrl)
-	delivery := NewFileDelivery(mockUsecase)
+	t.Run("NotFound", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/files/%d", fileID), nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": fmt.Sprintf("%d", fileID)})
+		rr := httptest.NewRecorder()
 
-	mockUsecase.EXPECT().DeleteFile(gomock.Any(), uint64(999)).Return(namederrors.ErrNotFound)
+		mockUsecase.EXPECT().DeleteFile(gomock.Any(), fileID).Return(constants.ErrNotFound)
 
-	req := httptest.NewRequest("DELETE", "/files/999", nil)
-	req = mux.SetURLVars(req, map[string]string{"file_id": "999"})
-	rr := httptest.NewRecorder()
+		delivery.DeleteFile(rr, req)
 
-	delivery.DeleteFile(rr, req)
+		assert.Equal(t, http.StatusNotFound, rr.Code)
+	})
 
-	assert.Equal(t, http.StatusNotFound, rr.Code)
-}
+	t.Run("InvalidID", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, "/files/invalid", nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": "invalid"})
+		rr := httptest.NewRecorder()
 
-func TestFileDelivery_UploadFile_NoFile(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
+		delivery.DeleteFile(rr, req)
 
-	mockUsecase := mock.NewMockFileUsecase(ctrl)
-	delivery := NewFileDelivery(mockUsecase)
+		assert.Equal(t, http.StatusBadRequest, rr.Code)
+	})
 
-	body := &bytes.Buffer{}
-	writer := multipart.NewWriter(body)
-	writer.Close()
+	t.Run("UsecaseError", func(t *testing.T) {
+		req, _ := http.NewRequest(http.MethodDelete, fmt.Sprintf("/files/%d", fileID), nil)
+		req = mux.SetURLVars(req, map[string]string{"file_id": fmt.Sprintf("%d", fileID)})
+		rr := httptest.NewRecorder()
 
-	req := httptest.NewRequest("POST", "/files", body)
-	req.Header.Set("Content-Type", writer.FormDataContentType())
-	ctx := context.Background()
-	req = req.WithContext(ctx)
-	rr := httptest.NewRecorder()
+		mockUsecase.EXPECT().DeleteFile(gomock.Any(), fileID).Return(errors.New("usecase error"))
 
-	delivery.UploadFile(rr, req)
+		delivery.DeleteFile(rr, req)
 
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
-}
-
-func TestFileDelivery_GetFile_InvalidID(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockUsecase := mock.NewMockFileUsecase(ctrl)
-	delivery := NewFileDelivery(mockUsecase)
-
-	req := httptest.NewRequest("GET", "/files/invalid", nil)
-	req = mux.SetURLVars(req, map[string]string{"file_id": "invalid"})
-	rr := httptest.NewRecorder()
-
-	delivery.GetFile(rr, req)
-
-	assert.Equal(t, http.StatusBadRequest, rr.Code)
+		assert.Equal(t, http.StatusInternalServerError, rr.Code)
+	})
 }

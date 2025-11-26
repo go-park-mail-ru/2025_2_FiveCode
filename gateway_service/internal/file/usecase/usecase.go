@@ -12,6 +12,7 @@ import (
 	_ "image/jpeg"
 	_ "image/png"
 	"io"
+	"net/http"
 )
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
@@ -42,18 +43,25 @@ func (u *FileUsecase) UploadFile(ctx context.Context, file io.Reader, filename, 
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
+	detectedType := http.DetectContentType(fileBytes)
+	if !isAllowedImageType(detectedType) {
+		log.Warn().Str("detected_type", detectedType).Msg("upload rejected: invalid file type")
+		return nil, fmt.Errorf("invalid file type: %s, only images (jpeg, png, gif, webp) are allowed", detectedType)
+	}
+
+	_ = contentType
+	contentType = detectedType
+
 	var width, height *int
-	if isImageContentType(contentType) {
-		config, _, err := image.DecodeConfig(bytes.NewReader(fileBytes))
-		if err != nil {
-			log.Warn().Err(err).Msg("failed to decode image config, proceeding without dimensions")
-		} else {
-			w := config.Width
-			h := config.Height
-			width = &w
-			height = &h
-			log.Info().Int("width", w).Int("height", h).Msg("decoded image dimensions")
-		}
+	config, _, err := image.DecodeConfig(bytes.NewReader(fileBytes))
+	if err != nil {
+		log.Warn().Err(err).Msg("failed to decode image config, proceeding without dimensions")
+	} else {
+		w := config.Width
+		h := config.Height
+		width = &w
+		height = &h
+		log.Info().Int("width", w).Int("height", h).Msg("decoded image dimensions")
 	}
 
 	url, err := u.Repository.UploadFileToMinIO(ctx, filename, fileBytes, contentType)
@@ -111,7 +119,7 @@ func (u *FileUsecase) DeleteFile(ctx context.Context, fileID uint64) error {
 	return nil
 }
 
-func isImageContentType(contentType string) bool {
+func isAllowedImageType(contentType string) bool {
 	return contentType == "image/jpeg" ||
 		contentType == "image/png" ||
 		contentType == "image/gif" ||
