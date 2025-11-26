@@ -48,14 +48,22 @@ func NewBlocksUsecase(blocksRepo BlocksRepository, notesRepo NotesRepository, sh
 }
 
 func (u *BlocksUsecase) CreateTextBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("note_id", noteID).
-		Str("type", models.BlockTypeText).
-		Logger()
+	log := logger.FromContext(ctx)
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot create text blocks")
+		return nil, constants.ErrNoAccess
 	}
 
 	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, 0)
@@ -74,19 +82,26 @@ func (u *BlocksUsecase) CreateTextBlock(ctx context.Context, userID, noteID uint
 }
 
 func (u *BlocksUsecase) CreateAttachmentBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64, fileID uint64) (*models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("note_id", noteID).
-		Str("type", models.BlockTypeAttachment).
-		Uint64("file_id", fileID).
-		Logger()
+	log := logger.FromContext(ctx)
 
 	if fileID == 0 {
 		return nil, fmt.Errorf("file_id is required")
 	}
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot create attachment blocks")
+		return nil, constants.ErrNoAccess
 	}
 
 	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, 0)
@@ -105,28 +120,41 @@ func (u *BlocksUsecase) CreateAttachmentBlock(ctx context.Context, userID, noteI
 }
 
 func (u *BlocksUsecase) CreateCodeBlock(ctx context.Context, userID, noteID uint64, beforeBlockID *uint64) (*models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("note_id", noteID).
-		Str("type", models.BlockTypeCode).
-		Logger()
+	log := logger.FromContext(ctx)
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
 	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot create code blocks")
+		return nil, constants.ErrNoAccess
+	}
+
 	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, 0)
 	if err != nil {
 		log.Error().Err(err).Msg("failed to calculate position for code block")
 		return nil, fmt.Errorf("failed to calculate position for code block: %w", err)
 	}
-	return u.BlocksRepo.CreateCodeBlock(ctx, noteID, position, userID)
+
+	block, err := u.BlocksRepo.CreateCodeBlock(ctx, noteID, position, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create code block")
+		return nil, fmt.Errorf("failed to create code block: %w", err)
+	}
+
+	return block, nil
 }
 
 func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID uint64, req *models.UpdateBlockRequest) (*models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("block_id", req.BlockID).
-		Logger()
+	log := logger.FromContext(ctx)
 
 	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, req.BlockID)
 	if err != nil {
@@ -134,8 +162,20 @@ func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID uint64, req *mod
 		return nil, fmt.Errorf("failed to get block note id: %w", err)
 	}
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot update blocks")
+		return nil, constants.ErrNoAccess
 	}
 
 	block, err := u.BlocksRepo.GetBlockByID(ctx, req.BlockID)
@@ -179,10 +219,7 @@ func (u *BlocksUsecase) UpdateBlock(ctx context.Context, userID uint64, req *mod
 }
 
 func (u *BlocksUsecase) GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("block_id", blockID).
-		Logger()
+	log := logger.FromContext(ctx)
 
 	block, err := u.BlocksRepo.GetBlockByID(ctx, blockID)
 	if err != nil {
@@ -190,18 +227,22 @@ func (u *BlocksUsecase) GetBlock(ctx context.Context, userID, blockID uint64) (*
 		return nil, fmt.Errorf("failed to get block by id: %w", err)
 	}
 
-	if err := u.checkNoteAccess(ctx, userID, block.NoteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, block.NoteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", block.NoteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
 	}
 
 	return block, nil
 }
 
 func (u *BlocksUsecase) DeleteBlock(ctx context.Context, userID, blockID uint64) error {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("block_id", blockID).
-		Logger()
+	log := logger.FromContext(ctx)
 
 	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
 	if err != nil {
@@ -209,8 +250,20 @@ func (u *BlocksUsecase) DeleteBlock(ctx context.Context, userID, blockID uint64)
 		return fmt.Errorf("failed to get block note id: %w", err)
 	}
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot delete blocks")
+		return constants.ErrNoAccess
 	}
 
 	if err := u.BlocksRepo.DeleteBlock(ctx, blockID); err != nil {
@@ -222,13 +275,17 @@ func (u *BlocksUsecase) DeleteBlock(ctx context.Context, userID, blockID uint64)
 }
 
 func (u *BlocksUsecase) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("note_id", noteID).
-		Logger()
+	log := logger.FromContext(ctx)
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
 	}
 
 	blocks, err := u.BlocksRepo.GetBlocksByNoteID(ctx, noteID)
@@ -241,10 +298,7 @@ func (u *BlocksUsecase) GetBlocks(ctx context.Context, userID, noteID uint64) ([
 }
 
 func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID uint64, beforeBlockID *uint64) (*models.Block, error) {
-	log := logger.FromContext(ctx).With().
-		Uint64("user_id", userID).
-		Uint64("block_id", blockID).
-		Logger()
+	log := logger.FromContext(ctx)
 
 	noteID, err := u.BlocksRepo.GetBlockNoteID(ctx, blockID)
 	if err != nil {
@@ -252,8 +306,20 @@ func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID
 		return nil, fmt.Errorf("failed to get block note id: %w", err)
 	}
 
-	if err := u.checkNoteAccess(ctx, userID, noteID); err != nil {
-		return nil, err
+	accessInfo, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Str("role", string(accessInfo.Role)).Msg("user cannot update block position")
+		return nil, constants.ErrNoAccess
 	}
 
 	position, err := u.calculatePosition(ctx, noteID, beforeBlockID, blockID)
@@ -269,23 +335,6 @@ func (u *BlocksUsecase) UpdateBlockPosition(ctx context.Context, userID, blockID
 	}
 
 	return block, nil
-}
-
-func (u *BlocksUsecase) checkNoteAccess(ctx context.Context, userID, noteID uint64) error {
-	log := logger.FromContext(ctx)
-
-	access, err := u.SharingRepo.CheckNoteAccess(ctx, noteID, userID)
-	if err != nil {
-		log.Error().Err(err).Uint64("note_id", noteID).Uint64("user_id", userID).Msg("failed to check note access")
-		return fmt.Errorf("failed to check note access: %w", err)
-	}
-
-	if !access.HasAccess {
-		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
-		return constants.ErrNoAccess
-	}
-
-	return nil
 }
 
 func (u *BlocksUsecase) calculatePosition(ctx context.Context, noteID uint64, beforeBlockID *uint64, excludeBlockID uint64) (float64, error) {
