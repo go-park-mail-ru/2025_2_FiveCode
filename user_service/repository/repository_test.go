@@ -1,286 +1,249 @@
 package repository
 
 import (
-	"backend/gateway_service/internal/middleware"
 	"backend/pkg/store"
-	"backend/user_service/logger"
-	"backend/user_service/models"
+	"backend/user_service/internal/constants"
 	"context"
 	"database/sql"
+	"errors"
 	"testing"
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 )
 
-func setupTestDB(t *testing.T) (*sql.DB, sqlmock.Sqlmock, *store.Store) {
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("failed to create mock db: %v", err)
-	}
-
-	store := &store.Store{
-		Postgres: &store.PostgresDB{DB: db},
-	}
-
-	return db, mock, store
+type testStoreDB struct {
+	*sql.DB
 }
 
-func TestUserRepository_GetProfile(t *testing.T) {
-	db, mock, store := setupTestDB(t)
+func (d *testStoreDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (store.Tx, error) {
+	return nil, errors.New("not implemented")
+}
+
+func (d *testStoreDB) GetSQLDB() *sql.DB {
+	return d.DB
+}
+
+func (d *testStoreDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+	return d.DB.QueryRowContext(ctx, query, args...)
+}
+
+func (d *testStoreDB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+	return d.DB.ExecContext(ctx, query, args...)
+}
+
+func (d *testStoreDB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+	return d.DB.QueryContext(ctx, query, args...)
+}
+
+func (d *testStoreDB) Close() error {
+	return d.DB.Close()
+}
+
+func newTestRepo(db *sql.DB) *UserRepository {
+	return NewUserRepository(&testStoreDB{DB: db})
+}
+
+func TestUserRepository_CreateUser(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
+	}
 	defer db.Close()
 
-	repo := NewUserRepository(store)
+	repo := newTestRepo(db)
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-	ctx = middleware.WithUserID(ctx, 1)
 
-	tests := []struct {
-		name          string
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name: "success",
-			setupMocks: func() {
-				rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
-					AddRow(1, "test@example.com", "hash", "testuser", nil, time.Now(), nil)
-				mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at`).
-					WithArgs(1).
-					WillReturnRows(rows)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Email:    "test@example.com",
-				Username: "testuser",
-			},
-			expectedError: nil,
-		},
-		{
-			name: "user not found",
-			setupMocks: func() {
-				mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at`).
-					WithArgs(1).
-					WillReturnError(sql.ErrNoRows)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrNotFound,
-		},
-	}
+	email := "test@example.com"
+	password := "hashed_password"
+	username := "testuser"
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := repo.GetProfile(ctx)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-			}
-			assert.NoError(t, mock.ExpectationsWereMet())
-		})
-	}
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id"}).AddRow(1)
+		mock.ExpectQuery(`INSERT INTO "user"`).
+			WithArgs(email, password, username, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnRows(rows)
+
+		id, err := repo.CreateUser(ctx, email, password, username)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(1), id)
+	})
+
+	t.Run("DuplicateUser", func(t *testing.T) {
+		mock.ExpectQuery(`INSERT INTO "user"`).
+			WithArgs(email, password, username, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(errors.New("duplicate key value violates unique constraint"))
+
+		id, err := repo.CreateUser(ctx, email, password, username)
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrUserExists, err)
+		assert.Equal(t, uint64(0), id)
+	})
+
+	t.Run("DBError", func(t *testing.T) {
+		mock.ExpectQuery(`INSERT INTO "user"`).
+			WithArgs(email, password, username, sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WillReturnError(errors.New("db error"))
+
+		id, err := repo.CreateUser(ctx, email, password, username)
+		assert.Error(t, err)
+		assert.NotEqual(t, constants.ErrUserExists, err)
+		assert.Equal(t, uint64(0), id)
+	})
 }
 
 func TestUserRepository_GetUserByID(t *testing.T) {
-	db, mock, store := setupTestDB(t)
-	defer db.Close()
-
-	repo := NewUserRepository(store)
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-
-	tests := []struct {
-		name          string
-		userID        uint64
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:   "success",
-			userID: 1,
-			setupMocks: func() {
-				rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
-					AddRow(1, "test@example.com", "hash", "testuser", nil, time.Now(), nil)
-				mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at`).
-					WithArgs(1).
-					WillReturnRows(rows)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Email:    "test@example.com",
-				Username: "testuser",
-			},
-			expectedError: nil,
-		},
-		{
-			name:   "user not found",
-			userID: 999,
-			setupMocks: func() {
-				mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at`).
-					WithArgs(999).
-					WillReturnError(sql.ErrNoRows)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrNotFound,
-		},
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
+	defer db.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := repo.GetUserByID(ctx, tt.userID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-			}
-			assert.NoError(t, mock.ExpectationsWereMet())
-		})
+	repo := newTestRepo(db)
+	ctx := context.Background()
+	userID := uint64(1)
+	now := time.Now().UTC()
+
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
+			AddRow(userID, "test@example.com", "hash", "testuser", nil, now, now)
+
+		mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at FROM "user"`).
+			WithArgs(userID).
+			WillReturnRows(rows)
+
+		user, err := repo.GetUserByID(ctx, userID)
+		assert.NoError(t, err)
+		assert.Equal(t, userID, user.ID)
+		assert.Equal(t, "test@example.com", user.Email)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at FROM "user"`).
+			WithArgs(userID).
+			WillReturnError(sql.ErrNoRows)
+
+		user, err := repo.GetUserByID(ctx, userID)
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrNotFound, err)
+		assert.Nil(t, user)
+	})
+
+	t.Run("DBError", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at FROM "user"`).
+			WithArgs(userID).
+			WillReturnError(errors.New("db error"))
+
+		user, err := repo.GetUserByID(ctx, userID)
+		assert.Error(t, err)
+		assert.Nil(t, user)
+	})
+}
+
+func TestUserRepository_GetUserByEmail(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-}
-
-func TestUserRepository_UpdateProfile(t *testing.T) {
-	db, mock, store := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewUserRepository(store)
+	repo := newTestRepo(db)
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-	ctx = middleware.WithUserID(ctx, 1)
+	email := "test@example.com"
+	now := time.Now().UTC()
 
-	tests := []struct {
-		name          string
-		username      *string
-		password      *string
-		avatarFileID  *uint64
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:     "update username",
-			username: stringPtr("newusername"),
-			setupMocks: func() {
-				rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
-					AddRow(1, "test@example.com", "hash", "newusername", nil, time.Now(), time.Now())
-				mock.ExpectQuery(`UPDATE "user"`).
-					WithArgs("newusername", sqlmock.AnyArg(), 1).
-					WillReturnRows(rows)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Username: "newusername",
-			},
-			expectedError: nil,
-		},
-		{
-			name:     "user not found",
-			username: stringPtr("newusername"),
-			setupMocks: func() {
-				mock.ExpectQuery(`UPDATE "user"`).
-					WithArgs("newusername", sqlmock.AnyArg(), 1).
-					WillReturnError(sql.ErrNoRows)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrNotFound,
-		},
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
+			AddRow(1, email, "hash", "testuser", nil, now, now)
+
+		mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at FROM "user"`).
+			WithArgs(email).
+			WillReturnRows(rows)
+
+		user, err := repo.GetUserByEmail(ctx, email)
+		assert.NoError(t, err)
+		assert.Equal(t, uint64(1), user.ID)
+		assert.Equal(t, email, user.Email)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT id, email, password_hash, username, avatar_file_id, created_at, updated_at FROM "user"`).
+			WithArgs(email).
+			WillReturnError(sql.ErrNoRows)
+
+		user, err := repo.GetUserByEmail(ctx, email)
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrNotFound, err)
+		assert.Nil(t, user)
+	})
+}
+
+func TestUserRepository_DeleteUser(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
+	defer db.Close()
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := repo.UpdateProfile(ctx, tt.username, tt.password, tt.avatarFileID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-			} else {
-				assert.NoError(t, err)
-				assert.NotNil(t, user)
-			}
-			assert.NoError(t, mock.ExpectationsWereMet())
-		})
+	repo := newTestRepo(db)
+	ctx := context.Background()
+	userID := uint64(1)
+
+	t.Run("Success", func(t *testing.T) {
+		mock.ExpectExec(`DELETE FROM "user"`).
+			WithArgs(userID).
+			WillReturnResult(sqlmock.NewResult(0, 1))
+
+		err := repo.DeleteUser(ctx, userID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("NotFound", func(t *testing.T) {
+		mock.ExpectExec(`DELETE FROM "user"`).
+			WithArgs(userID).
+			WillReturnResult(sqlmock.NewResult(0, 0))
+
+		err := repo.DeleteUser(ctx, userID)
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrNotFound, err)
+	})
+}
+
+func TestUserRepository_UpdateUser(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-}
-
-func TestUserRepository_UpdateProfile_WithPassword(t *testing.T) {
-	db, mock, store := setupTestDB(t)
 	defer db.Close()
 
-	repo := NewUserRepository(store)
+	repo := newTestRepo(db)
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-	ctx = middleware.WithUserID(ctx, 1)
+	userID := uint64(1)
+	username := "newusername"
+	now := time.Now().UTC()
 
-	password := "newpassword"
-	rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
-		AddRow(1, "test@example.com", "hash", "testuser", nil, time.Now(), time.Now())
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
+			AddRow(userID, "email", "hash", username, nil, now, now)
 
-	mock.ExpectQuery(`UPDATE "user"`).
-		WithArgs("newusername", password, sqlmock.AnyArg(), 1).
-		WillReturnRows(rows)
+		mock.ExpectQuery(`UPDATE "user"`).
+			WithArgs(username, sqlmock.AnyArg(), userID).
+			WillReturnRows(rows)
 
-	user, err := repo.UpdateProfile(ctx, stringPtr("newusername"), &password, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
+		user, err := repo.UpdateUser(ctx, userID, &username, nil, nil)
+		assert.NoError(t, err)
+		assert.Equal(t, username, user.Username)
+	})
 
-func TestUserRepository_UpdateProfile_WithAvatarFileID(t *testing.T) {
-	db, mock, store := setupTestDB(t)
-	defer db.Close()
+	t.Run("NotFound", func(t *testing.T) {
+		mock.ExpectQuery(`UPDATE "user"`).
+			WithArgs(username, sqlmock.AnyArg(), userID).
+			WillReturnError(sql.ErrNoRows)
 
-	repo := NewUserRepository(store)
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-	ctx = middleware.WithUserID(ctx, 1)
-
-	avatarFileID := uint64(10)
-	rows := sqlmock.NewRows([]string{"id", "email", "password_hash", "username", "avatar_file_id", "created_at", "updated_at"}).
-		AddRow(1, "test@example.com", "hash", "testuser", 10, time.Now(), time.Now())
-
-	mock.ExpectQuery(`UPDATE "user"`).
-		WithArgs("newusername", uint64(10), sqlmock.AnyArg(), 1).
-		WillReturnRows(rows)
-
-	user, err := repo.UpdateProfile(ctx, stringPtr("newusername"), nil, &avatarFileID)
-	assert.NoError(t, err)
-	assert.NotNil(t, user)
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func TestUserRepository_GetProfile_NoUserID(t *testing.T) {
-	db, mock, store := setupTestDB(t)
-	defer db.Close()
-
-	repo := NewUserRepository(store)
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-	// No user ID in context
-
-	user, err := repo.GetProfile(ctx)
-	assert.Error(t, err)
-	assert.Nil(t, user)
-	assert.Contains(t, err.Error(), "user not authenticated")
-	assert.NoError(t, mock.ExpectationsWereMet())
-}
-
-func stringPtr(s string) *string {
-	return &s
+		user, err := repo.UpdateUser(ctx, userID, &username, nil, nil)
+		assert.Error(t, err)
+		assert.Equal(t, constants.ErrNotFound, err)
+		assert.Nil(t, user)
+	})
 }

@@ -1,117 +1,247 @@
 package middleware
 
 import (
-	"backend/pkg/store"
+	"backend/gateway_service/internal/config"
+	"backend/gateway_service/internal/middleware/mock"
+	"context"
+	"crypto/aes"
+	"crypto/cipher"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
+	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
+	"github.com/stretchr/testify/assert"
 )
 
-// no external store shims needed for these unit tests
-
-func TestCORS_OptionsAndOrigin(t *testing.T) {
-	h := CORS(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// OPTIONS should return 200
-	req := httptest.NewRequest("OPTIONS", "/", nil)
-	req.Header.Set("Origin", "http://localhost:8030")
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-	if w.Result().StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 for OPTIONS got %d", w.Result().StatusCode)
+func TestCORS(t *testing.T) {
+	cfg := &config.Config{
+		Cors: config.CorsConfig{
+			AllowedOrigins: []string{"http://example.com"},
+		},
 	}
 
-	// Non-allowed origin should not set header but still call through
-	req2 := httptest.NewRequest("GET", "/", nil)
-	req2.Header.Set("Origin", "http://evil.com")
-	w2 := httptest.NewRecorder()
-	h.ServeHTTP(w2, req2)
-	if w2.Result().Header.Get("Access-Control-Allow-Origin") != "" {
-		t.Fatalf("unexpected CORS header for unallowed origin")
-	}
-}
-
-func TestAuthMiddleware_NoCookie(t *testing.T) {
-	h := AuthMiddleware(&store.Store{})(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.WriteHeader(http.StatusOK)
-	}))
-
-	// No cookie -> 400
-	req := httptest.NewRequest("GET", "/", nil)
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-	if w.Result().StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 got %d", w.Result().StatusCode)
-	}
-}
-
-func TestAuthMiddleware_ValidSession(t *testing.T) {
-	// validate WithUserID/ GetUserID helpers by simulating middleware behaviour
-	final := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		uid, ok := GetUserID(r.Context())
-		if !ok || uid == 0 {
-			t.Fatalf("user id not set by middleware")
-		}
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	// Simulate setting user ID via WithUserID helper to mimic middleware effect
-	req := httptest.NewRequest("GET", "/", nil)
-	req.AddCookie(&http.Cookie{Name: "session_id", Value: "abc"})
-	w := httptest.NewRecorder()
-	// call final handler with context containing user id
-	final.ServeHTTP(w, req.WithContext(WithUserID(req.Context(), 42)))
-	if w.Result().StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 got %d", w.Result().StatusCode)
-	}
+	handler := CORS(next, cfg)
+
+	t.Run("Allowed Origin", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.Header.Set("Origin", "http://example.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, "http://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("OPTIONS Request", func(t *testing.T) {
+		req := httptest.NewRequest("OPTIONS", "/", nil)
+		req.Header.Set("Origin", "http://example.com")
+		w := httptest.NewRecorder()
+
+		handler.ServeHTTP(w, req)
+
+		assert.Equal(t, "http://example.com", w.Header().Get("Access-Control-Allow-Origin"))
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
 }
 
-func TestUserAccessMiddleware_MissingAndForbiddenAndOK(t *testing.T) {
-	um := UserAccessMiddleware()
+func TestAuthMiddleware(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
 
-	// Missing user id should return 401
-	req := httptest.NewRequest("GET", "/user/1", nil)
-	w := httptest.NewRecorder()
-	um(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w, req)
-	if w.Result().StatusCode != http.StatusUnauthorized {
-		t.Fatalf("expected 401 got %d", w.Result().StatusCode)
-	}
+	mockValidator := mock.NewMockSessionValidator(ctrl)
+	middleware := AuthMiddleware(mockValidator)
 
-	// Set user id but missing path var -> 400
-	req2 := httptest.NewRequest("GET", "/", nil)
-	w2 := httptest.NewRecorder()
-	req2 = req2.WithContext(WithUserID(req2.Context(), 5))
-	um(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w2, req2)
-	if w2.Result().StatusCode != http.StatusBadRequest {
-		t.Fatalf("expected 400 got %d", w2.Result().StatusCode)
-	}
-
-	// Simulate vars with different user id -> 403
-	req3 := httptest.NewRequest("GET", "/user/6", nil)
-	w3 := httptest.NewRecorder()
-	req3 = req3.WithContext(WithUserID(req3.Context(), 5))
-	// inject mux vars
-	req3 = mux.SetURLVars(req3, map[string]string{"user_id": "6"})
-	um(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {})).ServeHTTP(w3, req3)
-	if w3.Result().StatusCode != http.StatusForbidden {
-		t.Fatalf("expected 403 got %d", w3.Result().StatusCode)
-	}
-
-	// OK case
-	req4 := httptest.NewRequest("GET", "/user/5", nil)
-	w4 := httptest.NewRecorder()
-	req4 = req4.WithContext(WithUserID(req4.Context(), 5))
-	req4 = mux.SetURLVars(req4, map[string]string{"user_id": "5"})
-	um(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		userID, ok := GetUserID(r.Context())
+		assert.True(t, ok)
+		assert.Equal(t, uint64(123), userID)
 		w.WriteHeader(http.StatusOK)
-	})).ServeHTTP(w4, req4)
-	if w4.Result().StatusCode != http.StatusOK {
-		t.Fatalf("expected 200 got %d", w4.Result().StatusCode)
-	}
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: "valid_session"})
+		w := httptest.NewRecorder()
+
+		mockValidator.EXPECT().
+			ValidateSession(gomock.Any(), "valid_session").
+			Return(uint64(123), nil)
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("No Cookie", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+	})
+
+	t.Run("Invalid Session", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: "invalid_session"})
+		w := httptest.NewRecorder()
+
+		mockValidator.EXPECT().
+			ValidateSession(gomock.Any(), "invalid_session").
+			Return(uint64(0), errors.New("invalid"))
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
 }
 
-// no helper needed; use mux.SetURLVars
+func TestUserAccessMiddleware(t *testing.T) {
+	middleware := UserAccessMiddleware()
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	t.Run("Success", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/users/123", nil)
+		req = mux.SetURLVars(req, map[string]string{"user_id": "123"})
+		ctx := WithUserID(req.Context(), 123)
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req.WithContext(ctx))
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("Forbidden", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/users/456", nil)
+		req = mux.SetURLVars(req, map[string]string{"user_id": "456"})
+		ctx := WithUserID(req.Context(), 123)
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req.WithContext(ctx))
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("Unauthenticated", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/users/123", nil)
+		req = mux.SetURLVars(req, map[string]string{"user_id": "123"})
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusUnauthorized, w.Code)
+	})
+}
+
+func TestWithUserID(t *testing.T) {
+	ctx := context.Background()
+	ctx = WithUserID(ctx, 123)
+	id, ok := GetUserID(ctx)
+	assert.True(t, ok)
+	assert.Equal(t, uint64(123), id)
+}
+
+func TestAccessLogMiddleware(t *testing.T) {
+	middleware := AccessLogMiddleware
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte("ok"))
+	})
+
+	req := httptest.NewRequest("GET", "/", nil)
+	w := httptest.NewRecorder()
+
+	middleware(next).ServeHTTP(w, req)
+	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, "ok", w.Body.String())
+}
+
+func generateToken(sessionID string, secretKey []byte, ttl time.Duration) (string, error) {
+	block, err := aes.NewCipher(secretKey)
+	if err != nil {
+		return "", err
+	}
+
+	gcm, err := cipher.NewGCM(block)
+	if err != nil {
+		return "", err
+	}
+
+	nonce := make([]byte, gcm.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
+		return "", err
+	}
+
+	plaintext := make([]byte, 32)
+	copy(plaintext[0:16], []byte(sessionID))
+	binary.BigEndian.PutUint64(plaintext[16:24], uint64(time.Now().Unix()))
+
+	ciphertext := gcm.Seal(nonce, nonce, plaintext, nil)
+	return base64.URLEncoding.EncodeToString(ciphertext), nil
+}
+
+func TestCSRFMiddleware(t *testing.T) {
+	secretKey := "12345678901234567890123456789012"
+	cfg := &config.Config{
+		CSRF: config.CSRFConfig{
+			SecretKey:       secretKey,
+			TokenTTLMinutes: 60,
+		},
+	}
+	middleware := CSRFMiddleware(cfg)
+
+	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	})
+
+	sessionID := "session-id"
+	validToken, _ := generateToken(sessionID, []byte(secretKey), 60*time.Minute)
+
+	t.Run("Success", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+		req.Header.Set("X-CSRF-Token", validToken)
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("Skip GET", func(t *testing.T) {
+		req := httptest.NewRequest("GET", "/", nil)
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusOK, w.Code)
+	})
+
+	t.Run("Missing Token", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+
+	t.Run("Invalid Token", func(t *testing.T) {
+		req := httptest.NewRequest("POST", "/", nil)
+		req.AddCookie(&http.Cookie{Name: "session_id", Value: sessionID})
+		req.Header.Set("X-CSRF-Token", "invalid")
+		w := httptest.NewRecorder()
+
+		middleware(next).ServeHTTP(w, req)
+		assert.Equal(t, http.StatusForbidden, w.Code)
+	})
+}

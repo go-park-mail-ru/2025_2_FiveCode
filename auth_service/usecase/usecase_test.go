@@ -1,178 +1,45 @@
 package usecase
 
 import (
-	"backend/auth/mock"
-	namederrors "backend/named_errors"
-	"backend/pkg/logger"
-	"backend/pkg/models"
+	"backend/auth_service/mock"
 	"context"
 	"errors"
 	"testing"
-	"time"
 
 	"github.com/golang/mock/gomock"
-	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
-	"golang.org/x/crypto/bcrypt"
 )
 
-func TestAuthUsecase_Login(t *testing.T) {
+func TestAuthUsecase_CreateSession(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewAuthUsecase(mockRepo)
+	usecase := NewAuthUsecase(mockRepo, []byte("12345678901234567890123456789012"))
 
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+	userID := uint64(1)
+	sessionID := "session_123"
 
-	hashedPassword, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			CreateSession(ctx, userID).
+			Return(sessionID, nil)
 
-	tests := []struct {
-		name          string
-		email         string
-		password      string
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:     "success",
-			email:    "test@example.com",
-			password: "password123",
-			setupMocks: func() {
-				mockRepo.EXPECT().GetUserByEmail(ctx, "test@example.com").Return(&models.User{
-					ID:        1,
-					Email:     "test@example.com",
-					Password:  string(hashedPassword),
-					Username:  "test",
-					CreatedAt: time.Now(),
-				}, nil)
-				mockRepo.EXPECT().CreateSession(ctx, uint64(1)).Return("session-id", nil)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Email:    "test@example.com",
-				Username: "test",
-			},
-			expectedError: nil,
-		},
-		{
-			name:     "user not found",
-			email:    "notfound@example.com",
-			password: "password123",
-			setupMocks: func() {
-				mockRepo.EXPECT().GetUserByEmail(ctx, "notfound@example.com").Return(nil, namederrors.ErrNotFound)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrInvalidEmailOrPassword,
-		},
-		{
-			name:     "invalid password",
-			email:    "test@example.com",
-			password: "wrongpassword",
-			setupMocks: func() {
-				mockRepo.EXPECT().GetUserByEmail(ctx, "test@example.com").Return(&models.User{
-					ID:        1,
-					Email:     "test@example.com",
-					Password:  string(hashedPassword),
-					Username:  "test",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrInvalidEmailOrPassword,
-		},
-	}
+		sid, err := usecase.CreateSession(ctx, userID)
+		assert.NoError(t, err)
+		assert.Equal(t, sessionID, sid)
+	})
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, sessionID, err := usecase.Login(ctx, tt.email, tt.password)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-				assert.Nil(t, user)
-				assert.Empty(t, sessionID)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-				assert.NotEmpty(t, sessionID)
-			}
-		})
-	}
-}
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			CreateSession(ctx, userID).
+			Return("", errors.New("redis error"))
 
-func TestAuthUsecase_Register(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewAuthUsecase(mockRepo)
-
-	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
-
-	tests := []struct {
-		name          string
-		email         string
-		password      string
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:     "success",
-			email:    "newuser@example.com",
-			password: "password123",
-			setupMocks: func() {
-				mockRepo.EXPECT().CreateUser(ctx, "newuser@example.com", gomock.Any()).Return(&models.User{
-					ID:        1,
-					Email:     "newuser@example.com",
-					Username:  "newuser",
-					CreatedAt: time.Now(),
-				}, nil)
-				mockRepo.EXPECT().CreateSession(ctx, uint64(1)).Return("session-id", nil)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Email:    "newuser@example.com",
-				Username: "newuser",
-			},
-			expectedError: nil,
-		},
-		{
-			name:     "user already exists",
-			email:    "existing@example.com",
-			password: "password123",
-			setupMocks: func() {
-				mockRepo.EXPECT().CreateUser(ctx, "existing@example.com", gomock.Any()).Return(nil, namederrors.ErrUserExists)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrUserExists,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, sessionID, err := usecase.Register(ctx, tt.email, tt.password)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-				assert.Nil(t, user)
-				assert.Empty(t, sessionID)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-				assert.NotEmpty(t, sessionID)
-			}
-		})
-	}
+		sid, err := usecase.CreateSession(ctx, userID)
+		assert.Error(t, err)
+		assert.Empty(t, sid)
+	})
 }
 
 func TestAuthUsecase_Logout(t *testing.T) {
@@ -180,111 +47,75 @@ func TestAuthUsecase_Logout(t *testing.T) {
 	defer ctrl.Finish()
 
 	mockRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewAuthUsecase(mockRepo)
+	usecase := NewAuthUsecase(mockRepo, []byte("12345678901234567890123456789012"))
 
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+	sessionID := "session_123"
 
-	tests := []struct {
-		name          string
-		sessionID     string
-		setupMocks    func()
-		expectedError error
-	}{
-		{
-			name:      "success",
-			sessionID: "session-id",
-			setupMocks: func() {
-				mockRepo.EXPECT().DeleteSession(ctx, "session-id").Return(nil)
-			},
-			expectedError: nil,
-		},
-		{
-			name:      "error deleting session",
-			sessionID: "invalid-session",
-			setupMocks: func() {
-				mockRepo.EXPECT().DeleteSession(ctx, "invalid-session").Return(errors.New("session not found"))
-			},
-			expectedError: errors.New("failed to logout"),
-		},
-	}
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			DeleteSession(ctx, sessionID).
+			Return(nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			err := usecase.Logout(ctx, tt.sessionID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Contains(t, err.Error(), tt.expectedError.Error())
-			} else {
-				assert.NoError(t, err)
-			}
-		})
-	}
+		err := usecase.Logout(ctx, sessionID)
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			DeleteSession(ctx, sessionID).
+			Return(errors.New("redis error"))
+
+		err := usecase.Logout(ctx, sessionID)
+		assert.Error(t, err)
+	})
 }
 
-func TestAuthUsecase_GetUserBySession(t *testing.T) {
+func TestAuthUsecase_GetUserIDBySession(t *testing.T) {
 	ctrl := gomock.NewController(t)
 	defer ctrl.Finish()
 
 	mockRepo := mock.NewMockAuthRepository(ctrl)
-	usecase := NewAuthUsecase(mockRepo)
+	usecase := NewAuthUsecase(mockRepo, []byte("12345678901234567890123456789012"))
 
 	ctx := context.Background()
-	log := zerolog.Nop()
-	ctx = logger.ToContext(ctx, log)
+	sessionID := "session_123"
+	userID := uint64(1)
 
-	tests := []struct {
-		name          string
-		sessionID     string
-		setupMocks    func()
-		expectedUser  *models.User
-		expectedError error
-	}{
-		{
-			name:      "success",
-			sessionID: "session-id",
-			setupMocks: func() {
-				mockRepo.EXPECT().GetUserIDBySession(ctx, "session-id").Return(uint64(1), nil)
-				mockRepo.EXPECT().GetUserByID(ctx, uint64(1)).Return(&models.User{
-					ID:        1,
-					Email:     "test@example.com",
-					Username:  "test",
-					CreatedAt: time.Now(),
-				}, nil)
-			},
-			expectedUser: &models.User{
-				ID:       1,
-				Email:    "test@example.com",
-				Username: "test",
-			},
-			expectedError: nil,
-		},
-		{
-			name:      "session not found",
-			sessionID: "invalid-session",
-			setupMocks: func() {
-				mockRepo.EXPECT().GetUserIDBySession(ctx, "invalid-session").Return(uint64(0), namederrors.ErrInvalidSession)
-			},
-			expectedUser:  nil,
-			expectedError: namederrors.ErrInvalidSession,
-		},
-	}
+	t.Run("Success", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserIDBySession(ctx, sessionID).
+			Return(userID, nil)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			tt.setupMocks()
-			user, err := usecase.GetUserBySession(ctx, tt.sessionID)
-			if tt.expectedError != nil {
-				assert.Error(t, err)
-				assert.Equal(t, tt.expectedError, err)
-				assert.Nil(t, user)
-			} else {
-				assert.NoError(t, err)
-				assert.Equal(t, tt.expectedUser.ID, user.ID)
-				assert.Equal(t, tt.expectedUser.Email, user.Email)
-			}
-		})
-	}
+		uid, err := usecase.GetUserIDBySession(ctx, sessionID)
+		assert.NoError(t, err)
+		assert.Equal(t, userID, uid)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mockRepo.EXPECT().
+			GetUserIDBySession(ctx, sessionID).
+			Return(uint64(0), errors.New("redis error"))
+
+		uid, err := usecase.GetUserIDBySession(ctx, sessionID)
+		assert.Error(t, err)
+		assert.Zero(t, uid)
+	})
+}
+
+func TestAuthUsecase_GenerateCSRFToken(t *testing.T) {
+	ctrl := gomock.NewController(t)
+	defer ctrl.Finish()
+
+	mockRepo := mock.NewMockAuthRepository(ctrl)
+	usecase := NewAuthUsecase(mockRepo, []byte("12345678901234567890123456789012"))
+
+	ctx := context.Background()
+	sessionID := "session_123"
+
+	t.Run("Success", func(t *testing.T) {
+		token, err := usecase.GenerateCSRFToken(ctx, sessionID)
+		assert.NoError(t, err)
+		assert.NotEmpty(t, token)
+	})
 }
