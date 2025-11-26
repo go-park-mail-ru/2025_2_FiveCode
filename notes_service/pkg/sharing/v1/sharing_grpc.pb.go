@@ -8,6 +8,7 @@ package v1
 
 import (
 	context "context"
+
 	grpc "google.golang.org/grpc"
 	codes "google.golang.org/grpc/codes"
 	status "google.golang.org/grpc/status"
@@ -43,7 +44,6 @@ type SharingServiceClient interface {
 	GetPublicAccess(ctx context.Context, in *GetPublicAccessRequest, opts ...grpc.CallOption) (*PublicAccessResponse, error)
 	GetSharingSettings(ctx context.Context, in *GetSharingSettingsRequest, opts ...grpc.CallOption) (*SharingSettingsResponse, error)
 	CheckNoteAccess(ctx context.Context, in *CheckNoteAccessRequest, opts ...grpc.CallOption) (*NoteAccessResponse, error)
-	// НОВЫЙ - активация доступа при переходе по публичной ссылке
 	ActivateAccessByLink(ctx context.Context, in *ActivateAccessByLinkRequest, opts ...grpc.CallOption) (*ActivateAccessByLinkResponse, error)
 }
 
@@ -157,7 +157,6 @@ type SharingServiceServer interface {
 	GetPublicAccess(context.Context, *GetPublicAccessRequest) (*PublicAccessResponse, error)
 	GetSharingSettings(context.Context, *GetSharingSettingsRequest) (*SharingSettingsResponse, error)
 	CheckNoteAccess(context.Context, *CheckNoteAccessRequest) (*NoteAccessResponse, error)
-	// НОВЫЙ - активация доступа при переходе по публичной ссылке
 	ActivateAccessByLink(context.Context, *ActivateAccessByLinkRequest) (*ActivateAccessByLinkResponse, error)
 	mustEmbedUnimplementedSharingServiceServer()
 }

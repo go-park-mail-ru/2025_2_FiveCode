@@ -353,7 +353,7 @@ func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID 
 	if ownerID == userID {
 		accessInfo.IsOwner = true
 		accessInfo.HasAccess = true
-		accessInfo.Role = models.RoleEditor
+		accessInfo.Role = models.RoleOwner
 		accessInfo.CanEdit = true
 		return accessInfo, nil
 	}

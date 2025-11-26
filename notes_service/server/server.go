@@ -501,6 +501,8 @@ func (s *Server) UpdateBlockPosition(ctx context.Context, req *blockPB.UpdateBlo
 
 func noteRoleToProto(role models.NoteRole) sharePB.NoteRole {
 	switch role {
+	case models.RoleOwner:
+		return sharePB.NoteRole_NOTE_ROLE_OWNER
 	case models.RoleViewer:
 		return sharePB.NoteRole_NOTE_ROLE_VIEWER
 	case models.RoleCommenter:
@@ -514,6 +516,8 @@ func noteRoleToProto(role models.NoteRole) sharePB.NoteRole {
 
 func noteRoleFromProto(role sharePB.NoteRole) models.NoteRole {
 	switch role {
+	case sharePB.NoteRole_NOTE_ROLE_OWNER:
+		return models.RoleOwner
 	case sharePB.NoteRole_NOTE_ROLE_VIEWER:
 		return models.RoleViewer
 	case sharePB.NoteRole_NOTE_ROLE_COMMENTER:

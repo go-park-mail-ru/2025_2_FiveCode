@@ -20,15 +20,15 @@ service SharingService {
 
   rpc CheckNoteAccess(CheckNoteAccessRequest) returns (NoteAccessResponse);
 
-  // НОВЫЙ - активация доступа при переходе по публичной ссылке
   rpc ActivateAccessByLink(ActivateAccessByLinkRequest) returns (ActivateAccessByLinkResponse);
 }
 
 enum NoteRole {
   NOTE_ROLE_UNSPECIFIED = 0;
-  NOTE_ROLE_VIEWER = 1;
-  NOTE_ROLE_COMMENTER = 2;
-  NOTE_ROLE_EDITOR = 3;
+  NOTE_ROLE_OWNER = 1;
+  NOTE_ROLE_EDITOR = 2;
+  NOTE_ROLE_COMMENTER = 3;
+  NOTE_ROLE_VIEWER = 4;
 }
 
 message Collaborator {

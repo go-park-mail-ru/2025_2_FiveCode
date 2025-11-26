@@ -7,13 +7,14 @@
 package v1
 
 import (
+	reflect "reflect"
+	sync "sync"
+	unsafe "unsafe"
+
 	protoreflect "google.golang.org/protobuf/reflect/protoreflect"
 	protoimpl "google.golang.org/protobuf/runtime/protoimpl"
 	emptypb "google.golang.org/protobuf/types/known/emptypb"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
-	reflect "reflect"
-	sync "sync"
-	unsafe "unsafe"
 )
 
 const (
@@ -27,24 +28,27 @@ type NoteRole int32
 
 const (
 	NoteRole_NOTE_ROLE_UNSPECIFIED NoteRole = 0
-	NoteRole_NOTE_ROLE_VIEWER      NoteRole = 1
-	NoteRole_NOTE_ROLE_COMMENTER   NoteRole = 2
-	NoteRole_NOTE_ROLE_EDITOR      NoteRole = 3
+	NoteRole_NOTE_ROLE_OWNER       NoteRole = 1
+	NoteRole_NOTE_ROLE_EDITOR      NoteRole = 2
+	NoteRole_NOTE_ROLE_COMMENTER   NoteRole = 3
+	NoteRole_NOTE_ROLE_VIEWER      NoteRole = 4
 )
 
 // Enum value maps for NoteRole.
 var (
 	NoteRole_name = map[int32]string{
 		0: "NOTE_ROLE_UNSPECIFIED",
-		1: "NOTE_ROLE_VIEWER",
-		2: "NOTE_ROLE_COMMENTER",
-		3: "NOTE_ROLE_EDITOR",
+		1: "NOTE_ROLE_OWNER",
+		2: "NOTE_ROLE_EDITOR",
+		3: "NOTE_ROLE_COMMENTER",
+		4: "NOTE_ROLE_VIEWER",
 	}
 	NoteRole_value = map[string]int32{
 		"NOTE_ROLE_UNSPECIFIED": 0,
-		"NOTE_ROLE_VIEWER":      1,
-		"NOTE_ROLE_COMMENTER":   2,
-		"NOTE_ROLE_EDITOR":      3,
+		"NOTE_ROLE_OWNER":       1,
+		"NOTE_ROLE_EDITOR":      2,
+		"NOTE_ROLE_COMMENTER":   3,
+		"NOTE_ROLE_VIEWER":      4,
 	}
 )
 
@@ -1232,12 +1236,13 @@ const file_proto_sharing_v1_sharing_proto_rawDesc = "" +
 	"\anote_id\x18\x01 \x01(\x04R\x06noteId\x12%\n" +
 	"\x0eaccess_granted\x18\x02 \x01(\bR\raccessGranted\x12<\n" +
 	"\vaccess_info\x18\x03 \x01(\v2\x1b.sharing.NoteAccessResponseR\n" +
-	"accessInfo*j\n" +
+	"accessInfo*\x7f\n" +
 	"\bNoteRole\x12\x19\n" +
-	"\x15NOTE_ROLE_UNSPECIFIED\x10\x00\x12\x14\n" +
-	"\x10NOTE_ROLE_VIEWER\x10\x01\x12\x17\n" +
-	"\x13NOTE_ROLE_COMMENTER\x10\x02\x12\x14\n" +
-	"\x10NOTE_ROLE_EDITOR\x10\x032\xa7\x06\n" +
+	"\x15NOTE_ROLE_UNSPECIFIED\x10\x00\x12\x13\n" +
+	"\x0fNOTE_ROLE_OWNER\x10\x01\x12\x14\n" +
+	"\x10NOTE_ROLE_EDITOR\x10\x02\x12\x17\n" +
+	"\x13NOTE_ROLE_COMMENTER\x10\x03\x12\x14\n" +
+	"\x10NOTE_ROLE_VIEWER\x10\x042\xa7\x06\n" +
 	"\x0eSharingService\x12Q\n" +
 	"\x0fAddCollaborator\x12\x1f.sharing.AddCollaboratorRequest\x1a\x1d.sharing.CollaboratorResponse\x12W\n" +
 	"\x10GetCollaborators\x12 .sharing.GetCollaboratorsRequest\x1a!.sharing.GetCollaboratorsResponse\x12_\n" +
