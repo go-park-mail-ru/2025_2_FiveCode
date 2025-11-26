@@ -170,6 +170,8 @@ func MapProtoToUser(p *userPB.User) *userModels.User {
 
 func MapProtoRoleToModel(role sharePB.NoteRole) shareModels.NoteRole {
 	switch role {
+	case sharePB.NoteRole_NOTE_ROLE_OWNER:
+		return shareModels.RoleOwner
 	case sharePB.NoteRole_NOTE_ROLE_VIEWER:
 		return shareModels.RoleViewer
 	case sharePB.NoteRole_NOTE_ROLE_COMMENTER:
@@ -183,6 +185,8 @@ func MapProtoRoleToModel(role sharePB.NoteRole) shareModels.NoteRole {
 
 func MapModelRoleToProto(role shareModels.NoteRole) sharePB.NoteRole {
 	switch role {
+	case shareModels.RoleOwner:
+		return sharePB.NoteRole_NOTE_ROLE_OWNER
 	case shareModels.RoleViewer:
 		return sharePB.NoteRole_NOTE_ROLE_VIEWER
 	case shareModels.RoleCommenter:
@@ -193,10 +197,6 @@ func MapModelRoleToProto(role shareModels.NoteRole) sharePB.NoteRole {
 		return sharePB.NoteRole_NOTE_ROLE_UNSPECIFIED
 	}
 }
-
-// ============================================
-// Collaborator Mapping
-// ============================================
 
 func MapProtoToCollaborator(proto *sharePB.Collaborator) shareModels.Collaborator {
 	return shareModels.Collaborator{
@@ -214,10 +214,6 @@ func MapProtoToCollaboratorResponse(proto *sharePB.CollaboratorResponse) *shareM
 		Collaborator: MapProtoToCollaborator(proto.Collaborator),
 	}
 }
-
-// ============================================
-// GetCollaborators Response Mapping
-// ============================================
 
 func MapProtoToGetCollaboratorsResponse(proto *sharePB.GetCollaboratorsResponse) *shareModels.GetCollaboratorsResponse {
 	collaborators := make([]shareModels.Collaborator, len(proto.Collaborators))
@@ -240,10 +236,6 @@ func MapProtoToGetCollaboratorsResponse(proto *sharePB.GetCollaboratorsResponse)
 	}
 }
 
-// ============================================
-// PublicAccess Mapping
-// ============================================
-
 func MapProtoToPublicAccessResponse(proto *sharePB.PublicAccessResponse) *shareModels.PublicAccessResponse {
 	var accessLevel *shareModels.NoteRole
 	if proto.AccessLevel != nil {
@@ -258,10 +250,6 @@ func MapProtoToPublicAccessResponse(proto *sharePB.PublicAccessResponse) *shareM
 		UpdatedAt:   proto.UpdatedAt.AsTime(),
 	}
 }
-
-// ============================================
-// SharingSettings Mapping
-// ============================================
 
 func MapProtoToSharingSettingsResponse(proto *sharePB.SharingSettingsResponse) *shareModels.SharingSettingsResponse {
 	collaborators := make([]shareModels.Collaborator, len(proto.Collaborators))
