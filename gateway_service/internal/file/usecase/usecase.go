@@ -49,6 +49,7 @@ func (u *FileUsecase) UploadFile(ctx context.Context, file io.Reader, filename, 
 		return nil, fmt.Errorf("invalid file type: %s, only images (jpeg, png, gif, webp) are allowed", detectedType)
 	}
 
+	_ = contentType
 	contentType = detectedType
 
 	var width, height *int
@@ -116,13 +117,6 @@ func (u *FileUsecase) DeleteFile(ctx context.Context, fileID uint64) error {
 	}
 
 	return nil
-}
-
-func isImageContentType(contentType string) bool {
-	return contentType == "image/jpeg" ||
-		contentType == "image/png" ||
-		contentType == "image/gif" ||
-		contentType == "image/webp"
 }
 
 func isAllowedImageType(contentType string) bool {

@@ -6,6 +6,8 @@ import (
 	"bytes"
 	"context"
 	"errors"
+	"image"
+	"image/png"
 	"testing"
 
 	"github.com/golang/mock/gomock"
@@ -20,12 +22,16 @@ func TestFileUsecase_UploadFile(t *testing.T) {
 	usecase := NewFileUsecase(mockRepo)
 
 	ctx := context.Background()
-	filename := "test.txt"
-	content := []byte("test content")
-	fileReader := bytes.NewReader(content)
-	contentType := "text/plain"
+
+	img := image.NewRGBA(image.Rect(0, 0, 100, 50))
+	var buf bytes.Buffer
+	_ = png.Encode(&buf, img)
+	content := buf.Bytes()
+
+	filename := "image.png"
+	contentType := "image/png"
 	size := int64(len(content))
-	url := "http://minio/test.txt"
+	url := "http://minio/image.png"
 
 	fileModel := &models.File{
 		ID:  1,
@@ -33,22 +39,35 @@ func TestFileUsecase_UploadFile(t *testing.T) {
 	}
 
 	t.Run("Success", func(t *testing.T) {
+		fileReader := bytes.NewReader(content)
+
 		mockRepo.EXPECT().
 			UploadFileToMinIO(ctx, filename, content, contentType).
 			Return(url, nil)
 
 		mockRepo.EXPECT().
-			SaveFile(ctx, url, contentType, size, gomock.Nil(), gomock.Nil()).
+			SaveFile(ctx, url, contentType, size, gomock.Any(), gomock.Any()).
 			Return(fileModel, nil)
 
-		res, err := usecase.UploadFile(ctx, fileReader, filename, contentType, size)
+		res, err := usecase.UploadFile(ctx, fileReader, filename, "application/octet-stream", size)
 		assert.NoError(t, err)
 		assert.NotNil(t, res)
 		assert.Equal(t, fileModel.ID, res.ID)
 	})
 
+	t.Run("InvalidFileType", func(t *testing.T) {
+		txtContent := []byte("just text")
+		fileReader := bytes.NewReader(txtContent)
+
+		res, err := usecase.UploadFile(ctx, fileReader, "text.txt", "text/plain", int64(len(txtContent)))
+		assert.Error(t, err)
+		assert.Nil(t, res)
+		assert.Contains(t, err.Error(), "invalid file type")
+	})
+
 	t.Run("UploadMinIO_Error", func(t *testing.T) {
 		fileReader := bytes.NewReader(content)
+
 		mockRepo.EXPECT().
 			UploadFileToMinIO(ctx, filename, content, contentType).
 			Return("", errors.New("minio error"))
@@ -60,12 +79,13 @@ func TestFileUsecase_UploadFile(t *testing.T) {
 
 	t.Run("SaveFile_Error", func(t *testing.T) {
 		fileReader := bytes.NewReader(content)
+
 		mockRepo.EXPECT().
 			UploadFileToMinIO(ctx, filename, content, contentType).
 			Return(url, nil)
 
 		mockRepo.EXPECT().
-			SaveFile(ctx, url, contentType, size, gomock.Nil(), gomock.Nil()).
+			SaveFile(ctx, url, contentType, size, gomock.Any(), gomock.Any()).
 			Return(nil, errors.New("db error"))
 
 		mockRepo.EXPECT().
