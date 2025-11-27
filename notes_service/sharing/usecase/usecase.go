@@ -1,6 +1,7 @@
 package usecase
 
 import (
+	"backend/notes_service/internal/constants"
 	"context"
 	"fmt"
 	"time"
@@ -17,7 +18,7 @@ type SharingRepository interface {
 	CheckCollaboratorExists(ctx context.Context, noteID, userID uint64) (bool, error)
 
 	SetPublicAccess(ctx context.Context, noteID uint64, accessLevel *models.NoteRole) error
-	GetPublicAccess(ctx context.Context, noteID uint64) (*models.NoteRole, string, error) // возвращает (accessLevel, shareUUID, error)
+	GetPublicAccess(ctx context.Context, noteID uint64) (*models.NoteRole, string, error)
 
 	GetNoteOwnerID(ctx context.Context, noteID uint64) (uint64, error)
 	CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error)
@@ -26,6 +27,7 @@ type SharingRepository interface {
 	CanUserShare(ctx context.Context, noteID, userID uint64) (bool, error)
 
 	UpdateIsSharedFlag(ctx context.Context, noteID uint64, isShared bool) error
+	IsSubNote(ctx context.Context, noteID uint64) (bool, error)
 }
 
 type NotesRepository interface {
@@ -95,6 +97,14 @@ func (uc *SharingUsecase) updateIsSharedFlag(ctx context.Context, noteID uint64)
 }
 
 func (uc *SharingUsecase) AddCollaborator(ctx context.Context, noteID, currentUserID, targetUserID uint64, role models.NoteRole) (*models.NotePermission, error) {
+	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if note is sub-note: %w", err)
+	}
+	if isSubNote {
+		return nil, constants.ErrSubNoteCannotBeShared
+	}
+
 	if err := uc.validateNoteOwnership(ctx, noteID, currentUserID); err != nil {
 		return nil, err
 	}
@@ -171,6 +181,14 @@ func (uc *SharingUsecase) GetCollaborators(ctx context.Context, noteID, currentU
 }
 
 func (uc *SharingUsecase) UpdateCollaboratorRole(ctx context.Context, noteID, currentUserID, permissionID uint64, newRole models.NoteRole) (*models.NotePermission, error) {
+	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check if note is sub-note: %w", err)
+	}
+	if isSubNote {
+		return nil, constants.ErrSubNoteCannotBeShared
+	}
+
 	if err := uc.validateNoteOwnership(ctx, noteID, currentUserID); err != nil {
 		return nil, err
 	}
@@ -197,6 +215,14 @@ func (uc *SharingUsecase) UpdateCollaboratorRole(ctx context.Context, noteID, cu
 }
 
 func (uc *SharingUsecase) RemoveCollaborator(ctx context.Context, noteID, currentUserID, permissionID uint64) error {
+	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to check if note is sub-note: %w", err)
+	}
+	if isSubNote {
+		return constants.ErrSubNoteCannotBeShared
+	}
+
 	if err := uc.validateNoteOwnership(ctx, noteID, currentUserID); err != nil {
 		return err
 	}
@@ -222,6 +248,14 @@ func (uc *SharingUsecase) RemoveCollaborator(ctx context.Context, noteID, curren
 }
 
 func (uc *SharingUsecase) SetPublicAccess(ctx context.Context, noteID, currentUserID uint64, accessLevel *models.NoteRole) error {
+	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to check if note is sub-note: %w", err)
+	}
+	if isSubNote {
+		return constants.ErrSubNoteCannotBeShared
+	}
+
 	if err := uc.validateNoteOwnership(ctx, noteID, currentUserID); err != nil {
 		return err
 	}

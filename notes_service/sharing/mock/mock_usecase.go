@@ -11,7 +11,7 @@ package mock
 
 import (
 	models "backend/notes_service/internal/models"
-	context "context"
+	"context"
 	reflect "reflect"
 
 	gomock "github.com/golang/mock/gomock"
@@ -22,6 +22,11 @@ type MockSharingRepository struct {
 	ctrl     *gomock.Controller
 	recorder *MockSharingRepositoryMockRecorder
 	isgomock struct{}
+}
+
+func (m *MockSharingRepository) IsSubNote(ctx context.Context, noteID uint64) (bool, error) {
+	//TODO implement me
+	panic("implement me")
 }
 
 // MockSharingRepositoryMockRecorder is the mock recorder for MockSharingRepository.

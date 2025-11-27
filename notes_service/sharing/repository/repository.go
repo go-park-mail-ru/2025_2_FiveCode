@@ -324,21 +324,47 @@ func (r *SharingRepository) GetNoteOwnerID(ctx context.Context, noteID uint64) (
 func (r *SharingRepository) CheckNoteAccess(ctx context.Context, noteID, userID uint64) (*models.NoteAccessInfo, error) {
 	log := logger.FromContext(ctx)
 
+	parentQuery := `
+		SELECT parent_note_id 
+		FROM note 
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	var parentNoteID sql.NullInt64
+	err := r.db.QueryRowContext(ctx, parentQuery, noteID).Scan(&parentNoteID)
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Uint64("note_id", noteID).Msg("note not found for access check")
+		return &models.NoteAccessInfo{HasAccess: false}, nil
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get note for access check")
+		return nil, fmt.Errorf("failed to get note: %w", err)
+	}
+
+	checkNoteID := noteID
+	if parentNoteID.Valid {
+		checkNoteID = uint64(parentNoteID.Int64)
+		log.Info().
+			Uint64("sub_note_id", noteID).
+			Uint64("parent_note_id", checkNoteID).
+			Msg("checking access for sub-note via parent")
+	}
+
 	query := `
-        SELECT 
-            n.owner_id,
-            np.role
-        FROM note n
-        LEFT JOIN note_permission np ON n.id = np.note_id AND np.granted_to = $2
-        WHERE n.id = $1 AND n.deleted_at IS NULL
-    `
+		SELECT 
+			n.owner_id,
+			np.role
+		FROM note n
+		LEFT JOIN note_permission np ON n.id = np.note_id AND np.granted_to = $2
+		WHERE n.id = $1 AND n.deleted_at IS NULL
+	`
 
 	var ownerID uint64
 	var permissionRole sql.NullString
 
-	err := r.db.QueryRowContext(ctx, query, noteID, userID).Scan(&ownerID, &permissionRole)
+	err = r.db.QueryRowContext(ctx, query, checkNoteID, userID).Scan(&ownerID, &permissionRole)
 	if errors.Is(err, sql.ErrNoRows) {
-		log.Warn().Uint64("note_id", noteID).Msg("note not found for access check")
+		log.Warn().Uint64("note_id", checkNoteID).Msg("note not found for access check")
 		return &models.NoteAccessInfo{HasAccess: false}, nil
 	}
 	if err != nil {
@@ -447,4 +473,27 @@ func (r *SharingRepository) UpdateIsSharedFlag(ctx context.Context, noteID uint6
 
 	log.Info().Uint64("note_id", noteID).Bool("is_shared", isShared).Msg("is_shared flag updated")
 	return nil
+}
+
+func (r *SharingRepository) IsSubNote(ctx context.Context, noteID uint64) (bool, error) {
+	log := logger.FromContext(ctx)
+
+	query := `
+		SELECT parent_note_id IS NOT NULL
+		FROM note
+		WHERE id = $1 AND deleted_at IS NULL
+	`
+
+	var isSubNote bool
+	err := r.db.QueryRowContext(ctx, query, noteID).Scan(&isSubNote)
+	if errors.Is(err, sql.ErrNoRows) {
+		log.Warn().Uint64("note_id", noteID).Msg("note not found")
+		return false, constants.ErrNotFound
+	}
+	if err != nil {
+		log.Error().Err(err).Msg("failed to check if note is sub-note")
+		return false, fmt.Errorf("failed to check if note is sub-note: %w", err)
+	}
+
+	return isSubNote, nil
 }
