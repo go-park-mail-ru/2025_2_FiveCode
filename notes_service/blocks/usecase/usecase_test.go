@@ -29,7 +29,7 @@ func TestBlocksUsecase_CreateTextBlock(t *testing.T) {
 	}
 
 	t.Run("Success", func(t *testing.T) {
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, uint64(0)).Return([]repository.BlockPositionInfo{}, nil)
 		mockBlocksRepo.EXPECT().CreateTextBlock(ctx, noteID, 1.0, userID).Return(block, nil)
 
@@ -114,7 +114,7 @@ func TestBlocksUsecase_DeleteBlock(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		mockBlocksRepo.EXPECT().DeleteBlock(ctx, blockID).Return(nil)
 
 		err := usecase.DeleteBlock(ctx, userID, blockID)
@@ -139,7 +139,7 @@ func TestBlocksUsecase_UpdateBlockPosition(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, blockID).Return([]repository.BlockPositionInfo{
 			{ID: 1, Position: 1.0},
 			{ID: 2, Position: 2.0},
@@ -170,7 +170,7 @@ func TestBlocksUsecase_CreateAttachmentBlock(t *testing.T) {
 	}
 
 	t.Run("Success", func(t *testing.T) {
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, uint64(0)).Return([]repository.BlockPositionInfo{}, nil)
 		mockBlocksRepo.EXPECT().CreateAttachmentBlock(ctx, noteID, 1.0, fileID, userID).Return(block, nil)
 
@@ -202,7 +202,7 @@ func TestBlocksUsecase_CreateCodeBlock(t *testing.T) {
 	}
 
 	t.Run("Success", func(t *testing.T) {
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		mockBlocksRepo.EXPECT().GetBlocksByNoteIDForPositionCalc(ctx, noteID, uint64(0)).Return([]repository.BlockPositionInfo{}, nil)
 		mockBlocksRepo.EXPECT().CreateCodeBlock(ctx, noteID, 1.0, userID).Return(block, nil)
 
@@ -228,7 +228,7 @@ func TestBlocksUsecase_UpdateBlock(t *testing.T) {
 
 	t.Run("UpdateTextBlock_Success", func(t *testing.T) {
 		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		
 		existingBlock := &models.Block{
 			BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Type: models.BlockTypeText},
@@ -255,7 +255,7 @@ func TestBlocksUsecase_UpdateBlock(t *testing.T) {
 
 	t.Run("UpdateCodeBlock_Success", func(t *testing.T) {
 		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		
 		existingBlock := &models.Block{
 			BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Type: models.BlockTypeCode},
@@ -280,7 +280,7 @@ func TestBlocksUsecase_UpdateBlock(t *testing.T) {
 
 	t.Run("UpdateAttachmentBlock_Fail", func(t *testing.T) {
 		mockBlocksRepo.EXPECT().GetBlockNoteID(ctx, blockID).Return(noteID, nil)
-		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true, CanEdit: true}, nil)
 		
 		existingBlock := &models.Block{
 			BaseBlock: models.BaseBlock{ID: blockID, NoteID: noteID, Type: models.BlockTypeAttachment},
