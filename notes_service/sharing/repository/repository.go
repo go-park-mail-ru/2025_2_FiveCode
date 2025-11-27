@@ -475,25 +475,30 @@ func (r *SharingRepository) UpdateIsSharedFlag(ctx context.Context, noteID uint6
 	return nil
 }
 
-func (r *SharingRepository) IsSubNote(ctx context.Context, noteID uint64) (bool, error) {
+func (r *SharingRepository) GetParentNoteID(ctx context.Context, noteID uint64) (*uint64, error) {
 	log := logger.FromContext(ctx)
 
 	query := `
-		SELECT parent_note_id IS NOT NULL
+		SELECT parent_note_id
 		FROM note
 		WHERE id = $1 AND deleted_at IS NULL
 	`
 
-	var isSubNote bool
-	err := r.db.QueryRowContext(ctx, query, noteID).Scan(&isSubNote)
+	var parentNoteID sql.NullInt64
+	err := r.db.QueryRowContext(ctx, query, noteID).Scan(&parentNoteID)
 	if errors.Is(err, sql.ErrNoRows) {
 		log.Warn().Uint64("note_id", noteID).Msg("note not found")
-		return false, constants.ErrNotFound
+		return nil, constants.ErrNotFound
 	}
 	if err != nil {
-		log.Error().Err(err).Msg("failed to check if note is sub-note")
-		return false, fmt.Errorf("failed to check if note is sub-note: %w", err)
+		log.Error().Err(err).Msg("failed to get parent note id")
+		return nil, fmt.Errorf("failed to get parent note id: %w", err)
 	}
 
-	return isSubNote, nil
+	if !parentNoteID.Valid {
+		return nil, nil
+	}
+
+	parentID := uint64(parentNoteID.Int64)
+	return &parentID, nil
 }

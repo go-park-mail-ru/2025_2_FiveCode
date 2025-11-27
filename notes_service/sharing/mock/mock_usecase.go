@@ -24,11 +24,6 @@ type MockSharingRepository struct {
 	isgomock struct{}
 }
 
-func (m *MockSharingRepository) IsSubNote(ctx context.Context, noteID uint64) (bool, error) {
-	//TODO implement me
-	panic("implement me")
-}
-
 // MockSharingRepositoryMockRecorder is the mock recorder for MockSharingRepository.
 type MockSharingRepositoryMockRecorder struct {
 	mock *MockSharingRepository

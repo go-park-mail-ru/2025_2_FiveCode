@@ -27,7 +27,8 @@ type SharingRepository interface {
 	CanUserShare(ctx context.Context, noteID, userID uint64) (bool, error)
 
 	UpdateIsSharedFlag(ctx context.Context, noteID uint64, isShared bool) error
-	IsSubNote(ctx context.Context, noteID uint64) (bool, error)
+
+	GetParentNoteID(ctx context.Context, noteID uint64) (*uint64, error)
 }
 
 type NotesRepository interface {
@@ -97,11 +98,11 @@ func (uc *SharingUsecase) updateIsSharedFlag(ctx context.Context, noteID uint64)
 }
 
 func (uc *SharingUsecase) AddCollaborator(ctx context.Context, noteID, currentUserID, targetUserID uint64, role models.NoteRole) (*models.NotePermission, error) {
-	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	parentNoteID, err := uc.sharingRepo.GetParentNoteID(ctx, noteID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if note is sub-note: %w", err)
+		return nil, fmt.Errorf("failed to get parent note id: %w", err)
 	}
-	if isSubNote {
+	if parentNoteID != nil {
 		return nil, constants.ErrSubNoteCannotBeShared
 	}
 
@@ -181,11 +182,11 @@ func (uc *SharingUsecase) GetCollaborators(ctx context.Context, noteID, currentU
 }
 
 func (uc *SharingUsecase) UpdateCollaboratorRole(ctx context.Context, noteID, currentUserID, permissionID uint64, newRole models.NoteRole) (*models.NotePermission, error) {
-	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	parentNoteID, err := uc.sharingRepo.GetParentNoteID(ctx, noteID)
 	if err != nil {
-		return nil, fmt.Errorf("failed to check if note is sub-note: %w", err)
+		return nil, fmt.Errorf("failed to get parent note id: %w", err)
 	}
-	if isSubNote {
+	if parentNoteID != nil {
 		return nil, constants.ErrSubNoteCannotBeShared
 	}
 
@@ -215,11 +216,11 @@ func (uc *SharingUsecase) UpdateCollaboratorRole(ctx context.Context, noteID, cu
 }
 
 func (uc *SharingUsecase) RemoveCollaborator(ctx context.Context, noteID, currentUserID, permissionID uint64) error {
-	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	parentNoteID, err := uc.sharingRepo.GetParentNoteID(ctx, noteID)
 	if err != nil {
-		return fmt.Errorf("failed to check if note is sub-note: %w", err)
+		return fmt.Errorf("failed to get parent note id: %w", err)
 	}
-	if isSubNote {
+	if parentNoteID != nil {
 		return constants.ErrSubNoteCannotBeShared
 	}
 
@@ -248,11 +249,11 @@ func (uc *SharingUsecase) RemoveCollaborator(ctx context.Context, noteID, curren
 }
 
 func (uc *SharingUsecase) SetPublicAccess(ctx context.Context, noteID, currentUserID uint64, accessLevel *models.NoteRole) error {
-	isSubNote, err := uc.sharingRepo.IsSubNote(ctx, noteID)
+	parentNoteID, err := uc.sharingRepo.GetParentNoteID(ctx, noteID)
 	if err != nil {
-		return fmt.Errorf("failed to check if note is sub-note: %w", err)
+		return fmt.Errorf("failed to get parent note id: %w", err)
 	}
-	if isSubNote {
+	if parentNoteID != nil {
 		return constants.ErrSubNoteCannotBeShared
 	}
 
@@ -287,17 +288,27 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 		return nil, err
 	}
 
-	ownerID, err := uc.sharingRepo.GetNoteOwnerID(ctx, noteID)
+	parentNoteID, err := uc.sharingRepo.GetParentNoteID(ctx, noteID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get parent note id: %w", err)
+	}
+
+	targetNoteID := noteID
+	if parentNoteID != nil {
+		targetNoteID = *parentNoteID
+	}
+
+	ownerID, err := uc.sharingRepo.GetNoteOwnerID(ctx, targetNoteID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get note owner: %w", err)
 	}
 
-	permissions, err := uc.sharingRepo.GetCollaboratorsByNoteID(ctx, noteID)
+	permissions, err := uc.sharingRepo.GetCollaboratorsByNoteID(ctx, targetNoteID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get collaborators: %w", err)
 	}
 
-	publicAccessLevel, shareUUID, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
+	publicAccessLevel, shareUUID, err := uc.sharingRepo.GetPublicAccess(ctx, targetNoteID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get public access: %w", err)
 	}
@@ -328,7 +339,7 @@ func (uc *SharingUsecase) GetSharingSettings(ctx context.Context, noteID, curren
 	}
 
 	publicAccess := models.PublicAccess{
-		NoteID:      noteID,
+		NoteID:      targetNoteID,
 		AccessLevel: publicAccessLevel,
 		ShareURL:    shareUUID,
 	}
