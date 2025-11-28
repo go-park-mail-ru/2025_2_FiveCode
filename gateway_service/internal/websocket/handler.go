@@ -64,6 +64,21 @@ func (h *Handler) HandleConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	isShared, err := h.checkNoteIsShared(r.Context(), uint64(noteID), userID)
+	if err != nil {
+		h.logger.Error().Err(err).Uint64("note_id", uint64(noteID)).Uint64("user_id", userID).Msg("failed to check if note is shared")
+		http.Error(w, "Internal server error", http.StatusInternalServerError)
+		return
+	}
+	if !isShared {
+		h.logger.Info().
+			Uint64("note_id", uint64(noteID)).
+			Uint64("user_id", userID).
+			Msg("websocket denied - note is not shared (personal note)")
+		http.Error(w, "WebSocket is only available for shared notes", http.StatusForbidden)
+		return
+	}
+
 	conn, err := upgrader.Upgrade(w, r, nil)
 	if err != nil {
 		h.logger.Error().Err(err).Msg("failed to upgrade connection")
@@ -97,4 +112,18 @@ func (h *Handler) checkNoteAccess(ctx context.Context, noteID, userID uint64) (b
 	}
 
 	return resp.HasAccess, nil
+}
+
+func (h *Handler) checkNoteIsShared(ctx context.Context, noteID, userID uint64) (bool, error) {
+	req := &sharePB.GetSharingSettingsRequest{
+		CurrentUserId: userID,
+		NoteId:        noteID,
+	}
+
+	resp, err := h.sharingClient.GetSharingSettings(ctx, req)
+	if err != nil {
+		return false, err
+	}
+
+	return resp.TotalCollaborators > 1, nil
 }
