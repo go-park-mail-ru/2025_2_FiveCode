@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type NotesRepository struct {
@@ -460,9 +461,6 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 	return note, nil
 }
 
-// SearchNotes выполняет полнотекстовый поиск по заметкам пользователя
-// Ищет по названию заметки, текстовым блокам и блокам кода
-// Возвращает до 20 самых релевантных результатов
 func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
 	log := logger.FromContext(ctx)
 
@@ -490,8 +488,16 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 			 plainto_tsquery('russian', $1) query,
 			 to_tsvector('russian', title) title_vector
 		WHERE search_vector @@ query
-		  AND owner_id = $2
 		  AND deleted_at IS NULL
+		  AND (
+			  owner_id = $2 
+			  OR 
+			  note_id IN (  
+				  SELECT note_id 
+				  FROM note_permission 
+				  WHERE granted_to = $2
+			  )
+		  )
 		ORDER BY rank DESC, updated_at DESC
 		LIMIT 20
 	`
@@ -543,4 +549,92 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 		Results: results,
 		Count:   len(results),
 	}, nil
+}
+
+func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connString string) error {
+	log := logger.FromContext(ctx)
+
+	// Создаём listener для PostgreSQL NOTIFY
+	listener := pq.NewListener(
+		connString,
+		10*time.Second, // minReconnectInterval
+		time.Minute,    // maxReconnectInterval
+		func(ev pq.ListenerEventType, err error) {
+			if err != nil {
+				log.Error().Err(err).Str("event", string(ev)).Msg("postgres listener event error")
+			}
+		},
+	)
+
+	// Подписываемся на канал 'refresh_search_index'
+	err := listener.Listen("refresh_search_index")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to start listening for search index updates")
+		return fmt.Errorf("failed to listen to refresh_search_index channel: %w", err)
+	}
+
+	log.Info().Msg("search index refresher listener started")
+
+	// Дебаунс: обновляем не чаще раза в 5 секунд
+	debounceTimer := time.NewTimer(5 * time.Second)
+	debounceTimer.Stop() // Останавливаем таймер до первого уведомления
+	needsRefresh := false
+
+	// Запускаем воркер в отдельной горутине
+	go func() {
+		defer func() {
+			if err := listener.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close postgres listener")
+			}
+			log.Info().Msg("search index refresher stopped")
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+				// Приложение завершается
+				log.Info().Msg("context cancelled, stopping search index refresher")
+				return
+
+			case notification := <-listener.Notify:
+				if notification != nil {
+					// Получили уведомление от триггера
+					needsRefresh = true
+					debounceTimer.Reset(5 * time.Second)
+					log.Debug().Msg("received search index refresh notification, debouncing...")
+				}
+
+			case <-debounceTimer.C:
+				// Таймер сработал - пора обновлять
+				if needsRefresh {
+					log.Info().Msg("debounce timer expired, refreshing search index...")
+
+					refreshCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					if err := r.refreshSearchIndex(refreshCtx); err != nil {
+						log.Error().Err(err).Msg("failed to refresh search index")
+					} else {
+						log.Info().Msg("search index refreshed successfully")
+					}
+					cancel()
+
+					needsRefresh = false
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+// refreshSearchIndex выполняет обновление материализованного представления
+// CONCURRENTLY позволяет обновлять индекс без блокировки чтения
+func (r *NotesRepository) refreshSearchIndex(ctx context.Context) error {
+	query := "REFRESH MATERIALIZED VIEW CONCURRENTLY note_search_index"
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to refresh materialized view: %w", err)
+	}
+
+	return nil
 }

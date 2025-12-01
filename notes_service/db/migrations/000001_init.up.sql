@@ -157,3 +157,37 @@ CREATE INDEX idx_note_search_vector ON note_search_index USING GIN(search_vector
 CREATE INDEX idx_note_search_filter ON note_search_index(owner_id, deleted_at, updated_at DESC);
 
 CREATE UNIQUE INDEX idx_note_search_id ON note_search_index(note_id);
+
+-- Функция для отправки уведомления об изменениях
+CREATE OR REPLACE FUNCTION refresh_search_index()
+    RETURNS TRIGGER AS $$
+BEGIN
+    -- Отправляем уведомление в канал PostgreSQL
+    PERFORM pg_notify('refresh_search_index', '');
+    RETURN NULL;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Триггер на таблицу note
+CREATE TRIGGER note_search_refresh_note
+    AFTER INSERT OR UPDATE OR DELETE ON note
+    FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_search_index();
+
+-- Триггер на таблицу block
+CREATE TRIGGER note_search_refresh_block
+    AFTER INSERT OR UPDATE OR DELETE ON block
+    FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_search_index();
+
+-- Триггер на таблицу block_text
+CREATE TRIGGER note_search_refresh_block_text
+    AFTER INSERT OR UPDATE OR DELETE ON block_text
+    FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_search_index();
+
+-- Триггер на таблицу block_code
+CREATE TRIGGER note_search_refresh_block_code
+    AFTER INSERT OR UPDATE OR DELETE ON block_code
+    FOR EACH STATEMENT
+EXECUTE FUNCTION refresh_search_index();

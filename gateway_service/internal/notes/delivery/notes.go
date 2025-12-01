@@ -261,3 +261,40 @@ func (d *NotesDelivery) notifyNoteChanged(ctx context.Context, noteID uint64, us
 		Uint64("updated_by", userID).
 		Msg("note update broadcasted via websocket")
 }
+
+type SearchNotesRequest struct {
+	Query string `json:"query"`
+}
+
+func (d *NotesDelivery) SearchNotes(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		log.Error().Msg("user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
+		return
+	}
+
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close request body")
+		}
+	}()
+
+	var req SearchNotesRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid request body")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	searchResult, err := d.usecase.SearchNotes(r.Context(), userID, req.Query)
+	if err != nil {
+		log.Error().Err(err).Str("query", req.Query).Msg("failed to search notes")
+		apiutils.HandleGrpcError(w, err, log)
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, searchResult)
+}

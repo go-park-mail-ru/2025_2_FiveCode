@@ -143,3 +143,18 @@ func (s *Server) RemoveFavorite(ctx context.Context, req *notePB.FavoriteRequest
 
 	return &emptypb.Empty{}, nil
 }
+
+func (s *Server) SearchNotes(ctx context.Context, req *notePB.SearchNotesRequest) (*notePB.SearchNotesResponse, error) {
+	response, err := s.noteUsecase.SearchNotes(ctx, req.GetUserId(), req.GetQuery())
+	if err != nil {
+		if strings.Contains(err.Error(), "search query cannot be empty") {
+			return nil, status.Error(codes.InvalidArgument, "search query cannot be empty")
+		}
+		if strings.Contains(err.Error(), "search query too long") {
+			return nil, status.Error(codes.InvalidArgument, "search query too long (max 200 characters)")
+		}
+		return nil, status.Error(codes.Internal, "failed to search notes")
+	}
+
+	return searchResponseModelToProto(response), nil
+}

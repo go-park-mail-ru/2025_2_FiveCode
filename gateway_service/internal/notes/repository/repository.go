@@ -27,6 +27,7 @@ type NoteClient interface {
 	DeleteNote(ctx context.Context, in *notePB.DeleteNoteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AddFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	RemoveFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SearchNotes(ctx context.Context, in *notePB.SearchNotesRequest, opts ...grpc.CallOption) (*notePB.SearchNotesResponse, error)
 }
 
 type BlockClient interface {
@@ -134,6 +135,18 @@ func (r *NotesRepository) AddFavorite(ctx context.Context, userID, noteID uint64
 func (r *NotesRepository) RemoveFavorite(ctx context.Context, userID, noteID uint64) error {
 	_, err := r.noteClient.RemoveFavorite(ctx, &notePB.FavoriteRequest{UserId: userID, NoteId: noteID})
 	return err
+}
+
+func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
+	searchResult, err := r.noteClient.SearchNotes(ctx, &notePB.SearchNotesRequest{
+		UserId: userID,
+		Query:  query,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	return utils.MapProtoToSearchNotesResponse(searchResult), nil
 }
 
 func (r *NotesRepository) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error) {

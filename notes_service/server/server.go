@@ -270,3 +270,37 @@ func noteAccessInfoModelToProto(accessInfo *models.NoteAccessInfo) *sharePB.Note
 		CanComment: accessInfo.Role == models.RoleCommenter || accessInfo.Role == models.RoleEditor,
 	}
 }
+
+func searchResultModelToProto(result *models.SearchResult) *notePB.SearchResult {
+	if result == nil {
+		return nil
+	}
+
+	return &notePB.SearchResult{
+		NoteId:           result.NoteID,
+		Title:            result.Title,
+		HighlightedTitle: result.HighlightedTitle,
+		ContentSnippet:   result.ContentSnippet,
+		Rank:             result.Rank,
+		UpdatedAt:        timestamppb.New(result.UpdatedAt),
+	}
+}
+
+func searchResponseModelToProto(response *models.SearchNotesResponse) *notePB.SearchNotesResponse {
+	if response == nil {
+		return &notePB.SearchNotesResponse{
+			Results: []*notePB.SearchResult{},
+			Count:   0,
+		}
+	}
+
+	protoResults := make([]*notePB.SearchResult, len(response.Results))
+	for i := range response.Results {
+		protoResults[i] = searchResultModelToProto(&response.Results[i])
+	}
+
+	return &notePB.SearchNotesResponse{
+		Results: protoResults,
+		Count:   int32(response.Count),
+	}
+}

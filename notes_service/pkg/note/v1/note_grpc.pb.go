@@ -29,6 +29,7 @@ const (
 	NoteService_DeleteNote_FullMethodName         = "/note.NoteService/DeleteNote"
 	NoteService_AddFavorite_FullMethodName        = "/note.NoteService/AddFavorite"
 	NoteService_RemoveFavorite_FullMethodName     = "/note.NoteService/RemoveFavorite"
+	NoteService_SearchNotes_FullMethodName        = "/note.NoteService/SearchNotes"
 )
 
 // NoteServiceClient is the client API for NoteService service.
@@ -43,6 +44,7 @@ type NoteServiceClient interface {
 	DeleteNote(ctx context.Context, in *DeleteNoteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	AddFavorite(ctx context.Context, in *FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	RemoveFavorite(ctx context.Context, in *FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
+	SearchNotes(ctx context.Context, in *SearchNotesRequest, opts ...grpc.CallOption) (*SearchNotesResponse, error)
 }
 
 type noteServiceClient struct {
@@ -133,6 +135,16 @@ func (c *noteServiceClient) RemoveFavorite(ctx context.Context, in *FavoriteRequ
 	return out, nil
 }
 
+func (c *noteServiceClient) SearchNotes(ctx context.Context, in *SearchNotesRequest, opts ...grpc.CallOption) (*SearchNotesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SearchNotesResponse)
+	err := c.cc.Invoke(ctx, NoteService_SearchNotes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NoteServiceServer is the server API for NoteService service.
 // All implementations must embed UnimplementedNoteServiceServer
 // for forward compatibility.
@@ -145,6 +157,7 @@ type NoteServiceServer interface {
 	DeleteNote(context.Context, *DeleteNoteRequest) (*emptypb.Empty, error)
 	AddFavorite(context.Context, *FavoriteRequest) (*emptypb.Empty, error)
 	RemoveFavorite(context.Context, *FavoriteRequest) (*emptypb.Empty, error)
+	SearchNotes(context.Context, *SearchNotesRequest) (*SearchNotesResponse, error)
 	mustEmbedUnimplementedNoteServiceServer()
 }
 
@@ -178,6 +191,9 @@ func (UnimplementedNoteServiceServer) AddFavorite(context.Context, *FavoriteRequ
 }
 func (UnimplementedNoteServiceServer) RemoveFavorite(context.Context, *FavoriteRequest) (*emptypb.Empty, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method RemoveFavorite not implemented")
+}
+func (UnimplementedNoteServiceServer) SearchNotes(context.Context, *SearchNotesRequest) (*SearchNotesResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method SearchNotes not implemented")
 }
 func (UnimplementedNoteServiceServer) mustEmbedUnimplementedNoteServiceServer() {}
 func (UnimplementedNoteServiceServer) testEmbeddedByValue()                     {}
@@ -344,6 +360,24 @@ func _NoteService_RemoveFavorite_Handler(srv interface{}, ctx context.Context, d
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NoteService_SearchNotes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SearchNotesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NoteServiceServer).SearchNotes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NoteService_SearchNotes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NoteServiceServer).SearchNotes(ctx, req.(*SearchNotesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NoteService_ServiceDesc is the grpc.ServiceDesc for NoteService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -382,6 +416,10 @@ var NoteService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveFavorite",
 			Handler:    _NoteService_RemoveFavorite_Handler,
+		},
+		{
+			MethodName: "SearchNotes",
+			Handler:    _NoteService_SearchNotes_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
