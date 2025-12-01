@@ -124,3 +124,36 @@ CREATE TABLE IF NOT EXISTS note_tag
     updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
     PRIMARY KEY (note_id, tag_id)
 );
+
+CREATE MATERIALIZED VIEW note_search_index AS
+SELECT
+    n.id as note_id,
+    n.owner_id,
+    n.title,
+    n.updated_at,
+    n.deleted_at,
+    COALESCE(string_agg(DISTINCT bt.text, ' '), '') as text_content,
+    COALESCE(string_agg(DISTINCT bc.code_text, ' '), '') as code_content,
+    COALESCE(string_agg(DISTINCT bt.text, ' '), '') || ' ' ||
+    COALESCE(string_agg(DISTINCT bc.code_text, ' '), '') as content,
+    -- Двуязычный индекс с весами:
+    -- A - заголовок (самый важный)
+    -- B - текстовые блоки
+    -- C - блоки кода (меньший вес, т.к. там много технических символов)
+    setweight(to_tsvector('russian', COALESCE(n.title, '')), 'A') ||
+    setweight(to_tsvector('english', COALESCE(n.title, '')), 'A') ||
+    setweight(to_tsvector('russian', COALESCE(string_agg(DISTINCT bt.text, ' '), '')), 'B') ||
+    setweight(to_tsvector('english', COALESCE(string_agg(DISTINCT bt.text, ' '), '')), 'B') ||
+    setweight(to_tsvector('russian', COALESCE(string_agg(DISTINCT bc.code_text, ' '), '')), 'C') ||
+    setweight(to_tsvector('english', COALESCE(string_agg(DISTINCT bc.code_text, ' '), '')), 'C') as search_vector
+FROM note n
+         LEFT JOIN block b ON b.note_id = n.id
+         LEFT JOIN block_text bt ON bt.block_id = b.id AND b.type = 'text'
+         LEFT JOIN block_code bc ON bc.block_id = b.id AND b.type = 'code'
+GROUP BY n.id, n.owner_id, n.title, n.updated_at, n.deleted_at;
+
+CREATE INDEX idx_note_search_vector ON note_search_index USING GIN(search_vector);
+
+CREATE INDEX idx_note_search_filter ON note_search_index(owner_id, deleted_at, updated_at DESC);
+
+CREATE UNIQUE INDEX idx_note_search_id ON note_search_index(note_id);

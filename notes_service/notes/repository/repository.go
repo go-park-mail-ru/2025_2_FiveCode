@@ -459,3 +459,88 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 
 	return note, nil
 }
+
+// SearchNotes выполняет полнотекстовый поиск по заметкам пользователя
+// Ищет по названию заметки, текстовым блокам и блокам кода
+// Возвращает до 20 самых релевантных результатов
+func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
+	log := logger.FromContext(ctx)
+
+	searchQuery := `
+		SELECT 
+			note_id,
+			title,
+			-- Подсветка заголовка (только если есть совпадение)
+			CASE 
+				WHEN title_vector @@ query THEN 
+					ts_headline('russian', title, query, 'StartSel=<mark>, StopSel=</mark>')
+				ELSE title 
+			END as highlighted_title,
+			-- Компактные сниппеты контента
+			ts_headline(
+				'russian',
+				COALESCE(content, ''),
+				query,
+				'MaxWords=15, MinWords=5, ShortWord=3, MaxFragments=2,
+				 FragmentDelimiter= ... , StartSel=<mark>, StopSel=</mark>'
+			) as content_snippet,
+			ts_rank(search_vector, query) as rank,
+			updated_at
+		FROM note_search_index,
+			 plainto_tsquery('russian', $1) query,
+			 to_tsvector('russian', title) title_vector
+		WHERE search_vector @@ query
+		  AND owner_id = $2
+		  AND deleted_at IS NULL
+		ORDER BY rank DESC, updated_at DESC
+		LIMIT 20
+	`
+
+	rows, err := r.db.QueryContext(ctx, searchQuery, query, userID)
+	if err != nil {
+		log.Error().Err(err).Str("query", query).Msg("failed to execute search query")
+		return nil, fmt.Errorf("failed to execute search query: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
+
+	results := make([]models.SearchResult, 0)
+
+	for rows.Next() {
+		var result models.SearchResult
+
+		err := rows.Scan(
+			&result.NoteID,
+			&result.Title,
+			&result.HighlightedTitle,
+			&result.ContentSnippet,
+			&result.Rank,
+			&result.UpdatedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to scan search result")
+			return nil, fmt.Errorf("failed to scan search result: %w", err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Error().Err(err).Msg("error iterating search results")
+		return nil, fmt.Errorf("error iterating search results: %w", err)
+	}
+
+	log.Info().
+		Str("query", query).
+		Uint64("user_id", userID).
+		Int("results_count", len(results)).
+		Msg("search completed successfully")
+
+	return &models.SearchNotesResponse{
+		Results: results,
+		Count:   len(results),
+	}, nil
+}

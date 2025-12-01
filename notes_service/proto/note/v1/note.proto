@@ -27,7 +27,7 @@ message Note {
   bool is_favorite = 6;
   bool is_archived = 7;
   bool is_shared = 8;
-  optional string share_uuid = 9;  // НОВЫЙ - UUID для публичной ссылки
+  optional string share_uuid = 9;
   google.protobuf.Timestamp created_at = 10;
   google.protobuf.Timestamp updated_at = 11;
   optional google.protobuf.Timestamp deleted_at = 12;
