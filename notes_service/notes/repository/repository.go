@@ -468,13 +468,11 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 		SELECT 
 			note_id,
 			title,
-			-- Подсветка заголовка (только если есть совпадение)
 			CASE 
 				WHEN title_vector @@ query THEN 
 					ts_headline('russian', title, query, 'StartSel=<mark>, StopSel=</mark>')
 				ELSE title 
 			END as highlighted_title,
-			-- Компактные сниппеты контента
 			ts_headline(
 				'russian',
 				COALESCE(content, ''),
@@ -554,11 +552,10 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connString string) error {
 	log := logger.FromContext(ctx)
 
-	// Создаём listener для PostgreSQL NOTIFY
 	listener := pq.NewListener(
 		connString,
-		10*time.Second, // minReconnectInterval
-		time.Minute,    // maxReconnectInterval
+		10*time.Second,
+		time.Minute,
 		func(ev pq.ListenerEventType, err error) {
 			if err != nil {
 				log.Error().Err(err).Str("event", string(ev)).Msg("postgres listener event error")
@@ -566,7 +563,6 @@ func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connStr
 		},
 	)
 
-	// Подписываемся на канал 'refresh_search_index'
 	err := listener.Listen("refresh_search_index")
 	if err != nil {
 		log.Error().Err(err).Msg("failed to start listening for search index updates")
@@ -575,12 +571,10 @@ func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connStr
 
 	log.Info().Msg("search index refresher listener started")
 
-	// Дебаунс: обновляем не чаще раза в 5 секунд
 	debounceTimer := time.NewTimer(5 * time.Second)
-	debounceTimer.Stop() // Останавливаем таймер до первого уведомления
+	debounceTimer.Stop()
 	needsRefresh := false
 
-	// Запускаем воркер в отдельной горутине
 	go func() {
 		defer func() {
 			if err := listener.Close(); err != nil {
@@ -592,20 +586,17 @@ func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connStr
 		for {
 			select {
 			case <-ctx.Done():
-				// Приложение завершается
 				log.Info().Msg("context cancelled, stopping search index refresher")
 				return
 
 			case notification := <-listener.Notify:
 				if notification != nil {
-					// Получили уведомление от триггера
 					needsRefresh = true
 					debounceTimer.Reset(5 * time.Second)
 					log.Debug().Msg("received search index refresh notification, debouncing...")
 				}
 
 			case <-debounceTimer.C:
-				// Таймер сработал - пора обновлять
 				if needsRefresh {
 					log.Info().Msg("debounce timer expired, refreshing search index...")
 
@@ -626,8 +617,6 @@ func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connStr
 	return nil
 }
 
-// refreshSearchIndex выполняет обновление материализованного представления
-// CONCURRENTLY позволяет обновлять индекс без блокировки чтения
 func (r *NotesRepository) refreshSearchIndex(ctx context.Context) error {
 	query := "REFRESH MATERIALIZED VIEW CONCURRENTLY note_search_index"
 
