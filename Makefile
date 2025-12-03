@@ -21,3 +21,11 @@ proto:
 		user_service/proto/user/v1/user.proto \
 		notes_service/proto/note/v1/note.proto \
 		notes_service/proto/block/v1/block.proto
+
+.PHONY: mock
+mock:
+	go generate ./...
+
+.PHONY: lint
+lint:
+	golangci-lint run ./...

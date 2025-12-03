@@ -1,13 +1,14 @@
 package repository
 
 import (
-	"backend/notes_service/internal/constants"
-	"backend/notes_service/internal/models"
-	"backend/pkg/store"
 	"context"
 	"database/sql"
 	"testing"
 	"time"
+
+	"backend/notes_service/internal/constants"
+	"backend/notes_service/internal/models"
+	"backend/pkg/store"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/lib/pq"
@@ -83,7 +84,11 @@ func TestBlocksRepository_CreateTextBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -110,7 +115,7 @@ func TestBlocksRepository_CreateTextBlock(t *testing.T) {
 		block, err := repo.CreateTextBlock(ctx, noteID, 1.0, userID)
 		assert.NoError(t, err)
 		assert.NotNil(t, block)
-		assert.Equal(t, blockID, block.BaseBlock.ID)
+		assert.Equal(t, blockID, block.ID)
 	})
 }
 
@@ -119,7 +124,11 @@ func TestBlocksRepository_CreateAttachmentBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -147,7 +156,7 @@ func TestBlocksRepository_CreateAttachmentBlock(t *testing.T) {
 		block, err := repo.CreateAttachmentBlock(ctx, noteID, 1.0, fileID, userID)
 		assert.NoError(t, err)
 		assert.NotNil(t, block)
-		assert.Equal(t, blockID, block.BaseBlock.ID)
+		assert.Equal(t, blockID, block.ID)
 	})
 }
 
@@ -156,7 +165,11 @@ func TestBlocksRepository_CreateCodeBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -183,7 +196,7 @@ func TestBlocksRepository_CreateCodeBlock(t *testing.T) {
 		block, err := repo.CreateCodeBlock(ctx, noteID, 1.0, userID)
 		assert.NoError(t, err)
 		assert.NotNil(t, block)
-		assert.Equal(t, blockID, block.BaseBlock.ID)
+		assert.Equal(t, blockID, block.ID)
 	})
 }
 
@@ -192,7 +205,11 @@ func TestBlocksRepository_UpdateCodeBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -227,7 +244,11 @@ func TestBlocksRepository_UpdateBlockText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -273,7 +294,11 @@ func TestBlocksRepository_UpdateBlockPosition(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -299,7 +324,11 @@ func TestBlocksRepository_DeleteBlock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -330,7 +359,11 @@ func TestBlocksRepository_GetBlockNoteID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -362,7 +395,11 @@ func TestBlocksRepository_GetBlocksByNoteID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -405,7 +442,11 @@ func TestBlocksRepository_GetBlocksByNoteIDForPositionCalc(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()

@@ -50,7 +50,11 @@ func TestUserRepository_CreateUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err) 
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -98,7 +102,11 @@ func TestUserRepository_GetUserByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err) 
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -146,7 +154,11 @@ func TestUserRepository_GetUserByEmail(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err) 
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -184,7 +196,11 @@ func TestUserRepository_DeleteUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err) 
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -215,7 +231,11 @@ func TestUserRepository_UpdateUser(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err) 
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()

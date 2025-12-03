@@ -1,13 +1,14 @@
 package repository
 
 import (
-	"backend/notes_service/internal/constants"
-	"backend/pkg/store"
 	"context"
 	"database/sql"
 	"errors"
 	"testing"
 	"time"
+
+	"backend/notes_service/internal/constants"
+	"backend/pkg/store"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -50,7 +51,11 @@ func TestNotesRepository_CreateNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -59,7 +64,7 @@ func TestNotesRepository_CreateNote(t *testing.T) {
 
 	t.Run("Success", func(t *testing.T) {
 		mock.ExpectBegin()
-		
+
 		rows := sqlmock.NewRows([]string{"id", "owner_id", "parent_note_id", "title", "icon_file_id", "is_archived", "is_shared", "share_uuid", "created_at", "updated_at", "deleted_at"}).
 			AddRow(1, userID, nil, "Новая заметка", nil, false, false, "uuid", now, now, nil)
 
@@ -96,7 +101,11 @@ func TestNotesRepository_GetNoteById(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -132,7 +141,11 @@ func TestNotesRepository_UpdateNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -168,7 +181,11 @@ func TestNotesRepository_DeleteNote(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -192,7 +209,11 @@ func TestNotesRepository_GetNotes(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -219,7 +240,11 @@ func TestNotesRepository_AddFavorite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -238,7 +263,11 @@ func TestNotesRepository_RemoveFavorite(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -257,7 +286,11 @@ func TestNotesRepository_CheckNoteOwnership(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -279,7 +312,7 @@ func TestNotesRepository_CheckNoteOwnership(t *testing.T) {
 		assert.NoError(t, err)
 		assert.False(t, isOwner)
 	})
-	
+
 	t.Run("NotFound", func(t *testing.T) {
 		mock.ExpectQuery(`SELECT owner_id FROM note`).WithArgs(noteID).WillReturnError(sql.ErrNoRows)
 		_, err := repo.CheckNoteOwnership(ctx, noteID, userID)
@@ -292,7 +325,11 @@ func TestNotesRepository_GetNoteByShareUUID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -301,9 +338,9 @@ func TestNotesRepository_GetNoteByShareUUID(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		rows := sqlmock.NewRows([]string{"id", "owner_id", "parent_note_id", "title", "icon_file_id", "is_archived", "is_shared", "share_uuid", "public_access_level", "created_at", "updated_at", "deleted_at"}).
 			AddRow(1, 1, nil, "Note", nil, false, true, shareUUID, "viewer", time.Now(), time.Now(), nil)
-		
+
 		mock.ExpectQuery(`SELECT (.+) FROM note`).WithArgs(shareUUID).WillReturnRows(rows)
-		
+
 		note, err := repo.GetNoteByShareUUID(ctx, shareUUID)
 		assert.NoError(t, err)
 		assert.Equal(t, shareUUID, *note.ShareUUID)

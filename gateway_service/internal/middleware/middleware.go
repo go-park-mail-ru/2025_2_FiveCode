@@ -123,7 +123,10 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 		var bodyBytes []byte
 		if r.Header.Get("Upgrade") == "" {
 			bodyBytes, _ = io.ReadAll(r.Body)
-			r.Body.Close()
+			err := r.Body.Close()
+			if err != nil {
+				log.Error().Err(err).Msg("failed to close request body")
+			}
 			r.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 		}
 

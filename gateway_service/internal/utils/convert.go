@@ -2,7 +2,6 @@ package utils
 
 import (
 	noteModels "backend/gateway_service/internal/notes/models"
-	shareModels "backend/gateway_service/internal/notes/models"
 	userModels "backend/gateway_service/internal/user/models"
 	blockPB "backend/notes_service/pkg/block/v1"
 	notePB "backend/notes_service/pkg/note/v1"
@@ -168,38 +167,38 @@ func MapProtoToUser(p *userPB.User) *userModels.User {
 	return u
 }
 
-func MapProtoRoleToModel(role sharePB.NoteRole) shareModels.NoteRole {
+func MapProtoRoleToModel(role sharePB.NoteRole) noteModels.NoteRole {
 	switch role {
 	case sharePB.NoteRole_NOTE_ROLE_OWNER:
-		return shareModels.RoleOwner
+		return noteModels.RoleOwner
 	case sharePB.NoteRole_NOTE_ROLE_VIEWER:
-		return shareModels.RoleViewer
+		return noteModels.RoleViewer
 	case sharePB.NoteRole_NOTE_ROLE_COMMENTER:
-		return shareModels.RoleCommenter
+		return noteModels.RoleCommenter
 	case sharePB.NoteRole_NOTE_ROLE_EDITOR:
-		return shareModels.RoleEditor
+		return noteModels.RoleEditor
 	default:
-		return shareModels.RoleViewer
+		return noteModels.RoleViewer
 	}
 }
 
-func MapModelRoleToProto(role shareModels.NoteRole) sharePB.NoteRole {
+func MapModelRoleToProto(role noteModels.NoteRole) sharePB.NoteRole {
 	switch role {
-	case shareModels.RoleOwner:
+	case noteModels.RoleOwner:
 		return sharePB.NoteRole_NOTE_ROLE_OWNER
-	case shareModels.RoleViewer:
+	case noteModels.RoleViewer:
 		return sharePB.NoteRole_NOTE_ROLE_VIEWER
-	case shareModels.RoleCommenter:
+	case noteModels.RoleCommenter:
 		return sharePB.NoteRole_NOTE_ROLE_COMMENTER
-	case shareModels.RoleEditor:
+	case noteModels.RoleEditor:
 		return sharePB.NoteRole_NOTE_ROLE_EDITOR
 	default:
 		return sharePB.NoteRole_NOTE_ROLE_UNSPECIFIED
 	}
 }
 
-func MapProtoToCollaborator(proto *sharePB.Collaborator) shareModels.Collaborator {
-	return shareModels.Collaborator{
+func MapProtoToCollaborator(proto *sharePB.Collaborator) noteModels.Collaborator {
+	return noteModels.Collaborator{
 		PermissionID: proto.PermissionId,
 		UserID:       proto.UserId,
 		Role:         MapProtoRoleToModel(proto.Role),
@@ -208,26 +207,26 @@ func MapProtoToCollaborator(proto *sharePB.Collaborator) shareModels.Collaborato
 	}
 }
 
-func MapProtoToCollaboratorResponse(proto *sharePB.CollaboratorResponse) *shareModels.CollaboratorResponse {
-	return &shareModels.CollaboratorResponse{
+func MapProtoToCollaboratorResponse(proto *sharePB.CollaboratorResponse) *noteModels.CollaboratorResponse {
+	return &noteModels.CollaboratorResponse{
 		PermissionID: proto.PermissionId,
 		Collaborator: MapProtoToCollaborator(proto.Collaborator),
 	}
 }
 
-func MapProtoToGetCollaboratorsResponse(proto *sharePB.GetCollaboratorsResponse) *shareModels.GetCollaboratorsResponse {
-	collaborators := make([]shareModels.Collaborator, len(proto.Collaborators))
+func MapProtoToGetCollaboratorsResponse(proto *sharePB.GetCollaboratorsResponse) *noteModels.GetCollaboratorsResponse {
+	collaborators := make([]noteModels.Collaborator, len(proto.Collaborators))
 	for i, c := range proto.Collaborators {
 		collaborators[i] = MapProtoToCollaborator(c)
 	}
 
-	var publicAccessLevel *shareModels.NoteRole
+	var publicAccessLevel *noteModels.NoteRole
 	if proto.PublicAccessLevel != nil {
 		role := MapProtoRoleToModel(*proto.PublicAccessLevel)
 		publicAccessLevel = &role
 	}
 
-	return &shareModels.GetCollaboratorsResponse{
+	return &noteModels.GetCollaboratorsResponse{
 		NoteID:             proto.NoteId,
 		OwnerID:            proto.OwnerId,
 		Collaborators:      collaborators,
@@ -236,14 +235,14 @@ func MapProtoToGetCollaboratorsResponse(proto *sharePB.GetCollaboratorsResponse)
 	}
 }
 
-func MapProtoToPublicAccessResponse(proto *sharePB.PublicAccessResponse) *shareModels.PublicAccessResponse {
-	var accessLevel *shareModels.NoteRole
+func MapProtoToPublicAccessResponse(proto *sharePB.PublicAccessResponse) *noteModels.PublicAccessResponse {
+	var accessLevel *noteModels.NoteRole
 	if proto.AccessLevel != nil {
 		role := MapProtoRoleToModel(*proto.AccessLevel)
 		accessLevel = &role
 	}
 
-	return &shareModels.PublicAccessResponse{
+	return &noteModels.PublicAccessResponse{
 		NoteID:      proto.NoteId,
 		AccessLevel: accessLevel,
 		ShareURL:    proto.ShareUrl,
@@ -251,26 +250,26 @@ func MapProtoToPublicAccessResponse(proto *sharePB.PublicAccessResponse) *shareM
 	}
 }
 
-func MapProtoToSharingSettingsResponse(proto *sharePB.SharingSettingsResponse) *shareModels.SharingSettingsResponse {
-	collaborators := make([]shareModels.Collaborator, len(proto.Collaborators))
+func MapProtoToSharingSettingsResponse(proto *sharePB.SharingSettingsResponse) *noteModels.SharingSettingsResponse {
+	collaborators := make([]noteModels.Collaborator, len(proto.Collaborators))
 	for i, c := range proto.Collaborators {
 		collaborators[i] = MapProtoToCollaborator(c)
 	}
 
-	var publicAccessLevel *shareModels.NoteRole
+	var publicAccessLevel *noteModels.NoteRole
 	if proto.PublicAccess.AccessLevel != nil {
 		role := MapProtoRoleToModel(*proto.PublicAccess.AccessLevel)
 		publicAccessLevel = &role
 	}
 
-	publicAccess := shareModels.PublicAccess{
+	publicAccess := noteModels.PublicAccess{
 		NoteID:      proto.PublicAccess.NoteId,
 		AccessLevel: publicAccessLevel,
 		ShareURL:    proto.PublicAccess.ShareUrl,
 		UpdatedAt:   timestamppb.Now().AsTime(),
 	}
 
-	return &shareModels.SharingSettingsResponse{
+	return &noteModels.SharingSettingsResponse{
 		NoteID:             proto.NoteId,
 		OwnerID:            proto.OwnerId,
 		PublicAccess:       publicAccess,
@@ -280,8 +279,8 @@ func MapProtoToSharingSettingsResponse(proto *sharePB.SharingSettingsResponse) *
 	}
 }
 
-func MapProtoToNoteAccessInfo(proto *sharePB.NoteAccessResponse) shareModels.NoteAccessInfo {
-	return shareModels.NoteAccessInfo{
+func MapProtoToNoteAccessInfo(proto *sharePB.NoteAccessResponse) noteModels.NoteAccessInfo {
+	return noteModels.NoteAccessInfo{
 		HasAccess:  proto.HasAccess,
 		Role:       MapProtoRoleToModel(proto.Role),
 		IsOwner:    proto.IsOwner,
@@ -290,8 +289,8 @@ func MapProtoToNoteAccessInfo(proto *sharePB.NoteAccessResponse) shareModels.Not
 	}
 }
 
-func MapProtoToActivateAccessResponse(proto *sharePB.ActivateAccessByLinkResponse) *shareModels.ActivateAccessResponse {
-	return &shareModels.ActivateAccessResponse{
+func MapProtoToActivateAccessResponse(proto *sharePB.ActivateAccessByLinkResponse) *noteModels.ActivateAccessResponse {
+	return &noteModels.ActivateAccessResponse{
 		NoteID:        proto.NoteId,
 		AccessGranted: proto.AccessGranted,
 		AccessInfo:    MapProtoToNoteAccessInfo(proto.AccessInfo),

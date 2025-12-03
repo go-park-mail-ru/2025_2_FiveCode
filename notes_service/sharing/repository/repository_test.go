@@ -15,10 +15,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type testStoreDB struct {
-	*sql.DB
-}
-
 func (d *dbWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (store.Tx, error) {
 	return nil, nil
 }
@@ -51,7 +47,11 @@ func TestSharingRepository_AddCollaborator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -83,7 +83,11 @@ func TestSharingRepository_GetCollaboratorsByNoteID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -109,7 +113,11 @@ func TestSharingRepository_GetCollaboratorByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -143,7 +151,11 @@ func TestSharingRepository_UpdateCollaboratorRole(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -174,7 +186,11 @@ func TestSharingRepository_RemoveCollaborator(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -204,7 +220,11 @@ func TestSharingRepository_CheckCollaboratorExists(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -225,7 +245,11 @@ func TestSharingRepository_SetPublicAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -256,7 +280,11 @@ func TestSharingRepository_GetPublicAccess(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -291,7 +319,11 @@ func TestSharingRepository_GetNoteOwnerID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -309,7 +341,11 @@ func TestSharingRepository_GetNoteOwnerID(t *testing.T) {
 func TestSharingRepository_CheckNoteAccess(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := NewSharingRepository(&dbWrapper{DB: db})
 	ctx := context.Background()
@@ -389,7 +425,11 @@ func TestSharingRepository_IsNoteOwner(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -410,7 +450,11 @@ func TestSharingRepository_GetUserPermission(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -442,7 +486,11 @@ func TestSharingRepository_CanUserShare(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
@@ -463,7 +511,11 @@ func TestSharingRepository_UpdateIsSharedFlag(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := newTestRepo(db)
 	ctx := context.Background()

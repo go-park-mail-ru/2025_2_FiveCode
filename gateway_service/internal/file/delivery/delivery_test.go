@@ -1,9 +1,6 @@
 package delivery
 
 import (
-	"backend/gateway_service/internal/constants"
-	"backend/gateway_service/internal/file/delivery/mock"
-	"backend/gateway_service/internal/file/models"
 	"bytes"
 	"errors"
 	"fmt"
@@ -11,6 +8,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	"backend/gateway_service/internal/constants"
+	"backend/gateway_service/internal/file/delivery/mock"
+	"backend/gateway_service/internal/file/models"
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
@@ -28,8 +29,10 @@ func TestFileDelivery_UploadFile(t *testing.T) {
 		body := new(bytes.Buffer)
 		writer := multipart.NewWriter(body)
 		part, _ := writer.CreateFormFile("file", "test.txt")
-		part.Write([]byte("test content"))
-		writer.Close()
+		_, err := part.Write([]byte("test content"))
+		assert.NoError(t, err)
+		err = writer.Close()
+		assert.NoError(t, err)
 
 		req, _ := http.NewRequest(http.MethodPost, "/upload", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -46,7 +49,8 @@ func TestFileDelivery_UploadFile(t *testing.T) {
 	t.Run("MissingFile", func(t *testing.T) {
 		body := new(bytes.Buffer)
 		writer := multipart.NewWriter(body)
-		writer.Close()
+		err := writer.Close()
+		assert.NoError(t, err)
 
 		req, _ := http.NewRequest(http.MethodPost, "/upload", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())
@@ -61,8 +65,10 @@ func TestFileDelivery_UploadFile(t *testing.T) {
 		body := new(bytes.Buffer)
 		writer := multipart.NewWriter(body)
 		part, _ := writer.CreateFormFile("file", "test.txt")
-		part.Write([]byte("test content"))
-		writer.Close()
+		_, err := part.Write([]byte("test content"))
+		assert.NoError(t, err)
+		err = writer.Close()
+		assert.NoError(t, err)
 
 		req, _ := http.NewRequest(http.MethodPost, "/upload", body)
 		req.Header.Set("Content-Type", writer.FormDataContentType())

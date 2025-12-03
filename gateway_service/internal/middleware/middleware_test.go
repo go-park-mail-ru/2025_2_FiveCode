@@ -1,8 +1,6 @@
 package middleware
 
 import (
-	"backend/gateway_service/internal/config"
-	"backend/gateway_service/internal/middleware/mock"
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
@@ -15,6 +13,9 @@ import (
 	"net/http/httptest"
 	"testing"
 	"time"
+
+	"backend/gateway_service/internal/config"
+	"backend/gateway_service/internal/middleware/mock"
 
 	"github.com/golang/mock/gomock"
 	"github.com/gorilla/mux"
@@ -156,7 +157,8 @@ func TestAccessLogMiddleware(t *testing.T) {
 
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("ok"))
+		_, err := w.Write([]byte("ok"))
+		assert.NoError(t, err)
 	})
 
 	req := httptest.NewRequest("GET", "/", nil)

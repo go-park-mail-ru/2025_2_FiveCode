@@ -1,12 +1,13 @@
 package repository
 
 import (
-	"backend/gateway_service/internal/constants"
 	"context"
 	"database/sql"
 	"errors"
 	"testing"
 	"time"
+
+	"backend/gateway_service/internal/constants"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -17,7 +18,11 @@ func TestFileRepository_SaveFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := NewFileRepository(db, nil)
 	ctx := context.Background()
@@ -72,7 +77,11 @@ func TestFileRepository_GetFileByID(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := NewFileRepository(db, nil)
 	ctx := context.Background()
@@ -117,7 +126,11 @@ func TestFileRepository_DeleteFile(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	repo := NewFileRepository(db, nil)
 	ctx := context.Background()

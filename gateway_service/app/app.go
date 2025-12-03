@@ -185,7 +185,7 @@ func (a *App) mustConnectGrpc(serviceName string) *grpc.ClientConn {
 
 	a.Logger.Info().Str("service", serviceName).Str("addr", addr).Msg("connecting to gRPC service")
 
-	conn, err := grpc.Dial(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	conn, err := grpc.NewClient(addr, grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		a.Logger.Fatal().Err(err).Msgf("failed to connect to %s", serviceName)
 	}

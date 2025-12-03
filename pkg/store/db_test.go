@@ -13,7 +13,11 @@ func TestDBWrapper_QueryRowContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
@@ -32,7 +36,11 @@ func TestDBWrapper_ExecContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
@@ -48,7 +56,11 @@ func TestDBWrapper_QueryContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
@@ -58,7 +70,11 @@ func TestDBWrapper_QueryContext(t *testing.T) {
 
 	resRows, err := wrapper.QueryContext(ctx, "SELECT id")
 	assert.NoError(t, err)
-	defer resRows.Close()
+	defer func() {
+		if err := resRows.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 }
 
 func TestDBWrapper_BeginTx(t *testing.T) {
@@ -66,7 +82,11 @@ func TestDBWrapper_BeginTx(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
@@ -83,7 +103,11 @@ func TestTxWrapper_QueryRowContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	mock.ExpectBegin()
 	tx, _ := db.Begin()
@@ -104,7 +128,11 @@ func TestTxWrapper_ExecContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	mock.ExpectBegin()
 	tx, _ := db.Begin()
@@ -122,7 +150,11 @@ func TestTxWrapper_QueryContext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	mock.ExpectBegin()
 	tx, _ := db.Begin()
@@ -134,7 +166,11 @@ func TestTxWrapper_QueryContext(t *testing.T) {
 
 	resRows, err := wrapper.QueryContext(ctx, "SELECT id")
 	assert.NoError(t, err)
-	defer resRows.Close()
+	defer func() {
+		if err := resRows.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 }
 
 func TestTxWrapper_Commit(t *testing.T) {
@@ -142,7 +178,11 @@ func TestTxWrapper_Commit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	mock.ExpectBegin()
 	tx, _ := db.Begin()
@@ -159,7 +199,11 @@ func TestTxWrapper_Rollback(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
 	}
-	defer db.Close()
+	defer func() {
+		if err := db.Close(); err != nil {
+			t.Logf("failed to close rows: %v", err)
+		}
+	}()
 
 	mock.ExpectBegin()
 	tx, _ := db.Begin()

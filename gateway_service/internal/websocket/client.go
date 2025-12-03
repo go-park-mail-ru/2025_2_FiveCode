@@ -41,13 +41,22 @@ func NewClient(conn *websocket.Conn, hub *Hub, userID int, logger *zerolog.Logge
 func (c *Client) readPump() {
 	defer func() {
 		c.hub.unregister <- c
-		c.conn.Close()
+		err := c.conn.Close()
+		if err != nil {
+			c.logger.Error().Err(err).Msg("failed to close websocket connection")
+		}
 	}()
 
-	c.conn.SetReadDeadline(time.Now().Add(pongWait))
+	if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+		c.logger.Error().Err(err).Msg("failed to set read deadline")
+		return
+	}
 	c.conn.SetReadLimit(maxMessageSize)
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(pongWait))
+		if err := c.conn.SetReadDeadline(time.Now().Add(pongWait)); err != nil {
+			c.logger.Error().Err(err).Msg("failed to set read deadline in pong handler")
+			return err
+		}
 		return nil
 	})
 
@@ -75,15 +84,22 @@ func (c *Client) writePump() {
 	ticker := time.NewTicker(pingPeriod)
 	defer func() {
 		ticker.Stop()
-		c.conn.Close()
+		err := c.conn.Close()
+		if err != nil {
+			c.logger.Error().Err(err).Msg("failed to close websocket connection")
+		}
 	}()
 
 	for {
 		select {
 		case message, ok := <-c.send:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				return
+			}
 			if !ok {
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				if err := c.conn.WriteMessage(websocket.CloseMessage, []byte{}); err != nil {
+					return
+				}
 				return
 			}
 
@@ -91,12 +107,21 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			_, err = w.Write(message)
+			if err != nil {
+				return
+			}
 
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				_, err = w.Write([]byte{'\n'})
+				if err != nil {
+					return
+				}
+				_, err = w.Write(<-c.send)
+				if err != nil {
+					return
+				}
 			}
 
 			if err := w.Close(); err != nil {
@@ -104,7 +129,9 @@ func (c *Client) writePump() {
 			}
 
 		case <-ticker.C:
-			c.conn.SetWriteDeadline(time.Now().Add(writeWait))
+			if err := c.conn.SetWriteDeadline(time.Now().Add(writeWait)); err != nil {
+				return
+			}
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -114,7 +141,6 @@ func (c *Client) writePump() {
 
 func (c *Client) handleMessage(msg *ClientMessage) {
 	switch msg.Type {
-
 	default:
 		c.logger.Warn().
 			Str("message_type", string(msg.Type)).

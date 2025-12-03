@@ -13,7 +13,7 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func generateToken(sessionID string, secretKey []byte, timestamp int64) string {
+func generateToken(sessionID string, secretKey []byte, timestamp int64, t *testing.T) string {
 	sessionIDBytes := make([]byte, 16)
 	copy(sessionIDBytes, []byte(sessionID))
 
@@ -21,7 +21,8 @@ func generateToken(sessionID string, secretKey []byte, timestamp int64) string {
 	binary.BigEndian.PutUint64(timestampBytes, uint64(timestamp))
 
 	nonce := make([]byte, 8)
-	io.ReadFull(rand.Reader, nonce)
+	_, err := io.ReadFull(rand.Reader, nonce)
+	assert.NoError(t, err)
 
 	plaintext := make([]byte, 32)
 	copy(plaintext[0:16], sessionIDBytes)
@@ -32,7 +33,8 @@ func generateToken(sessionID string, secretKey []byte, timestamp int64) string {
 	gcm, _ := cipher.NewGCM(block)
 
 	gcmNonce := make([]byte, gcm.NonceSize())
-	io.ReadFull(rand.Reader, gcmNonce)
+	_, err = io.ReadFull(rand.Reader, gcmNonce)
+	assert.NoError(t, err)
 
 	ciphertext := gcm.Seal(gcmNonce, gcmNonce, plaintext, nil)
 	return base64.URLEncoding.EncodeToString(ciphertext)
@@ -43,20 +45,20 @@ func TestValidateCSRFToken_Full(t *testing.T) {
 	sessionID := "session_123"
 
 	t.Run("Valid Token", func(t *testing.T) {
-		token := generateToken(sessionID, secretKey, time.Now().Unix())
+		token := generateToken(sessionID, secretKey, time.Now().Unix(), t)
 		err := ValidateCSRFToken(token, sessionID, secretKey, 60)
 		assert.NoError(t, err)
 	})
 
 	t.Run("Expired Token", func(t *testing.T) {
 		expiredTime := time.Now().Add(-61 * time.Minute).Unix()
-		token := generateToken(sessionID, secretKey, expiredTime)
+		token := generateToken(sessionID, secretKey, expiredTime, t)
 		err := ValidateCSRFToken(token, sessionID, secretKey, 60)
 		assert.Equal(t, ErrTokenExpired, err)
 	})
 
 	t.Run("Session Mismatch", func(t *testing.T) {
-		token := generateToken("other_session", secretKey, time.Now().Unix())
+		token := generateToken("other_session", secretKey, time.Now().Unix(), t)
 		err := ValidateCSRFToken(token, sessionID, secretKey, 60)
 		assert.Equal(t, ErrSessionMismatch, err)
 	})
