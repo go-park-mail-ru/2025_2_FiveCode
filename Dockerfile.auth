@@ -17,7 +17,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/bin/auth-service .
-COPY --from=builder /app/config/ ./config/
+COPY config ./config/
 
 EXPOSE 50051
 CMD ["./auth-service"]

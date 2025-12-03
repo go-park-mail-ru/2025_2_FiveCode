@@ -16,7 +16,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/bin/note-service .
-COPY --from=builder /app/config/ ./config/
+COPY config ./config/
 COPY --from=builder /app/notes_service/db/migrations ./db/migrations
 
 EXPOSE 50053

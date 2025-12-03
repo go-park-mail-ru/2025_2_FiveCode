@@ -4,7 +4,7 @@ import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/constants"
 	"backend/gateway_service/internal/file/models"
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"context"
 	"fmt"
 	"io"

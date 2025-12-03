@@ -1,7 +1,7 @@
 package store
 
 import (
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"context"
 	"database/sql"
 	"errors"

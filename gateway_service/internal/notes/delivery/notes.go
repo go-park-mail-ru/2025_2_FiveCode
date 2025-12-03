@@ -5,7 +5,7 @@ import (
 	"backend/gateway_service/internal/middleware"
 	"backend/gateway_service/internal/notes/models"
 	"backend/gateway_service/internal/websocket"
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"context"
 	"encoding/json"
 	"net/http"

@@ -10,7 +10,7 @@ import (
 
 	"backend/gateway_service/internal/config"
 	"backend/gateway_service/internal/websocket"
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"backend/gateway_service/router"
 	"backend/pkg/store"
 

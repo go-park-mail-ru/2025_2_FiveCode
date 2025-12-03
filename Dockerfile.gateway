@@ -8,6 +8,10 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 COPY pkg ./pkg
 COPY gateway_service ./gateway_service
 
+COPY auth_service/pkg ./auth_service/pkg
+COPY notes_service/pkg ./notes_service/pkg
+COPY user_service/pkg ./user_service/pkg
+
 RUN --mount=type=cache,target=/root/.cache/go-build \
     --mount=type=cache,target=/go/pkg/mod \
     CGO_ENABLED=0 go build -o /app/bin/gateway ./gateway_service/cmd/main.go
@@ -16,7 +20,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/bin/gateway .
-COPY --from=builder /app/config/ ./config/
+COPY config ./config/
 COPY --from=builder /app/gateway_service/db/migrations ./db/migrations
 
 EXPOSE 8080

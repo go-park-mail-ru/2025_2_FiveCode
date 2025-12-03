@@ -4,7 +4,7 @@ import (
 	"backend/gateway_service/internal/apiutils"
 	"backend/gateway_service/internal/user/models"
 	"backend/gateway_service/internal/validation"
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"context"
 	"encoding/json"
 	"net/http"

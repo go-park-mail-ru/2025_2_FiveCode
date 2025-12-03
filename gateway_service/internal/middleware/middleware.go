@@ -5,7 +5,7 @@ import (
 	"backend/gateway_service/internal/config"
 	"backend/gateway_service/internal/constants"
 	"backend/gateway_service/internal/utils"
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"backend/pkg/metrics"
 	"bufio"
 	"bytes"

@@ -5,7 +5,7 @@ import (
 	"backend/gateway_service/internal/middleware"
 	"backend/gateway_service/internal/user/models"
 	"backend/gateway_service/internal/validation"
-	"backend/gateway_service/logger"
+	"backend/pkg/logger"
 	"context"
 	"encoding/json"
 	"errors"

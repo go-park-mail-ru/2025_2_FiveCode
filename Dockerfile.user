@@ -16,7 +16,7 @@ FROM alpine:latest
 WORKDIR /app
 
 COPY --from=builder /app/bin/user-service .
-COPY --from=builder /app/config/ ./config/
+COPY config ./config/
 COPY --from=builder /app/user_service/db/migrations ./db/migrations
 
 EXPOSE 50052

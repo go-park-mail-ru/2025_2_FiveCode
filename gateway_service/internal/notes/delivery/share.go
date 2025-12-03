@@ -1,19 +1,20 @@
 package delivery
 
 import (
-	"backend/gateway_service/internal/apiutils"
-	"backend/gateway_service/internal/middleware"
-	"backend/gateway_service/internal/notes/models"
-	"backend/gateway_service/logger"
 	"encoding/json"
 	"net/http"
 	"strconv"
+
+	"backend/gateway_service/internal/apiutils"
+	"backend/gateway_service/internal/middleware"
+	"backend/gateway_service/internal/notes/models"
+	"backend/pkg/logger"
 
 	"github.com/gorilla/mux"
 )
 
 type AddCollaboratorRequest struct {
-	Email string          `json:"email"` // БЫЛО: UserID uint64
+	Email string          `json:"email"`
 	Role  models.NoteRole `json:"role"`
 }
 
