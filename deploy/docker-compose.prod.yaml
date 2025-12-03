@@ -25,7 +25,7 @@ services:
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
 
   gateway:
-    image: ${DOCKERHUB_USERNAME}/goose-gateway:${IMAGE_TAG}
+    image: ${DOCKER_USERNAME}/goose-gateway:${IMAGE_TAG}
     container_name: goose_gateway
     restart: always
     env_file: .env
@@ -44,7 +44,7 @@ services:
       - goose_network
 
   auth:
-    image: ${DOCKERHUB_USERNAME}/goose-auth:${IMAGE_TAG}
+    image: ${DOCKER_USERNAME}/goose-auth:${IMAGE_TAG}
     container_name: goose_auth
     restart: always
     env_file: .env
@@ -55,7 +55,7 @@ services:
       - goose_network
 
   user:
-    image: ${DOCKERHUB_USERNAME}/goose-user:${IMAGE_TAG}
+    image: ${DOCKER_USERNAME}/goose-user:${IMAGE_TAG}
     container_name: goose_user
     restart: always
     env_file: .env
@@ -68,7 +68,7 @@ services:
       - goose_network
 
   notes:
-    image: ${DOCKERHUB_USERNAME}/goose-notes:${IMAGE_TAG}
+    image: ${DOCKER_USERNAME}/goose-notes:${IMAGE_TAG}
     container_name: goose_notes
     restart: always
     env_file: .env

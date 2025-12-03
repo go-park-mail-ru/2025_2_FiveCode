@@ -2,11 +2,15 @@ FROM golang:1.25-alpine AS builder
 WORKDIR /app
 
 COPY go.mod go.sum ./
-RUN go mod download
+RUN --mount=type=cache,target=/go/pkg/mod \
+    go mod download
 
-COPY . .
+COPY pkg ./pkg
+COPY notes_service ./notes_service
 
-RUN CGO_ENABLED=0 go build -o /app/bin/note-service ./notes_service/cmd/main.go
+RUN --mount=type=cache,target=/root/.cache/go-build \
+    --mount=type=cache,target=/go/pkg/mod \
+    CGO_ENABLED=0 go build -o /app/bin/note-service ./notes_service/cmd/main.go
 
 FROM alpine:latest
 WORKDIR /app
