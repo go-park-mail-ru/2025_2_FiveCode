@@ -3,6 +3,8 @@ cors:
     - "http://localhost:8030"
     - "http://127.0.0.1:8030"
     - "http://89.208.210.115:8030"
+    - "https://goose-notes.duckdns.org"
+    - "http://goose-notes.duckdns.org"
 
 cookie:
   session_duration: 30

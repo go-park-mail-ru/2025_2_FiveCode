@@ -31,6 +31,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: "postgres"
+      DB_NAME: "files_db"
       REDIS_HOST: "redis"
       MINIO_ENDPOINT: "minio:9000"
       SERVICES_AUTH_GRPC_HOST: "auth"
@@ -61,6 +62,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: "postgres"
+      DB_NAME: "user_db"
     depends_on:
       postgres:
         condition: service_healthy
@@ -74,6 +76,7 @@ services:
     env_file: .env
     environment:
       DB_HOST: "postgres"
+      DB_NAME: "notes_db"
     depends_on:
       postgres:
         condition: service_healthy
