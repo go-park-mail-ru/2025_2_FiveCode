@@ -6,6 +6,7 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=usecase.go -destination=mock/mock_deps.go -package=mock
 type NotesRepository interface {
 	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)
 	CreateNote(ctx context.Context, userID uint64, parentNoteID *uint64) (*models.Note, error)

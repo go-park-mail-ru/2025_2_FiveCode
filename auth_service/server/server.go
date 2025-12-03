@@ -13,7 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
-//go:generate mockgen -source=delivery.go -destination=../mock/mock_delivery.go -package=mock
+//go:generate mockgen -source=server.go -destination=../mock/mock_usecase.go -package=mock
 type AuthUsecase interface {
 	CreateSession(ctx context.Context, userID uint64) (string, error)
 	Logout(ctx context.Context, sessionID string) error
@@ -67,7 +67,6 @@ func (s *Server) Logout(ctx context.Context, req *pb.LogoutRequest) (*emptypb.Em
 
 func (s *Server) GetUserIDBySession(ctx context.Context, req *pb.GetUserIDBySessionRequest) (*pb.GetUserIDBySessionResponse, error) {
 	userID, err := s.Usecase.GetUserIDBySession(ctx, req.GetSessionId())
-
 	if err != nil {
 		if errors.Is(err, constants.ErrInvalidSession) {
 			return &pb.GetUserIDBySessionResponse{

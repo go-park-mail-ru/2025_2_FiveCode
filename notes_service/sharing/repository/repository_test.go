@@ -1,13 +1,15 @@
 package repository
 
 import (
+	"context"
+	"database/sql"
+	"errors"
+	"testing"
+	"time"
+
 	"backend/notes_service/internal/constants"
 	"backend/notes_service/internal/models"
 	"backend/pkg/store"
-	"context"
-	"database/sql"
-	"testing"
-	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/stretchr/testify/assert"
@@ -17,32 +19,31 @@ type testStoreDB struct {
 	*sql.DB
 }
 
-func (d *testStoreDB) BeginTx(ctx context.Context, opts *sql.TxOptions) (store.Tx, error) {
-	return d.DB.BeginTx(ctx, opts)
+func (d *dbWrapper) BeginTx(ctx context.Context, opts *sql.TxOptions) (store.Tx, error) {
+	return nil, nil
 }
 
-func (d *testStoreDB) GetSQLDB() *sql.DB {
-	return d.DB
+type dbWrapper struct {
+	*sql.DB
 }
 
-func (d *testStoreDB) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
+func (d *dbWrapper) QueryRowContext(ctx context.Context, query string, args ...interface{}) *sql.Row {
 	return d.DB.QueryRowContext(ctx, query, args...)
 }
 
-func (d *testStoreDB) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
+func (d *dbWrapper) ExecContext(ctx context.Context, query string, args ...interface{}) (sql.Result, error) {
 	return d.DB.ExecContext(ctx, query, args...)
 }
 
-func (d *testStoreDB) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
+func (d *dbWrapper) QueryContext(ctx context.Context, query string, args ...interface{}) (*sql.Rows, error) {
 	return d.DB.QueryContext(ctx, query, args...)
 }
 
-func (d *testStoreDB) Close() error {
-	return d.DB.Close()
-}
+func (d *dbWrapper) Close() error      { return d.DB.Close() }
+func (d *dbWrapper) GetSQLDB() *sql.DB { return d.DB }
 
 func newTestRepo(db *sql.DB) *SharingRepository {
-	return NewSharingRepository(&testStoreDB{DB: db})
+	return NewSharingRepository(&dbWrapper{DB: db})
 }
 
 func TestSharingRepository_AddCollaborator(t *testing.T) {
@@ -54,7 +55,7 @@ func TestSharingRepository_AddCollaborator(t *testing.T) {
 
 	repo := newTestRepo(db)
 	ctx := context.Background()
-	
+
 	permission := &models.NotePermission{
 		NoteID:    1,
 		GrantedBy: 1,
@@ -264,7 +265,7 @@ func TestSharingRepository_GetPublicAccess(t *testing.T) {
 	t.Run("Success", func(t *testing.T) {
 		rows := sqlmock.NewRows([]string{"public_access_level", "share_uuid"}).
 			AddRow("viewer", "uuid")
-		
+
 		mock.ExpectQuery(`SELECT public_access_level, share_uuid`).
 			WithArgs(noteID).
 			WillReturnRows(rows)
@@ -307,54 +308,79 @@ func TestSharingRepository_GetNoteOwnerID(t *testing.T) {
 
 func TestSharingRepository_CheckNoteAccess(t *testing.T) {
 	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatalf("an error '%s' was not expected when opening a database connection", err)
-	}
+	assert.NoError(t, err)
 	defer db.Close()
 
-	repo := newTestRepo(db)
+	repo := NewSharingRepository(&dbWrapper{DB: db})
 	ctx := context.Background()
-	noteID := uint64(1)
-	userID := uint64(2)
-
-	t.Run("Success_Editor", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"owner_id", "role"}).
-			AddRow(1, "editor")
-
-		mock.ExpectQuery(`SELECT (.+) FROM note n`).
-			WithArgs(noteID, userID).
-			WillReturnRows(rows)
-
-		access, err := repo.CheckNoteAccess(ctx, noteID, userID)
-		assert.NoError(t, err)
-		assert.True(t, access.HasAccess)
-		assert.True(t, access.CanEdit)
-		assert.Equal(t, models.RoleEditor, access.Role)
-	})
+	noteID := uint64(10)
+	userID := uint64(1)
 
 	t.Run("Success_Owner", func(t *testing.T) {
-		rows := sqlmock.NewRows([]string{"owner_id", "role"}).
-			AddRow(userID, nil)
+		mock.ExpectQuery(`SELECT parent_note_id FROM note WHERE id = \$1 AND deleted_at IS NULL`).
+			WithArgs(noteID).
+			WillReturnRows(sqlmock.NewRows([]string{"parent_note_id"}).AddRow(nil))
 
-		mock.ExpectQuery(`SELECT (.+) FROM note n`).
+		mock.ExpectQuery(`SELECT n.owner_id, np.role FROM note n`).
 			WithArgs(noteID, userID).
-			WillReturnRows(rows)
+			WillReturnRows(sqlmock.NewRows([]string{"owner_id", "role"}).AddRow(userID, nil))
 
-		access, err := repo.CheckNoteAccess(ctx, noteID, userID)
+		info, err := repo.CheckNoteAccess(ctx, noteID, userID)
 		assert.NoError(t, err)
-		assert.True(t, access.IsOwner)
-		assert.True(t, access.HasAccess)
-		assert.True(t, access.CanEdit)
+		assert.True(t, info.IsOwner)
+		assert.True(t, info.HasAccess)
+		assert.True(t, info.CanEdit)
+	})
+
+	t.Run("Success_Editor", func(t *testing.T) {
+		ownerID := uint64(2)
+		mock.ExpectQuery(`SELECT parent_note_id FROM note WHERE id = \$1 AND deleted_at IS NULL`).
+			WithArgs(noteID).
+			WillReturnRows(sqlmock.NewRows([]string{"parent_note_id"}).AddRow(nil))
+		mock.ExpectQuery(`SELECT n.owner_id, np.role FROM note n`).
+			WithArgs(noteID, userID).
+			WillReturnRows(sqlmock.NewRows([]string{"owner_id", "role"}).AddRow(ownerID, "editor"))
+
+		info, err := repo.CheckNoteAccess(ctx, noteID, userID)
+		assert.NoError(t, err)
+		assert.False(t, info.IsOwner)
+		assert.True(t, info.HasAccess)
+		assert.Equal(t, models.RoleEditor, info.Role)
+		assert.True(t, info.CanEdit)
+	})
+
+	t.Run("Success_SubNote", func(t *testing.T) {
+		parentID := uint64(99)
+		mock.ExpectQuery(`SELECT parent_note_id FROM note WHERE id = \$1 AND deleted_at IS NULL`).
+			WithArgs(noteID).
+			WillReturnRows(sqlmock.NewRows([]string{"parent_note_id"}).AddRow(parentID))
+
+		mock.ExpectQuery(`SELECT n.owner_id, np.role FROM note n`).
+			WithArgs(parentID, userID).
+			WillReturnRows(sqlmock.NewRows([]string{"owner_id", "role"}).AddRow(userID, nil))
+
+		info, err := repo.CheckNoteAccess(ctx, noteID, userID)
+		assert.NoError(t, err)
+		assert.True(t, info.HasAccess)
 	})
 
 	t.Run("NotFound", func(t *testing.T) {
-		mock.ExpectQuery(`SELECT (.+) FROM note n`).
-			WithArgs(noteID, userID).
+		mock.ExpectQuery(`SELECT parent_note_id FROM note`).
+			WithArgs(noteID).
 			WillReturnError(sql.ErrNoRows)
 
-		access, err := repo.CheckNoteAccess(ctx, noteID, userID)
+		info, err := repo.CheckNoteAccess(ctx, noteID, userID)
 		assert.NoError(t, err)
-		assert.False(t, access.HasAccess)
+		assert.False(t, info.HasAccess)
+	})
+
+	t.Run("DBError", func(t *testing.T) {
+		mock.ExpectQuery(`SELECT parent_note_id FROM note`).
+			WithArgs(noteID).
+			WillReturnError(errors.New("db error"))
+
+		_, err := repo.CheckNoteAccess(ctx, noteID, userID)
+		assert.Error(t, err)
 	})
 }
 
@@ -394,9 +420,9 @@ func TestSharingRepository_GetUserPermission(t *testing.T) {
 	t.Run("Found", func(t *testing.T) {
 		rows := sqlmock.NewRows([]string{"note_permission_id", "note_id", "granted_by", "granted_to", "role", "created_at", "updated_at"}).
 			AddRow(1, noteID, 1, userID, "viewer", time.Now(), time.Now())
-		
+
 		mock.ExpectQuery(`SELECT (.+) FROM note_permission`).WithArgs(noteID, userID).WillReturnRows(rows)
-		
+
 		perm, err := repo.GetUserPermission(ctx, noteID, userID)
 		assert.NoError(t, err)
 		assert.NotNil(t, perm)
@@ -404,7 +430,7 @@ func TestSharingRepository_GetUserPermission(t *testing.T) {
 
 	t.Run("NotFound", func(t *testing.T) {
 		mock.ExpectQuery(`SELECT (.+) FROM note_permission`).WithArgs(noteID, userID).WillReturnError(sql.ErrNoRows)
-		
+
 		perm, err := repo.GetUserPermission(ctx, noteID, userID)
 		assert.NoError(t, err)
 		assert.Nil(t, perm)

@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/timestamppb"
 )
 
+//go:generate mockgen -source=server.go -destination=../mock/mock_server_usecase.go -package=mock
 type UserUsecase interface {
 	CreateUser(ctx context.Context, email, password, username string) (*models.User, error)
 	GetUserByID(ctx context.Context, userID uint64) (*models.User, error)

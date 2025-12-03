@@ -183,6 +183,7 @@ func AccessLogMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+//go:generate mockgen -source=middleware.go -destination=mock/mock_session.go -package=mock
 type SessionValidator interface {
 	ValidateSession(ctx context.Context, sessionID string) (uint64, error)
 }

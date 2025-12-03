@@ -13,6 +13,7 @@ import (
 	pkgErrors "github.com/pkg/errors"
 )
 
+//go:generate mockgen -source=delivery.go -destination=mock/mock_delivery.go -package=mock
 type AuthUsecase interface {
 	Login(ctx context.Context, email, password string) (string, *models.User, error)
 	Register(ctx context.Context, email, password string) (string, *models.User, error)

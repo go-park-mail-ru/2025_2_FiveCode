@@ -1,29 +1,34 @@
 package usecase
 
 import (
-	"backend/notes_service/internal/models"
-	"backend/notes_service/sharing/mock"
 	"context"
 	"errors"
 	"testing"
+
+	"backend/notes_service/internal/models"
+	"backend/notes_service/sharing/mock"
 
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/assert"
 )
 
-func TestSharingUsecase_CheckNoteAccess(t *testing.T) {
+func setupTest(t *testing.T) (*gomock.Controller, *mock.MockSharingRepository, *mock.MockNotesRepository, *SharingUsecase) {
 	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
 	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
 	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
 	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
+	return ctrl, mockSharingRepo, mockNotesRepo, usecase
+}
 
+func TestSharingUsecase_CheckNoteAccess(t *testing.T) {
 	ctx := context.Background()
 	noteID := uint64(10)
 	userID := uint64(1)
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
 
 		res, err := usecase.CheckNoteAccess(ctx, noteID, userID)
@@ -32,6 +37,9 @@ func TestSharingUsecase_CheckNoteAccess(t *testing.T) {
 	})
 
 	t.Run("Error", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, userID).Return(nil, errors.New("repo error"))
 
 		_, err := usecase.CheckNoteAccess(ctx, noteID, userID)
@@ -40,13 +48,6 @@ func TestSharingUsecase_CheckNoteAccess(t *testing.T) {
 }
 
 func TestSharingUsecase_AddCollaborator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
@@ -55,6 +56,10 @@ func TestSharingUsecase_AddCollaborator(t *testing.T) {
 	permission := &models.NotePermission{PermissionID: 5, GrantedTo: targetUserID, Role: role}
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, targetUserID).Return(false, nil)
 		mockSharingRepo.EXPECT().CheckCollaboratorExists(ctx, noteID, targetUserID).Return(false, nil)
@@ -67,7 +72,23 @@ func TestSharingUsecase_AddCollaborator(t *testing.T) {
 		assert.Equal(t, permission, res)
 	})
 
+	t.Run("IsSubNote", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		parentID := uint64(99)
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(&parentID, nil)
+
+		_, err := usecase.AddCollaborator(ctx, noteID, currentUserID, targetUserID, role)
+		assert.Error(t, err)
+		assert.Contains(t, err.Error(), "sub-notes cannot be shared")
+	})
+
 	t.Run("NotOwner", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(false, nil)
 
 		_, err := usecase.AddCollaborator(ctx, noteID, currentUserID, targetUserID, role)
@@ -75,6 +96,10 @@ func TestSharingUsecase_AddCollaborator(t *testing.T) {
 	})
 
 	t.Run("TargetIsOwner", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, targetUserID).Return(true, nil)
 
@@ -84,6 +109,10 @@ func TestSharingUsecase_AddCollaborator(t *testing.T) {
 	})
 
 	t.Run("AlreadyExists", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, targetUserID).Return(false, nil)
 		mockSharingRepo.EXPECT().CheckCollaboratorExists(ctx, noteID, targetUserID).Return(true, nil)
@@ -95,19 +124,15 @@ func TestSharingUsecase_AddCollaborator(t *testing.T) {
 }
 
 func TestSharingUsecase_GetCollaborators(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
 	ownerID := uint64(1)
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, currentUserID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
 		mockSharingRepo.EXPECT().GetNoteOwnerID(ctx, noteID).Return(ownerID, nil)
 		mockSharingRepo.EXPECT().GetCollaboratorsByNoteID(ctx, noteID).Return([]*models.NotePermission{}, nil)
@@ -119,6 +144,9 @@ func TestSharingUsecase_GetCollaborators(t *testing.T) {
 	})
 
 	t.Run("NoAccess", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, currentUserID).Return(&models.NoteAccessInfo{HasAccess: false}, nil)
 
 		_, _, _, err := usecase.GetCollaborators(ctx, noteID, currentUserID)
@@ -127,13 +155,6 @@ func TestSharingUsecase_GetCollaborators(t *testing.T) {
 }
 
 func TestSharingUsecase_UpdateCollaboratorRole(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
@@ -142,6 +163,10 @@ func TestSharingUsecase_UpdateCollaboratorRole(t *testing.T) {
 	permission := &models.NotePermission{PermissionID: permissionID, NoteID: noteID, Role: models.RoleEditor}
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().GetCollaboratorByID(ctx, permissionID).Return(permission, nil)
 		mockSharingRepo.EXPECT().UpdateCollaboratorRole(ctx, permissionID, newRole).Return(nil)
@@ -153,6 +178,10 @@ func TestSharingUsecase_UpdateCollaboratorRole(t *testing.T) {
 	})
 
 	t.Run("WrongNoteID", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		wrongPermission := &models.NotePermission{PermissionID: permissionID, NoteID: 999}
 		mockSharingRepo.EXPECT().GetCollaboratorByID(ctx, permissionID).Return(wrongPermission, nil)
@@ -164,13 +193,6 @@ func TestSharingUsecase_UpdateCollaboratorRole(t *testing.T) {
 }
 
 func TestSharingUsecase_RemoveCollaborator(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
@@ -178,6 +200,10 @@ func TestSharingUsecase_RemoveCollaborator(t *testing.T) {
 	permission := &models.NotePermission{PermissionID: permissionID, NoteID: noteID}
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().GetCollaboratorByID(ctx, permissionID).Return(permission, nil)
 		mockSharingRepo.EXPECT().RemoveCollaborator(ctx, permissionID).Return(nil)
@@ -189,6 +215,10 @@ func TestSharingUsecase_RemoveCollaborator(t *testing.T) {
 	})
 
 	t.Run("WrongNoteID", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		wrongPermission := &models.NotePermission{PermissionID: permissionID, NoteID: 999}
 		mockSharingRepo.EXPECT().GetCollaboratorByID(ctx, permissionID).Return(wrongPermission, nil)
@@ -200,19 +230,16 @@ func TestSharingUsecase_RemoveCollaborator(t *testing.T) {
 }
 
 func TestSharingUsecase_SetPublicAccess(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
 	accessLevel := models.RoleViewer
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().SetPublicAccess(ctx, noteID, &accessLevel).Return(nil)
 
@@ -222,19 +249,15 @@ func TestSharingUsecase_SetPublicAccess(t *testing.T) {
 }
 
 func TestSharingUsecase_GetPublicAccess(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
 	accessLevel := models.RoleViewer
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, currentUserID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
 		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(&accessLevel, "uuid", nil)
 
@@ -245,13 +268,6 @@ func TestSharingUsecase_GetPublicAccess(t *testing.T) {
 }
 
 func TestSharingUsecase_GetSharingSettings(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	noteID := uint64(10)
 	currentUserID := uint64(1)
@@ -259,7 +275,11 @@ func TestSharingUsecase_GetSharingSettings(t *testing.T) {
 	accessLevel := models.RoleViewer
 
 	t.Run("Success", func(t *testing.T) {
+		ctrl, mockSharingRepo, _, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockSharingRepo.EXPECT().CheckNoteAccess(ctx, noteID, currentUserID).Return(&models.NoteAccessInfo{HasAccess: true}, nil)
+		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().GetNoteOwnerID(ctx, noteID).Return(ownerID, nil)
 		mockSharingRepo.EXPECT().GetCollaboratorsByNoteID(ctx, noteID).Return([]*models.NotePermission{}, nil)
 		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(&accessLevel, "uuid", nil)
@@ -273,13 +293,6 @@ func TestSharingUsecase_GetSharingSettings(t *testing.T) {
 }
 
 func TestSharingUsecase_ActivateAccessByLink(t *testing.T) {
-	ctrl := gomock.NewController(t)
-	defer ctrl.Finish()
-
-	mockSharingRepo := mock.NewMockSharingRepository(ctrl)
-	mockNotesRepo := mock.NewMockNotesRepository(ctrl)
-	usecase := NewSharingUsecase(mockSharingRepo, mockNotesRepo)
-
 	ctx := context.Background()
 	shareUUID := "uuid"
 	userID := uint64(2)
@@ -288,6 +301,9 @@ func TestSharingUsecase_ActivateAccessByLink(t *testing.T) {
 	accessLevel := models.RoleViewer
 
 	t.Run("Success_Public", func(t *testing.T) {
+		ctrl, mockSharingRepo, mockNotesRepo, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockNotesRepo.EXPECT().GetNoteByShareUUID(ctx, shareUUID).Return(note, nil)
 		mockSharingRepo.EXPECT().GetUserPermission(ctx, noteID, userID).Return(nil, nil)
 		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(&accessLevel, "", nil)
@@ -301,6 +317,9 @@ func TestSharingUsecase_ActivateAccessByLink(t *testing.T) {
 	})
 
 	t.Run("Owner", func(t *testing.T) {
+		ctrl, _, mockNotesRepo, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		ownerNote := &models.Note{ID: noteID, OwnerID: userID}
 		mockNotesRepo.EXPECT().GetNoteByShareUUID(ctx, shareUUID).Return(ownerNote, nil)
 
@@ -311,6 +330,9 @@ func TestSharingUsecase_ActivateAccessByLink(t *testing.T) {
 	})
 
 	t.Run("ExistingPermission", func(t *testing.T) {
+		ctrl, mockSharingRepo, mockNotesRepo, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockNotesRepo.EXPECT().GetNoteByShareUUID(ctx, shareUUID).Return(note, nil)
 		mockSharingRepo.EXPECT().GetUserPermission(ctx, noteID, userID).Return(&models.NotePermission{Role: models.RoleEditor}, nil)
 
@@ -321,6 +343,9 @@ func TestSharingUsecase_ActivateAccessByLink(t *testing.T) {
 	})
 
 	t.Run("NoPublicAccess", func(t *testing.T) {
+		ctrl, mockSharingRepo, mockNotesRepo, usecase := setupTest(t)
+		defer ctrl.Finish()
+
 		mockNotesRepo.EXPECT().GetNoteByShareUUID(ctx, shareUUID).Return(note, nil)
 		mockSharingRepo.EXPECT().GetUserPermission(ctx, noteID, userID).Return(nil, nil)
 		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(nil, "", nil)

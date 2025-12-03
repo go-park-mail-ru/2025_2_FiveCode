@@ -9,6 +9,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+//go:generate mockgen -source=repository.go -destination=mock/mock_client.go -package=mock
 type AuthClient interface {
 	CreateSession(ctx context.Context, in *authPB.CreateSessionRequest, opts ...grpc.CallOption) (*authPB.CreateSessionResponse, error)
 	Logout(ctx context.Context, in *authPB.LogoutRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)

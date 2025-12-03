@@ -6,6 +6,7 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=delivery.go -destination=mock/mock_delivery.go -package=mock
 type NotesUsecase interface {
 	// Notes
 	GetAllNotes(ctx context.Context, userID uint64) ([]models.Note, error)

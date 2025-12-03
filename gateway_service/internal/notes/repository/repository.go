@@ -15,6 +15,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+//go:generate mockgen -source=repository.go -destination=mock/mock_client.go -package=mock
 type FileRepository interface {
 	GetFileByID(ctx context.Context, fileID uint64) (*fileModels.File, error)
 }

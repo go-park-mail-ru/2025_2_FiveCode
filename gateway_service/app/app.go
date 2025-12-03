@@ -1,17 +1,18 @@
 package app
 
 import (
-	"backend/gateway_service/internal/config"
-	"backend/gateway_service/internal/websocket"
-	"backend/gateway_service/logger"
-	"backend/gateway_service/router"
-	"backend/pkg/store"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"time"
+
+	"backend/gateway_service/internal/config"
+	"backend/gateway_service/internal/websocket"
+	"backend/gateway_service/logger"
+	"backend/gateway_service/router"
+	"backend/pkg/store"
 
 	authDelivery "backend/gateway_service/internal/auth/delivery"
 	authRepo "backend/gateway_service/internal/auth/repository"

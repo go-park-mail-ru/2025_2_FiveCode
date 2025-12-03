@@ -9,6 +9,7 @@ import (
 	"backend/notes_service/internal/models"
 )
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
 type SharingRepository interface {
 	AddCollaborator(ctx context.Context, permission *models.NotePermission) (*models.NotePermission, error)
 	GetCollaboratorsByNoteID(ctx context.Context, noteID uint64) ([]*models.NotePermission, error)

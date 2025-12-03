@@ -13,6 +13,7 @@ import (
 	"google.golang.org/protobuf/types/known/emptypb"
 )
 
+//go:generate mockgen -source=repository.go -destination=mock/mock_client.go -package=mock
 type UserClient interface {
 	GetUser(ctx context.Context, in *userPB.GetUserRequest, opts ...grpc.CallOption) (*userPB.User, error)
 	GetUserByEmail(ctx context.Context, in *userPB.GetUserByEmailRequest, opts ...grpc.CallOption) (*userPB.User, error) // ДОБАВИЛИ

@@ -1,0 +1,139 @@
+version: '3.8'
+
+services:
+  frontend:
+    image: ${DOCKER_USERNAME}/goose-frontend:${IMAGE_TAG}
+    container_name: goose_frontend
+    restart: always
+    ports:
+      - "${HTTP_PORT}:80"
+      - "${HTTPS_PORT}:443"
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    depends_on:
+      - gateway
+    networks:
+      - goose_network
+
+  certbot:
+    image: certbot/certbot
+    container_name: goose_certbot
+    volumes:
+      - ./certbot/conf:/etc/letsencrypt
+      - ./certbot/www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+
+  gateway:
+    image: ${DOCKERHUB_USERNAME}/goose-gateway:${IMAGE_TAG}
+    container_name: goose_gateway
+    restart: always
+    env_file: .env
+    environment:
+      DB_HOST: "postgres"
+      REDIS_HOST: "redis"
+      MINIO_ENDPOINT: "minio:9000"
+      SERVICES_AUTH_GRPC_HOST: "auth"
+      SERVICES_USER_GRPC_HOST: "user"
+      SERVICES_NOTES_GRPC_HOST: "notes"
+    depends_on:
+      - auth
+      - user
+      - notes
+    networks:
+      - goose_network
+
+  auth:
+    image: ${DOCKERHUB_USERNAME}/goose-auth:${IMAGE_TAG}
+    container_name: goose_auth
+    restart: always
+    env_file: .env
+    environment:
+      REDIS_HOST: "redis"
+      SERVICES_USER_GRPC_HOST: "user"
+    networks:
+      - goose_network
+
+  user:
+    image: ${DOCKERHUB_USERNAME}/goose-user:${IMAGE_TAG}
+    container_name: goose_user
+    restart: always
+    env_file: .env
+    environment:
+      DB_HOST: "postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - goose_network
+
+  notes:
+    image: ${DOCKERHUB_USERNAME}/goose-notes:${IMAGE_TAG}
+    container_name: goose_notes
+    restart: always
+    env_file: .env
+    environment:
+      DB_HOST: "postgres"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - goose_network
+
+  postgres:
+    image: postgres:14
+    container_name: goose_postgres
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: postgres
+    ports:
+      - "${POSTGRES_PORT_EXTERNAL}:5432"
+    volumes:
+      - ./scripts/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - goose_network
+
+  redis:
+    image: redis:7-alpine
+    container_name: goose_redis
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    restart: always
+    ports:
+      - "${REDIS_PORT_EXTERNAL}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - goose_network
+
+  minio:
+    image: minio/minio:latest
+    container_name: minio
+    command: server /data --console-address ":9001"
+    restart: always
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY}
+    ports:
+      - "${MINIO_API_PORT}:9000"
+      - "${MINIO_CONSOLE_PORT}:9001"
+    volumes:
+      - minio_data:/data
+    networks:
+      - goose_network
+
+networks:
+  goose_network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+  minio_data:

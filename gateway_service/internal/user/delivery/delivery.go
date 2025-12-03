@@ -19,6 +19,7 @@ const (
 	MaxUsernameLength = 50
 )
 
+//go:generate mockgen -source=delivery.go -destination=mock/mock_delivery.go -package=mock
 type UserUsecase interface {
 	GetProfile(ctx context.Context, userID uint64) (*models.User, error)
 	UpdateProfile(ctx context.Context, input *models.UpdateUserInput) (*models.User, error)

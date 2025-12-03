@@ -5,6 +5,7 @@ import (
 	"context"
 )
 
+//go:generate mockgen -source=usecase.go -destination=../mock/mock_deps.go -package=mock
 type UserRepository interface {
 	GetUser(ctx context.Context, userID uint64) (*models.User, error)
 	UpdateUser(ctx context.Context, input *models.UpdateUserInput) (*models.User, error)
