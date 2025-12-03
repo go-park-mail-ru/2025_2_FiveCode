@@ -34,9 +34,16 @@ services:
       DB_NAME: "files_db"
       REDIS_HOST: "redis"
       MINIO_ENDPOINT: "minio:9000"
+
+      SERVER_PORT: "8080"
+      SERVER_HOST: "0.0.0.0"
+
       SERVICES_AUTH_GRPC_HOST: "auth"
+      SERVICES_AUTH_GRPC_PORT: "50051"
       SERVICES_USER_GRPC_HOST: "user"
+      SERVICES_USER_GRPC_PORT: "50052"
       SERVICES_NOTES_GRPC_HOST: "notes"
+      SERVICES_NOTES_GRPC_PORT: "50053"
     depends_on:
       - auth
       - user

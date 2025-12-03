@@ -145,7 +145,7 @@ func Load() (*Config, error) {
 	}
 
 	viper.Set("MINIO_ENDPOINT", v.GetString("MINIO_ENDPOINT"))
-    viper.Set("MINIO_PUBLIC_ENDPOINT", v.GetString("MINIO_PUBLIC_ENDPOINT"))
+	viper.Set("MINIO_PUBLIC_ENDPOINT", v.GetString("MINIO_PUBLIC_ENDPOINT"))
 
 	return &cfg, nil
 }
