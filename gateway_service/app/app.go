@@ -87,9 +87,6 @@ func NewApp() *App {
 func (a *App) initDependencies() {
 	a.Logger.Info().Msg("Initializing dependencies for Gateway Service")
 
-	// ============================================
-	// ШАГ 1: Запуск миграций от имени ADMIN
-	// ============================================
 	a.Logger.Info().Msg("Running database migrations as admin user...")
 
 	adminUser := os.Getenv("DB_ADMIN_USER")
@@ -99,12 +96,11 @@ func (a *App) initDependencies() {
 		a.Logger.Fatal().Msg("DB_ADMIN_USER and DB_ADMIN_PASSWORD must be set for migrations")
 	}
 
-	// Создаем временное подключение от имени admin
 	adminStore := store.NewStore()
 	if err := adminStore.InitPostgres(&store.PostgresConfig{
 		Host:     a.Config.DB.Host,
 		Port:     a.Config.DB.Port,
-		User:     adminUser, // admin - имеет права на DDL
+		User:     adminUser,
 		Password: adminPassword,
 		DBName:   a.Config.DB.DBName,
 		SSLMode:  a.Config.DB.SSLMode,
@@ -117,22 +113,17 @@ func (a *App) initDependencies() {
 		Str("database", a.Config.DB.DBName).
 		Msg("Connected as admin, running migrations...")
 
-	// Запускаем миграции
 	if err := adminStore.Postgres.RunMigrations("./db/migrations"); err != nil {
 		a.Logger.Fatal().Err(err).Msg("failed to run migrations")
 	}
 
-	a.Logger.Info().Msg("✅ Migrations completed successfully")
+	a.Logger.Info().Msg("Migrations completed successfully")
 
-	// Закрываем admin подключение (оно больше не нужно)
 	if err := adminStore.Postgres.Close(); err != nil {
 		a.Logger.Warn().Err(err).Msg("failed to close admin connection")
 	}
 	a.Logger.Info().Msg("Admin connection closed")
 
-	// ============================================
-	// ШАГ 2: Подключение к БД от имени SERVICE USER с Connection Pool
-	// ============================================
 	a.Logger.Info().
 		Str("user", a.Config.DB.User).
 		Msg("Connecting to Postgres as service user with connection pool...")
@@ -140,18 +131,16 @@ func (a *App) initDependencies() {
 	if err := a.Store.InitPostgres(&store.PostgresConfig{
 		Host:     a.Config.DB.Host,
 		Port:     a.Config.DB.Port,
-		User:     a.Config.DB.User, // files_service_user
+		User:     a.Config.DB.User,
 		Password: a.Config.DB.Password,
 		DBName:   a.Config.DB.DBName,
 		SSLMode:  a.Config.DB.SSLMode,
 
-		// Connection Pool настройки
 		MaxOpenConns:    a.Config.DB.MaxOpenConns,
 		MaxIdleConns:    a.Config.DB.MaxIdleConns,
 		ConnMaxLifetime: a.Config.DB.ConnMaxLifetime,
 		ConnMaxIdleTime: a.Config.DB.ConnMaxIdleTime,
 
-		// Таймауты
 		StatementTimeout: a.Config.DB.StatementTimeout,
 		LockTimeout:      a.Config.DB.LockTimeout,
 	}); err != nil {
@@ -165,15 +154,12 @@ func (a *App) initDependencies() {
 		Int("max_idle_conns", a.Config.DB.MaxIdleConns).
 		Int("statement_timeout_sec", a.Config.DB.StatementTimeout).
 		Int("lock_timeout_sec", a.Config.DB.LockTimeout).
-		Msg("✅ Connected to Postgres with connection pool configured")
+		Msg("Connected to Postgres with connection pool configured")
 
 	a.Logger.Info().
 		Str("user", a.Config.DB.User).
-		Msg("✅ Connected to Postgres as service user successfully")
+		Msg("Connected to Postgres as service user successfully")
 
-	// ============================================
-	// MinIO Initialization
-	// ============================================
 	a.Logger.Info().Msg("Initializing MinIO storage...")
 	if err := a.Store.InitMinioStorage(&store.MinioConfig{
 		Endpoint:  a.Config.Minio.Endpoint,
@@ -184,9 +170,6 @@ func (a *App) initDependencies() {
 		a.Logger.Fatal().Err(err).Msg("failed to init minio")
 	}
 
-	// ============================================
-	// gRPC Connections
-	// ============================================
 	a.Logger.Info().Msg("Connecting to gRPC services...")
 	a.AuthConn = a.mustConnectGrpc("auth")
 	a.UserConn = a.mustConnectGrpc("user")

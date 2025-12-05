@@ -10,15 +10,13 @@ type PostgresConfig struct {
 	DBName   string
 	SSLMode  string
 
-	// Connection Pool настройки (опционально)
 	MaxOpenConns    int
 	MaxIdleConns    int
-	ConnMaxLifetime int // в секундах
-	ConnMaxIdleTime int // в секундах
+	ConnMaxLifetime int
+	ConnMaxIdleTime int
 
-	// Таймауты PostgreSQL (опционально)
-	StatementTimeout int // в секундах - максимальное время выполнения запроса
-	LockTimeout      int // в секундах - максимальное время ожидания блокировки
+	StatementTimeout int
+	LockTimeout      int
 }
 
 type RedisConfig struct {
@@ -46,16 +44,13 @@ func NewStore() *Store {
 }
 
 func (s *Store) InitPostgres(config *PostgresConfig) error {
-	// Проверяем, заданы ли параметры пула
 	if config.MaxOpenConns > 0 {
-		// Используем настройки пула из конфига
 		poolConfig := ConnectionPoolConfig{
 			MaxOpenConns:    config.MaxOpenConns,
 			MaxIdleConns:    config.MaxIdleConns,
 			ConnMaxLifetime: time.Duration(config.ConnMaxLifetime) * time.Second,
 			ConnMaxIdleTime: time.Duration(config.ConnMaxIdleTime) * time.Second,
 
-			// Таймауты
 			StatementTimeout: time.Duration(config.StatementTimeout) * time.Second,
 			LockTimeout:      time.Duration(config.LockTimeout) * time.Second,
 		}
@@ -74,10 +69,8 @@ func (s *Store) InitPostgres(config *PostgresConfig) error {
 		}
 		s.Postgres = db
 	} else {
-		// Используем настройки по умолчанию
 		poolConfig := DefaultConnectionPoolConfig()
 
-		// Переопределяем таймауты если заданы
 		if config.StatementTimeout > 0 {
 			poolConfig.StatementTimeout = time.Duration(config.StatementTimeout) * time.Second
 		}

@@ -15,13 +15,11 @@ type DBConfig struct {
 	DBName   string
 	SSLMode  string
 
-	// Connection Pool settings
 	MaxOpenConns    int
 	MaxIdleConns    int
 	ConnMaxLifetime int
 	ConnMaxIdleTime int
 
-	// Timeout settings
 	StatementTimeout int
 	LockTimeout      int
 }
@@ -53,28 +51,21 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// ============================================
-	// Database Configuration - Service User
-	// ============================================
-	// Используем переменные для notes_service
 	cfg.DB.Host = v.GetString("DB_HOST")
 	cfg.DB.Port = v.GetInt("DB_PORT")
-	cfg.DB.User = v.GetString("NOTES_DB_USER") // notes_service_user
+	cfg.DB.User = v.GetString("NOTES_DB_USER")
 	cfg.DB.Password = v.GetString("NOTES_DB_PASSWORD")
-	cfg.DB.DBName = v.GetString("NOTES_DB_NAME") // notes_db
+	cfg.DB.DBName = v.GetString("NOTES_DB_NAME")
 	cfg.DB.SSLMode = v.GetString("DB_SSLMODE")
 
-	// Connection Pool settings
 	cfg.DB.MaxOpenConns = v.GetInt("DB_MAX_OPEN_CONNS")
 	cfg.DB.MaxIdleConns = v.GetInt("DB_MAX_IDLE_CONNS")
 	cfg.DB.ConnMaxLifetime = v.GetInt("DB_CONN_MAX_LIFETIME")
 	cfg.DB.ConnMaxIdleTime = v.GetInt("DB_CONN_MAX_IDLE_TIME")
 
-	// Timeout settings (специфичные для notes_service)
 	cfg.DB.StatementTimeout = v.GetInt("NOTES_SERVICE_STATEMENT_TIMEOUT")
 	cfg.DB.LockTimeout = v.GetInt("NOTES_SERVICE_LOCK_TIMEOUT")
 
-	// Fallback для обратной совместимости (если старые переменные используются)
 	if cfg.DB.User == "" {
 		cfg.DB.User = v.GetString("DB_USER")
 	}
@@ -92,7 +83,6 @@ func Load() (*Config, error) {
 		cfg.MetricsPort = v.GetInt("METRICS_PORT")
 	}
 
-	// Validation
 	if cfg.GRPCPort == 0 {
 		return nil, fmt.Errorf("GRPC_PORT is required")
 	}

@@ -87,28 +87,21 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("failed to unmarshal config: %w", err)
 	}
 
-	// ============================================
-	// Database Configuration - Service User
-	// ============================================
-	// Gateway работает с files_db, используем FILES_DB_* переменные
 	cfg.DB.Host = v.GetString("DB_HOST")
 	cfg.DB.Port = v.GetInt("DB_PORT")
-	cfg.DB.User = v.GetString("FILES_DB_USER") // files_service_user
+	cfg.DB.User = v.GetString("FILES_DB_USER")
 	cfg.DB.Password = v.GetString("FILES_DB_PASSWORD")
-	cfg.DB.DBName = v.GetString("FILES_DB_NAME") // files_db
+	cfg.DB.DBName = v.GetString("FILES_DB_NAME")
 	cfg.DB.SSLMode = v.GetString("DB_SSLMODE")
 
-	// Connection Pool settings
 	cfg.DB.MaxOpenConns = v.GetInt("DB_MAX_OPEN_CONNS")
 	cfg.DB.MaxIdleConns = v.GetInt("DB_MAX_IDLE_CONNS")
 	cfg.DB.ConnMaxLifetime = v.GetInt("DB_CONN_MAX_LIFETIME")
 	cfg.DB.ConnMaxIdleTime = v.GetInt("DB_CONN_MAX_IDLE_TIME")
 
-	// Timeout settings (специфичные для files_service/gateway)
 	cfg.DB.StatementTimeout = v.GetInt("FILES_SERVICE_STATEMENT_TIMEOUT")
 	cfg.DB.LockTimeout = v.GetInt("FILES_SERVICE_LOCK_TIMEOUT")
 
-	// Fallback для обратной совместимости (если старые переменные используются)
 	if cfg.DB.User == "" {
 		cfg.DB.User = v.GetString("DB_USER")
 	}
@@ -119,13 +112,11 @@ func Load() (*Config, error) {
 		cfg.DB.DBName = v.GetString("DB_NAME")
 	}
 
-	// MinIO Configuration
 	cfg.Minio.Endpoint = v.GetString("MINIO_ENDPOINT")
 	cfg.Minio.AccessKey = v.GetString("MINIO_ACCESS_KEY")
 	cfg.Minio.SecretKey = v.GetString("MINIO_SECRET_KEY")
 	cfg.Minio.Secure = v.GetBool("MINIO_SECURE")
 
-	// Server Configuration
 	if host := v.GetString("SERVER_HOST"); host != "" {
 		cfg.Server.Host = host
 	}
@@ -133,12 +124,10 @@ func Load() (*Config, error) {
 		cfg.Server.Port = port
 	}
 
-	// CSRF Configuration
 	if key := v.GetString("CSRF_SECRET_KEY"); key != "" {
 		cfg.CSRF.SecretKey = key
 	}
 
-	// Services Configuration
 	if cfg.Services == nil {
 		cfg.Services = make(map[string]ServiceConfig)
 	}
@@ -163,7 +152,6 @@ func Load() (*Config, error) {
 		cfg.Services[svc] = current
 	}
 
-	// Validation
 	if cfg.Server.Port == 0 {
 		return nil, fmt.Errorf("SERVER_PORT is required")
 	}
