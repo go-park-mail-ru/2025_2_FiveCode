@@ -37,6 +37,16 @@ type DBConfig struct {
 	Password string
 	DBName   string
 	SSLMode  string
+
+	// Connection Pool settings
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime int
+	ConnMaxIdleTime int
+
+	// Timeout settings
+	StatementTimeout int
+	LockTimeout      int
 }
 
 type MinioConfig struct {
@@ -79,10 +89,28 @@ func Load() (*Config, error) {
 
 	cfg.DB.Host = v.GetString("DB_HOST")
 	cfg.DB.Port = v.GetInt("DB_PORT")
-	cfg.DB.User = v.GetString("DB_USER")
-	cfg.DB.Password = v.GetString("DB_PASSWORD")
-	cfg.DB.DBName = v.GetString("DB_NAME")
+	cfg.DB.User = v.GetString("FILES_DB_USER")
+	cfg.DB.Password = v.GetString("FILES_DB_PASSWORD")
+	cfg.DB.DBName = v.GetString("FILES_DB_NAME")
 	cfg.DB.SSLMode = v.GetString("DB_SSLMODE")
+
+	cfg.DB.MaxOpenConns = v.GetInt("DB_MAX_OPEN_CONNS")
+	cfg.DB.MaxIdleConns = v.GetInt("DB_MAX_IDLE_CONNS")
+	cfg.DB.ConnMaxLifetime = v.GetInt("DB_CONN_MAX_LIFETIME")
+	cfg.DB.ConnMaxIdleTime = v.GetInt("DB_CONN_MAX_IDLE_TIME")
+
+	cfg.DB.StatementTimeout = v.GetInt("FILES_SERVICE_STATEMENT_TIMEOUT")
+	cfg.DB.LockTimeout = v.GetInt("FILES_SERVICE_LOCK_TIMEOUT")
+
+	if cfg.DB.User == "" {
+		cfg.DB.User = v.GetString("DB_USER")
+	}
+	if cfg.DB.Password == "" {
+		cfg.DB.Password = v.GetString("DB_PASSWORD")
+	}
+	if cfg.DB.DBName == "" {
+		cfg.DB.DBName = v.GetString("DB_NAME")
+	}
 
 	cfg.Minio.Endpoint = v.GetString("MINIO_ENDPOINT")
 	cfg.Minio.AccessKey = v.GetString("MINIO_ACCESS_KEY")
@@ -133,6 +161,18 @@ func Load() (*Config, error) {
 	if cfg.DB.Host == "" {
 		return nil, fmt.Errorf("DB_HOST is required")
 	}
+	if cfg.DB.Port == 0 {
+		return nil, fmt.Errorf("DB_PORT is required")
+	}
+	if cfg.DB.User == "" {
+		return nil, fmt.Errorf("FILES_DB_USER is required")
+	}
+	if cfg.DB.Password == "" {
+		return nil, fmt.Errorf("FILES_DB_PASSWORD is required")
+	}
+	if cfg.DB.DBName == "" {
+		return nil, fmt.Errorf("FILES_DB_NAME is required")
+	}
 	if cfg.Minio.Endpoint == "" {
 		return nil, fmt.Errorf("MINIO_ENDPOINT is required")
 	}
@@ -145,7 +185,7 @@ func Load() (*Config, error) {
 	}
 
 	viper.Set("MINIO_ENDPOINT", v.GetString("MINIO_ENDPOINT"))
-    viper.Set("MINIO_PUBLIC_ENDPOINT", v.GetString("MINIO_PUBLIC_ENDPOINT"))
+	viper.Set("MINIO_PUBLIC_ENDPOINT", v.GetString("MINIO_PUBLIC_ENDPOINT"))
 
 	return &cfg, nil
 }

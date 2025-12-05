@@ -78,7 +78,47 @@ func NewApp() *App {
 func (a *App) initDependencies() {
 	a.Logger.Info().Msg("Initializing dependencies for Note Service")
 
-	a.Logger.Info().Msg("Initializing Postgres...")
+	a.Logger.Info().Msg("Running database migrations as admin user...")
+
+	adminUser := os.Getenv("DB_ADMIN_USER")
+	adminPassword := os.Getenv("DB_ADMIN_PASSWORD")
+
+	if adminUser == "" || adminPassword == "" {
+		a.Logger.Fatal().Msg("DB_ADMIN_USER and DB_ADMIN_PASSWORD must be set for migrations")
+	}
+
+	adminStore := store.NewStore()
+	if err := adminStore.InitPostgres(&store.PostgresConfig{
+		Host:     a.Config.DB.Host,
+		Port:     a.Config.DB.Port,
+		User:     adminUser,
+		Password: adminPassword,
+		DBName:   a.Config.DB.DBName,
+		SSLMode:  a.Config.DB.SSLMode,
+	}); err != nil {
+		a.Logger.Fatal().Err(err).Msg("failed to connect to postgres as admin")
+	}
+
+	a.Logger.Info().
+		Str("user", adminUser).
+		Str("database", a.Config.DB.DBName).
+		Msg("Connected as admin, running migrations...")
+
+	if err := adminStore.Postgres.RunMigrations("./db/migrations"); err != nil {
+		a.Logger.Fatal().Err(err).Msg("failed to run migrations")
+	}
+
+	a.Logger.Info().Msg("Migrations completed successfully")
+
+	if err := adminStore.Postgres.Close(); err != nil {
+		a.Logger.Warn().Err(err).Msg("failed to close admin connection")
+	}
+	a.Logger.Info().Msg("Admin connection closed")
+
+	a.Logger.Info().
+		Str("user", a.Config.DB.User).
+		Msg("Connecting to Postgres as service user with connection pool...")
+
 	if err := a.Store.InitPostgres(&store.PostgresConfig{
 		Host:     a.Config.DB.Host,
 		Port:     a.Config.DB.Port,
@@ -86,15 +126,30 @@ func (a *App) initDependencies() {
 		Password: a.Config.DB.Password,
 		DBName:   a.Config.DB.DBName,
 		SSLMode:  a.Config.DB.SSLMode,
+
+		MaxOpenConns:    a.Config.DB.MaxOpenConns,
+		MaxIdleConns:    a.Config.DB.MaxIdleConns,
+		ConnMaxLifetime: a.Config.DB.ConnMaxLifetime,
+		ConnMaxIdleTime: a.Config.DB.ConnMaxIdleTime,
+
+		StatementTimeout: a.Config.DB.StatementTimeout,
+		LockTimeout:      a.Config.DB.LockTimeout,
 	}); err != nil {
-		a.Logger.Fatal().Err(err).Msg("failed to init postgres")
+		a.Logger.Fatal().Err(err).Msg("failed to init postgres as service user")
 	}
 	a.closers = append(a.closers, a.Store.Postgres)
 
-	a.Logger.Info().Msg("Running migrations...")
-	if err := a.Store.Postgres.RunMigrations("./db/migrations"); err != nil {
-		a.Logger.Fatal().Err(err).Msg("failed to run migrations")
-	}
+	a.Logger.Info().
+		Str("user", a.Config.DB.User).
+		Int("max_open_conns", a.Config.DB.MaxOpenConns).
+		Int("max_idle_conns", a.Config.DB.MaxIdleConns).
+		Int("statement_timeout_sec", a.Config.DB.StatementTimeout).
+		Int("lock_timeout_sec", a.Config.DB.LockTimeout).
+		Msg("Connected to Postgres with connection pool configured")
+
+	a.Logger.Info().
+		Str("user", a.Config.DB.User).
+		Msg("Connected to Postgres as service user successfully")
 
 	a.Logger.Info().Msg("Dependencies installed successfully")
 }
@@ -175,7 +230,12 @@ func (a *App) startSearchIndexRefresher() {
 }
 
 func (a *App) Run() {
-	a.Logger.Info().Str("addr", a.Lis.Addr().String()).Msg("gRPC server is ready to accept connections")
+	a.Logger.Info().
+		Str("addr", a.Lis.Addr().String()).
+		Str("db_user", a.Config.DB.User).
+		Str("db_name", a.Config.DB.DBName).
+		Msg("gRPC server is ready to accept connections")
+
 	if err := a.GRPCServer.Serve(a.Lis); err != nil {
 		a.Logger.Fatal().Err(err).Msg("gRPC server failed to serve")
 	}

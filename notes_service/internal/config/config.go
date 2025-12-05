@@ -14,6 +14,14 @@ type DBConfig struct {
 	Password string
 	DBName   string
 	SSLMode  string
+
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime int
+	ConnMaxIdleTime int
+
+	StatementTimeout int
+	LockTimeout      int
 }
 
 type Config struct {
@@ -45,10 +53,28 @@ func Load() (*Config, error) {
 
 	cfg.DB.Host = v.GetString("DB_HOST")
 	cfg.DB.Port = v.GetInt("DB_PORT")
-	cfg.DB.User = v.GetString("DB_USER")
-	cfg.DB.Password = v.GetString("DB_PASSWORD")
-	cfg.DB.DBName = v.GetString("DB_NAME")
+	cfg.DB.User = v.GetString("NOTES_DB_USER")
+	cfg.DB.Password = v.GetString("NOTES_DB_PASSWORD")
+	cfg.DB.DBName = v.GetString("NOTES_DB_NAME")
 	cfg.DB.SSLMode = v.GetString("DB_SSLMODE")
+
+	cfg.DB.MaxOpenConns = v.GetInt("DB_MAX_OPEN_CONNS")
+	cfg.DB.MaxIdleConns = v.GetInt("DB_MAX_IDLE_CONNS")
+	cfg.DB.ConnMaxLifetime = v.GetInt("DB_CONN_MAX_LIFETIME")
+	cfg.DB.ConnMaxIdleTime = v.GetInt("DB_CONN_MAX_IDLE_TIME")
+
+	cfg.DB.StatementTimeout = v.GetInt("NOTES_SERVICE_STATEMENT_TIMEOUT")
+	cfg.DB.LockTimeout = v.GetInt("NOTES_SERVICE_LOCK_TIMEOUT")
+
+	if cfg.DB.User == "" {
+		cfg.DB.User = v.GetString("DB_USER")
+	}
+	if cfg.DB.Password == "" {
+		cfg.DB.Password = v.GetString("DB_PASSWORD")
+	}
+	if cfg.DB.DBName == "" {
+		cfg.DB.DBName = v.GetString("DB_NAME")
+	}
 
 	if cfg.GRPCPort == 0 {
 		cfg.GRPCPort = v.GetInt("GRPC_PORT")
@@ -70,10 +96,13 @@ func Load() (*Config, error) {
 		return nil, fmt.Errorf("DB_PORT is required")
 	}
 	if cfg.DB.User == "" {
-		return nil, fmt.Errorf("DB_USER is required")
+		return nil, fmt.Errorf("NOTES_DB_USER is required")
+	}
+	if cfg.DB.Password == "" {
+		return nil, fmt.Errorf("NOTES_DB_PASSWORD is required")
 	}
 	if cfg.DB.DBName == "" {
-		return nil, fmt.Errorf("DB_NAME is required")
+		return nil, fmt.Errorf("NOTES_DB_NAME is required")
 	}
 
 	return &cfg, nil

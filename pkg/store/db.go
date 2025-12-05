@@ -118,6 +118,28 @@ func (t *txWrapper) Rollback() error {
 	return t.Tx.Rollback()
 }
 
+type ConnectionPoolConfig struct {
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime time.Duration
+	ConnMaxIdleTime time.Duration
+
+	StatementTimeout time.Duration
+	LockTimeout      time.Duration
+}
+
+func DefaultConnectionPoolConfig() ConnectionPoolConfig {
+	return ConnectionPoolConfig{
+		MaxOpenConns:    25,
+		MaxIdleConns:    5,
+		ConnMaxLifetime: 5 * time.Minute,
+		ConnMaxIdleTime: 5 * time.Minute,
+
+		StatementTimeout: 30 * time.Second,
+		LockTimeout:      10 * time.Second,
+	}
+}
+
 type PostgresDB struct {
 	DB DB
 }
@@ -130,6 +152,48 @@ func NewPostgresDB(host string, port int, user, password, dbname, sslmode string
 	if err != nil {
 		return nil, fmt.Errorf("error connecting to Postgres database: %w", err)
 	}
+
+	if err := db.Ping(); err != nil {
+		return nil, fmt.Errorf("failed to ping database: %w", err)
+	}
+
+	return &PostgresDB{DB: &dbWrapper{DB: db}}, nil
+}
+
+func NewPostgresDBWithPool(host string, port int, user, password, dbname, sslmode string, poolConfig ConnectionPoolConfig) (*PostgresDB, error) {
+	dsn := fmt.Sprintf("host=%s port=%d user=%s password=%s dbname=%s sslmode=%s",
+		host, port, user, password, dbname, sslmode)
+
+	if poolConfig.StatementTimeout > 0 || poolConfig.LockTimeout > 0 {
+		options := ""
+
+		if poolConfig.StatementTimeout > 0 {
+			timeoutMs := int(poolConfig.StatementTimeout.Milliseconds())
+			options += fmt.Sprintf("-c statement_timeout=%d ", timeoutMs)
+		}
+
+		if poolConfig.LockTimeout > 0 {
+			timeoutMs := int(poolConfig.LockTimeout.Milliseconds())
+			options += fmt.Sprintf("-c lock_timeout=%d", timeoutMs)
+		}
+
+		if options != "" {
+			dsn += fmt.Sprintf(" options='%s'", options)
+		}
+	}
+
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		return nil, fmt.Errorf("error connecting to Postgres database: %w", err)
+	}
+
+	db.SetMaxOpenConns(poolConfig.MaxOpenConns)
+
+	db.SetMaxIdleConns(poolConfig.MaxIdleConns)
+
+	db.SetConnMaxLifetime(poolConfig.ConnMaxLifetime)
+
+	db.SetConnMaxIdleTime(poolConfig.ConnMaxIdleTime)
 
 	if err := db.Ping(); err != nil {
 		return nil, fmt.Errorf("failed to ping database: %w", err)
