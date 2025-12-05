@@ -1,21 +1,24 @@
 package store
 
-import (
-	"backend/gateway_service/logger"
-	"context"
-	"database/sql"
-	"errors"
-	"fmt"
-	"strings"
-	"time"
+import "time"
 
-	"golang.org/x/crypto/bcrypt"
-)
+type PostgresConfig struct {
+	Host     string
+	Port     int
+	User     string
+	Password string
+	DBName   string
+	SSLMode  string
 
-type Store struct {
-	Minio    *MinioStorage
-	Postgres *PostgresDB
-	Redis    *RedisDB
+	// Connection Pool настройки (опционально)
+	MaxOpenConns    int
+	MaxIdleConns    int
+	ConnMaxLifetime int // в секундах
+	ConnMaxIdleTime int // в секундах
+
+	// Таймауты PostgreSQL (опционально)
+	StatementTimeout int // в секундах - максимальное время выполнения запроса
+	LockTimeout      int // в секундах - максимальное время ожидания блокировки
 }
 
 type RedisConfig struct {
@@ -25,47 +28,6 @@ type RedisConfig struct {
 	DB       int
 }
 
-func (s *Store) InitRedis(conf *RedisConfig) error {
-	rdb, err := NewRedisDB(
-		conf.Host,
-		conf.Port,
-		conf.Password,
-		conf.DB,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to init redis: %w", err)
-	}
-
-	s.Redis = rdb
-	return nil
-}
-
-type PostgresConfig struct {
-	Host     string
-	Port     int
-	User     string
-	Password string
-	DBName   string
-	SSLMode  string
-}
-
-func (s *Store) InitPostgres(conf *PostgresConfig) error {
-	pg, err := NewPostgresDB(
-		conf.Host,
-		conf.Port,
-		conf.User,
-		conf.Password,
-		conf.DBName,
-		conf.SSLMode,
-	)
-	if err != nil {
-		return fmt.Errorf("failed to init postgres: %w", err)
-	}
-
-	s.Postgres = pg
-	return nil
-}
-
 type MinioConfig struct {
 	Endpoint  string
 	AccessKey string
@@ -73,88 +35,88 @@ type MinioConfig struct {
 	Secure    bool
 }
 
-func (s *Store) InitMinioStorage(conf *MinioConfig) error {
-	minioStorage, err := NewMinioStorage(
-		conf.Endpoint,
-		conf.AccessKey,
-		conf.SecretKey,
-		conf.Secure,
-	)
-	if err != nil {
-		return fmt.Errorf("error to init Minio storage: %w", err)
-	}
-
-	s.Minio = minioStorage
-	return nil
-}
-
-func (s *Store) InitFillStore(ctx context.Context) error {
-	log := logger.FromContext(ctx)
-	email := "user@example.com"
-	password := "password"
-
-	var userID uint64
-	var exists bool
-	checkQuery := `SELECT id FROM "user" WHERE email = $1`
-	err := s.Postgres.DB.QueryRowContext(ctx, checkQuery, email).Scan(&userID)
-
-	if errors.Is(err, sql.ErrNoRows) {
-		log.Info().Str("email", email).Msg("default user not found, creating...")
-		hashedPassword, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
-		if err != nil {
-			return fmt.Errorf("failed to hash password: %w", err)
-		}
-
-		username := strings.Split(email, "@")[0]
-		insertQuery := `
-            INSERT INTO "user" (email, password_hash, username)
-            VALUES ($1, $2, $3)
-            RETURNING id
-        `
-		err = s.Postgres.DB.QueryRowContext(ctx, insertQuery, email, string(hashedPassword), username).Scan(&userID)
-		if err != nil {
-			return fmt.Errorf("failed to create user in PostgreSQL: %w", err)
-		}
-		exists = false
-		log.Info().Uint64("user_id", userID).Msg("default user created in database")
-	} else if err != nil {
-		return fmt.Errorf("failed to check user existence: %w", err)
-	} else {
-		log.Info().Str("email", email).Msg("default user already exists in database")
-		exists = true
-	}
-
-	if !exists {
-		log.Info().Msg("creating default notes for new user")
-		notes := []struct {
-			Title     string
-			IsShared  bool
-			CreatedAt time.Time
-			UpdatedAt time.Time
-		}{
-			{"University Lectures", false, time.Now().Add(-30 * 24 * time.Hour), time.Now().Add(-5 * 24 * time.Hour)},
-			{"Project Ideas", true, time.Now().Add(-20 * 24 * time.Hour), time.Now().Add(-2 * 24 * time.Hour)},
-			{"Shopping List", false, time.Now().Add(-7 * 24 * time.Hour), time.Now().Add(-6 * time.Hour)},
-			{"Random Note", false, time.Now().Add(-10 * 24 * time.Hour), time.Now().Add(-8 * 24 * time.Hour)},
-		}
-
-		for _, note := range notes {
-			insertNoteQuery := `
-                INSERT INTO note (owner_id, title, is_archived, is_shared, created_at, updated_at)
-                VALUES ($1, $2, $3, $4, $5, $6)
-            `
-			_, err = s.Postgres.DB.ExecContext(ctx, insertNoteQuery, userID, note.Title, false, note.IsShared, note.CreatedAt, note.UpdatedAt)
-			if err != nil {
-				return fmt.Errorf("failed to create note '%s': %w", note.Title, err)
-			}
-		}
-		log.Info().Int("count", len(notes)).Msg("default notes created")
-	}
-
-	log.Info().Msg("InitFillStore completed successfully")
-	return nil
+type Store struct {
+	Postgres *PostgresDB
+	Redis    *RedisDB
+	Minio    *MinioStorage
 }
 
 func NewStore() *Store {
 	return &Store{}
+}
+
+func (s *Store) InitPostgres(config *PostgresConfig) error {
+	// Проверяем, заданы ли параметры пула
+	if config.MaxOpenConns > 0 {
+		// Используем настройки пула из конфига
+		poolConfig := ConnectionPoolConfig{
+			MaxOpenConns:    config.MaxOpenConns,
+			MaxIdleConns:    config.MaxIdleConns,
+			ConnMaxLifetime: time.Duration(config.ConnMaxLifetime) * time.Second,
+			ConnMaxIdleTime: time.Duration(config.ConnMaxIdleTime) * time.Second,
+
+			// Таймауты
+			StatementTimeout: time.Duration(config.StatementTimeout) * time.Second,
+			LockTimeout:      time.Duration(config.LockTimeout) * time.Second,
+		}
+
+		db, err := NewPostgresDBWithPool(
+			config.Host,
+			config.Port,
+			config.User,
+			config.Password,
+			config.DBName,
+			config.SSLMode,
+			poolConfig,
+		)
+		if err != nil {
+			return err
+		}
+		s.Postgres = db
+	} else {
+		// Используем настройки по умолчанию
+		poolConfig := DefaultConnectionPoolConfig()
+
+		// Переопределяем таймауты если заданы
+		if config.StatementTimeout > 0 {
+			poolConfig.StatementTimeout = time.Duration(config.StatementTimeout) * time.Second
+		}
+		if config.LockTimeout > 0 {
+			poolConfig.LockTimeout = time.Duration(config.LockTimeout) * time.Second
+		}
+
+		db, err := NewPostgresDBWithPool(
+			config.Host,
+			config.Port,
+			config.User,
+			config.Password,
+			config.DBName,
+			config.SSLMode,
+			poolConfig,
+		)
+		if err != nil {
+			return err
+		}
+		s.Postgres = db
+	}
+
+	return nil
+}
+
+func (s *Store) InitRedis(config *RedisConfig) error {
+	db, err := NewRedisDB(config.Host, config.Port, config.Password, config.DB)
+	if err != nil {
+		return err
+	}
+	s.Redis = db
+	return nil
+}
+
+func (s *Store) InitMinioStorage(config *MinioConfig) error {
+	storage, err := NewMinioStorage(config.Endpoint, config.AccessKey, config.SecretKey, config.Secure)
+	if err != nil {
+		return err
+	}
+	s.Minio = storage
+	return nil
 }

@@ -17,17 +17,22 @@ services:
     image: postgres:14
     container_name: goose_postgres
     environment:
-      POSTGRES_USER: ${DB_USER}
-      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_USER: ${DB_ADMIN_USER}
+      POSTGRES_PASSWORD: ${DB_ADMIN_PASSWORD}
       POSTGRES_DB: postgres
+      USER_SERVICE_DB_PASSWORD: ${USER_SERVICE_DB_PASSWORD}
+      NOTES_SERVICE_DB_PASSWORD: ${NOTES_SERVICE_DB_PASSWORD}
+      FILES_SERVICE_DB_PASSWORD: ${FILES_SERVICE_DB_PASSWORD}
     ports:
       - "${DB_PORT_EXTERNAL}:5432"
     volumes:
       - ./scripts/init-dbs.sh:/docker-entrypoint-initdb.d/init-dbs.sh
+      - ./config/postgresql.conf:/etc/postgresql/postgresql.conf
       - postgres_data:/var/lib/postgresql/data
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
     restart: unless-stopped
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d postgres"]
+      test: ["CMD-SHELL", "pg_isready -U ${DB_ADMIN_USER} -d postgres"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -73,8 +78,14 @@ services:
       CONFIG_PATH: "./config"
       DB_HOST: "postgres"
       DB_PORT: "5432"
-      DB_NAME: "user_db"
       DB_SSLMODE: "${DB_SSLMODE}"
+
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+
+      USER_DB_USER: ${USER_DB_USER}
+      USER_DB_PASSWORD: ${USER_DB_PASSWORD}
+      USER_DB_NAME: ${USER_DB_NAME}
     ports:
       - "9096:9092"
     restart: unless-stopped
@@ -92,8 +103,14 @@ services:
       CONFIG_PATH: "./config"
       DB_HOST: "postgres"
       DB_PORT: "5432"
-      DB_NAME: "notes_db"
       DB_SSLMODE: "${DB_SSLMODE}"
+
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+
+      NOTES_DB_USER: ${NOTES_DB_USER}
+      NOTES_DB_PASSWORD: ${NOTES_DB_PASSWORD}
+      NOTES_DB_NAME: ${NOTES_DB_NAME}
     ports:
       - "9095:9091"
     restart: unless-stopped
@@ -111,15 +128,21 @@ services:
       CONFIG_PATH: "./config"
       SERVER_HOST: "0.0.0.0"
       SERVER_PORT: "8080"
-      
+
       DB_HOST: "postgres"
       DB_PORT: "5432"
-      DB_NAME: "files_db"
       DB_SSLMODE: "${DB_SSLMODE}"
-      
+
+      DB_ADMIN_USER: ${DB_ADMIN_USER}
+      DB_ADMIN_PASSWORD: ${DB_ADMIN_PASSWORD}
+
+      FILES_DB_USER: ${FILES_DB_USER}
+      FILES_DB_PASSWORD: ${FILES_DB_PASSWORD}
+      FILES_DB_NAME: ${FILES_DB_NAME}
+
       MINIO_ENDPOINT: "minio:9000"
       MINIO_PUBLIC_ENDPOINT: "${MINIO_PUBLIC_ENDPOINT}"
-      
+
       SERVICES_AUTH_GRPC_HOST: "auth"
       SERVICES_AUTH_GRPC_PORT: "50051"
       SERVICES_USER_GRPC_HOST: "user"
