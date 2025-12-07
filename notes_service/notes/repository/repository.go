@@ -558,7 +558,7 @@ func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connStr
 		time.Minute,
 		func(ev pq.ListenerEventType, err error) {
 			if err != nil {
-				log.Error().Err(err).Str("event", string(ev)).Msg("postgres listener event error")
+				log.Error().Err(err).Int("event", int(ev)).Msg("postgres listener event error")
 			}
 		},
 	)
