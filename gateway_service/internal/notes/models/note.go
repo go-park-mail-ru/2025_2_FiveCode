@@ -15,3 +15,17 @@ type Note struct {
 	UpdatedAt    time.Time  `json:"updated_at"`
 	DeletedAt    *time.Time `json:"deleted_at,omitempty"`
 }
+
+type SearchResult struct {
+	NoteID           uint64    `json:"note_id"`
+	Title            string    `json:"title"`
+	HighlightedTitle string    `json:"highlighted_title"`
+	ContentSnippet   string    `json:"content_snippet"`
+	Rank             float32   `json:"rank"`
+	UpdatedAt        time.Time `json:"updated_at"`
+}
+
+type SearchNotesResponse struct {
+	Results []SearchResult `json:"results"`
+	Count   int            `json:"count"`
+}

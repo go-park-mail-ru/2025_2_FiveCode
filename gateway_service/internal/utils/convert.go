@@ -296,3 +296,36 @@ func MapProtoToActivateAccessResponse(proto *sharePB.ActivateAccessByLinkRespons
 		AccessInfo:    MapProtoToNoteAccessInfo(proto.AccessInfo),
 	}
 }
+
+func MapProtoToSearchResult(p *notePB.SearchResult) noteModels.SearchResult {
+	if p == nil {
+		return noteModels.SearchResult{}
+	}
+	return noteModels.SearchResult{
+		NoteID:           p.NoteId,
+		Title:            p.Title,
+		HighlightedTitle: p.HighlightedTitle,
+		ContentSnippet:   p.ContentSnippet,
+		Rank:             p.Rank,
+		UpdatedAt:        p.UpdatedAt.AsTime(),
+	}
+}
+
+func MapProtoToSearchNotesResponse(p *notePB.SearchNotesResponse) *noteModels.SearchNotesResponse {
+	if p == nil {
+		return &noteModels.SearchNotesResponse{
+			Results: []noteModels.SearchResult{},
+			Count:   0,
+		}
+	}
+
+	results := make([]noteModels.SearchResult, len(p.Results))
+	for i, result := range p.Results {
+		results[i] = MapProtoToSearchResult(result)
+	}
+
+	return &noteModels.SearchNotesResponse{
+		Results: results,
+		Count:   int(p.Count),
+	}
+}

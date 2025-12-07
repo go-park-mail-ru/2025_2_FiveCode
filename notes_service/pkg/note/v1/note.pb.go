@@ -34,7 +34,7 @@ type Note struct {
 	IsFavorite    bool                   `protobuf:"varint,6,opt,name=is_favorite,json=isFavorite,proto3" json:"is_favorite,omitempty"`
 	IsArchived    bool                   `protobuf:"varint,7,opt,name=is_archived,json=isArchived,proto3" json:"is_archived,omitempty"`
 	IsShared      bool                   `protobuf:"varint,8,opt,name=is_shared,json=isShared,proto3" json:"is_shared,omitempty"`
-	ShareUuid     *string                `protobuf:"bytes,9,opt,name=share_uuid,json=shareUuid,proto3,oneof" json:"share_uuid,omitempty"` // НОВЫЙ - UUID для публичной ссылки
+	ShareUuid     *string                `protobuf:"bytes,9,opt,name=share_uuid,json=shareUuid,proto3,oneof" json:"share_uuid,omitempty"`
 	CreatedAt     *timestamppb.Timestamp `protobuf:"bytes,10,opt,name=created_at,json=createdAt,proto3" json:"created_at,omitempty"`
 	UpdatedAt     *timestamppb.Timestamp `protobuf:"bytes,11,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
 	DeletedAt     *timestamppb.Timestamp `protobuf:"bytes,12,opt,name=deleted_at,json=deletedAt,proto3,oneof" json:"deleted_at,omitempty"`
@@ -564,6 +564,194 @@ func (x *FavoriteRequest) GetNoteId() uint64 {
 	return 0
 }
 
+type SearchNotesRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Query         string                 `protobuf:"bytes,2,opt,name=query,proto3" json:"query,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchNotesRequest) Reset() {
+	*x = SearchNotesRequest{}
+	mi := &file_proto_note_v1_note_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchNotesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchNotesRequest) ProtoMessage() {}
+
+func (x *SearchNotesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_note_v1_note_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchNotesRequest.ProtoReflect.Descriptor instead.
+func (*SearchNotesRequest) Descriptor() ([]byte, []int) {
+	return file_proto_note_v1_note_proto_rawDescGZIP(), []int{9}
+}
+
+func (x *SearchNotesRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *SearchNotesRequest) GetQuery() string {
+	if x != nil {
+		return x.Query
+	}
+	return ""
+}
+
+type SearchResult struct {
+	state            protoimpl.MessageState `protogen:"open.v1"`
+	NoteId           uint64                 `protobuf:"varint,1,opt,name=note_id,json=noteId,proto3" json:"note_id,omitempty"`
+	Title            string                 `protobuf:"bytes,2,opt,name=title,proto3" json:"title,omitempty"`
+	HighlightedTitle string                 `protobuf:"bytes,3,opt,name=highlighted_title,json=highlightedTitle,proto3" json:"highlighted_title,omitempty"`
+	ContentSnippet   string                 `protobuf:"bytes,4,opt,name=content_snippet,json=contentSnippet,proto3" json:"content_snippet,omitempty"`
+	Rank             float32                `protobuf:"fixed32,5,opt,name=rank,proto3" json:"rank,omitempty"`
+	UpdatedAt        *timestamppb.Timestamp `protobuf:"bytes,6,opt,name=updated_at,json=updatedAt,proto3" json:"updated_at,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *SearchResult) Reset() {
+	*x = SearchResult{}
+	mi := &file_proto_note_v1_note_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchResult) ProtoMessage() {}
+
+func (x *SearchResult) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_note_v1_note_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchResult.ProtoReflect.Descriptor instead.
+func (*SearchResult) Descriptor() ([]byte, []int) {
+	return file_proto_note_v1_note_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *SearchResult) GetNoteId() uint64 {
+	if x != nil {
+		return x.NoteId
+	}
+	return 0
+}
+
+func (x *SearchResult) GetTitle() string {
+	if x != nil {
+		return x.Title
+	}
+	return ""
+}
+
+func (x *SearchResult) GetHighlightedTitle() string {
+	if x != nil {
+		return x.HighlightedTitle
+	}
+	return ""
+}
+
+func (x *SearchResult) GetContentSnippet() string {
+	if x != nil {
+		return x.ContentSnippet
+	}
+	return ""
+}
+
+func (x *SearchResult) GetRank() float32 {
+	if x != nil {
+		return x.Rank
+	}
+	return 0
+}
+
+func (x *SearchResult) GetUpdatedAt() *timestamppb.Timestamp {
+	if x != nil {
+		return x.UpdatedAt
+	}
+	return nil
+}
+
+type SearchNotesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Results       []*SearchResult        `protobuf:"bytes,1,rep,name=results,proto3" json:"results,omitempty"`
+	Count         int32                  `protobuf:"varint,2,opt,name=count,proto3" json:"count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SearchNotesResponse) Reset() {
+	*x = SearchNotesResponse{}
+	mi := &file_proto_note_v1_note_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SearchNotesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SearchNotesResponse) ProtoMessage() {}
+
+func (x *SearchNotesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_proto_note_v1_note_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SearchNotesResponse.ProtoReflect.Descriptor instead.
+func (*SearchNotesResponse) Descriptor() ([]byte, []int) {
+	return file_proto_note_v1_note_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *SearchNotesResponse) GetResults() []*SearchResult {
+	if x != nil {
+		return x.Results
+	}
+	return nil
+}
+
+func (x *SearchNotesResponse) GetCount() int32 {
+	if x != nil {
+		return x.Count
+	}
+	return 0
+}
+
 var File_proto_note_v1_note_proto protoreflect.FileDescriptor
 
 const file_proto_note_v1_note_proto_rawDesc = "" +
@@ -622,7 +810,21 @@ const file_proto_note_v1_note_proto_rawDesc = "" +
 	"\anote_id\x18\x02 \x01(\x04R\x06noteId\"C\n" +
 	"\x0fFavoriteRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x17\n" +
-	"\anote_id\x18\x02 \x01(\x04R\x06noteId2\xed\x03\n" +
+	"\anote_id\x18\x02 \x01(\x04R\x06noteId\"C\n" +
+	"\x12SearchNotesRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x14\n" +
+	"\x05query\x18\x02 \x01(\tR\x05query\"\xe2\x01\n" +
+	"\fSearchResult\x12\x17\n" +
+	"\anote_id\x18\x01 \x01(\x04R\x06noteId\x12\x14\n" +
+	"\x05title\x18\x02 \x01(\tR\x05title\x12+\n" +
+	"\x11highlighted_title\x18\x03 \x01(\tR\x10highlightedTitle\x12'\n" +
+	"\x0fcontent_snippet\x18\x04 \x01(\tR\x0econtentSnippet\x12\x12\n" +
+	"\x04rank\x18\x05 \x01(\x02R\x04rank\x129\n" +
+	"\n" +
+	"updated_at\x18\x06 \x01(\v2\x1a.google.protobuf.TimestampR\tupdatedAt\"Y\n" +
+	"\x13SearchNotesResponse\x12,\n" +
+	"\aresults\x18\x01 \x03(\v2\x12.note.SearchResultR\aresults\x12\x14\n" +
+	"\x05count\x18\x02 \x01(\x05R\x05count2\xb1\x04\n" +
 	"\vNoteService\x12B\n" +
 	"\vGetAllNotes\x12\x18.note.GetAllNotesRequest\x1a\x19.note.GetAllNotesResponse\x121\n" +
 	"\n" +
@@ -638,7 +840,8 @@ const file_proto_note_v1_note_proto_rawDesc = "" +
 	"\n" +
 	"DeleteNote\x12\x17.note.DeleteNoteRequest\x1a\x16.google.protobuf.Empty\x12<\n" +
 	"\vAddFavorite\x12\x15.note.FavoriteRequest\x1a\x16.google.protobuf.Empty\x12?\n" +
-	"\x0eRemoveFavorite\x12\x15.note.FavoriteRequest\x1a\x16.google.protobuf.EmptyB#Z!backend/notes_service/pkg/note/v1b\x06proto3"
+	"\x0eRemoveFavorite\x12\x15.note.FavoriteRequest\x1a\x16.google.protobuf.Empty\x12B\n" +
+	"\vSearchNotes\x12\x18.note.SearchNotesRequest\x1a\x19.note.SearchNotesResponseB#Z!backend/notes_service/pkg/note/v1b\x06proto3"
 
 var (
 	file_proto_note_v1_note_proto_rawDescOnce sync.Once
@@ -652,7 +855,7 @@ func file_proto_note_v1_note_proto_rawDescGZIP() []byte {
 	return file_proto_note_v1_note_proto_rawDescData
 }
 
-var file_proto_note_v1_note_proto_msgTypes = make([]protoimpl.MessageInfo, 9)
+var file_proto_note_v1_note_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_proto_note_v1_note_proto_goTypes = []any{
 	(*Note)(nil),                      // 0: note.Note
 	(*GetAllNotesRequest)(nil),        // 1: note.GetAllNotesRequest
@@ -663,35 +866,42 @@ var file_proto_note_v1_note_proto_goTypes = []any{
 	(*UpdateNoteRequest)(nil),         // 6: note.UpdateNoteRequest
 	(*DeleteNoteRequest)(nil),         // 7: note.DeleteNoteRequest
 	(*FavoriteRequest)(nil),           // 8: note.FavoriteRequest
-	(*timestamppb.Timestamp)(nil),     // 9: google.protobuf.Timestamp
-	(*emptypb.Empty)(nil),             // 10: google.protobuf.Empty
+	(*SearchNotesRequest)(nil),        // 9: note.SearchNotesRequest
+	(*SearchResult)(nil),              // 10: note.SearchResult
+	(*SearchNotesResponse)(nil),       // 11: note.SearchNotesResponse
+	(*timestamppb.Timestamp)(nil),     // 12: google.protobuf.Timestamp
+	(*emptypb.Empty)(nil),             // 13: google.protobuf.Empty
 }
 var file_proto_note_v1_note_proto_depIdxs = []int32{
-	9,  // 0: note.Note.created_at:type_name -> google.protobuf.Timestamp
-	9,  // 1: note.Note.updated_at:type_name -> google.protobuf.Timestamp
-	9,  // 2: note.Note.deleted_at:type_name -> google.protobuf.Timestamp
+	12, // 0: note.Note.created_at:type_name -> google.protobuf.Timestamp
+	12, // 1: note.Note.updated_at:type_name -> google.protobuf.Timestamp
+	12, // 2: note.Note.deleted_at:type_name -> google.protobuf.Timestamp
 	0,  // 3: note.GetAllNotesResponse.notes:type_name -> note.Note
-	1,  // 4: note.NoteService.GetAllNotes:input_type -> note.GetAllNotesRequest
-	3,  // 5: note.NoteService.CreateNote:input_type -> note.CreateNoteRequest
-	4,  // 6: note.NoteService.GetNoteById:input_type -> note.GetNoteByIdRequest
-	5,  // 7: note.NoteService.GetNoteByShareUUID:input_type -> note.GetNoteByShareUUIDRequest
-	6,  // 8: note.NoteService.UpdateNote:input_type -> note.UpdateNoteRequest
-	7,  // 9: note.NoteService.DeleteNote:input_type -> note.DeleteNoteRequest
-	8,  // 10: note.NoteService.AddFavorite:input_type -> note.FavoriteRequest
-	8,  // 11: note.NoteService.RemoveFavorite:input_type -> note.FavoriteRequest
-	2,  // 12: note.NoteService.GetAllNotes:output_type -> note.GetAllNotesResponse
-	0,  // 13: note.NoteService.CreateNote:output_type -> note.Note
-	0,  // 14: note.NoteService.GetNoteById:output_type -> note.Note
-	0,  // 15: note.NoteService.GetNoteByShareUUID:output_type -> note.Note
-	0,  // 16: note.NoteService.UpdateNote:output_type -> note.Note
-	10, // 17: note.NoteService.DeleteNote:output_type -> google.protobuf.Empty
-	10, // 18: note.NoteService.AddFavorite:output_type -> google.protobuf.Empty
-	10, // 19: note.NoteService.RemoveFavorite:output_type -> google.protobuf.Empty
-	12, // [12:20] is the sub-list for method output_type
-	4,  // [4:12] is the sub-list for method input_type
-	4,  // [4:4] is the sub-list for extension type_name
-	4,  // [4:4] is the sub-list for extension extendee
-	0,  // [0:4] is the sub-list for field type_name
+	12, // 4: note.SearchResult.updated_at:type_name -> google.protobuf.Timestamp
+	10, // 5: note.SearchNotesResponse.results:type_name -> note.SearchResult
+	1,  // 6: note.NoteService.GetAllNotes:input_type -> note.GetAllNotesRequest
+	3,  // 7: note.NoteService.CreateNote:input_type -> note.CreateNoteRequest
+	4,  // 8: note.NoteService.GetNoteById:input_type -> note.GetNoteByIdRequest
+	5,  // 9: note.NoteService.GetNoteByShareUUID:input_type -> note.GetNoteByShareUUIDRequest
+	6,  // 10: note.NoteService.UpdateNote:input_type -> note.UpdateNoteRequest
+	7,  // 11: note.NoteService.DeleteNote:input_type -> note.DeleteNoteRequest
+	8,  // 12: note.NoteService.AddFavorite:input_type -> note.FavoriteRequest
+	8,  // 13: note.NoteService.RemoveFavorite:input_type -> note.FavoriteRequest
+	9,  // 14: note.NoteService.SearchNotes:input_type -> note.SearchNotesRequest
+	2,  // 15: note.NoteService.GetAllNotes:output_type -> note.GetAllNotesResponse
+	0,  // 16: note.NoteService.CreateNote:output_type -> note.Note
+	0,  // 17: note.NoteService.GetNoteById:output_type -> note.Note
+	0,  // 18: note.NoteService.GetNoteByShareUUID:output_type -> note.Note
+	0,  // 19: note.NoteService.UpdateNote:output_type -> note.Note
+	13, // 20: note.NoteService.DeleteNote:output_type -> google.protobuf.Empty
+	13, // 21: note.NoteService.AddFavorite:output_type -> google.protobuf.Empty
+	13, // 22: note.NoteService.RemoveFavorite:output_type -> google.protobuf.Empty
+	11, // 23: note.NoteService.SearchNotes:output_type -> note.SearchNotesResponse
+	15, // [15:24] is the sub-list for method output_type
+	6,  // [6:15] is the sub-list for method input_type
+	6,  // [6:6] is the sub-list for extension type_name
+	6,  // [6:6] is the sub-list for extension extendee
+	0,  // [0:6] is the sub-list for field type_name
 }
 
 func init() { file_proto_note_v1_note_proto_init() }
@@ -708,7 +918,7 @@ func file_proto_note_v1_note_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_proto_note_v1_note_proto_rawDesc), len(file_proto_note_v1_note_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   9,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

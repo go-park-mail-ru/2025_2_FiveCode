@@ -14,6 +14,7 @@ import (
 	"backend/pkg/interceptors"
 	"backend/pkg/metrics"
 	"backend/pkg/store"
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -36,6 +37,9 @@ type App struct {
 	GRPCServer *grpc.Server
 	Lis        net.Listener
 
+	ctx    context.Context
+	cancel context.CancelFunc
+
 	closers []io.Closer
 }
 
@@ -52,16 +56,21 @@ func NewApp() *App {
 
 	appLogger := logger.New()
 
+	ctx, cancel := context.WithCancel(context.Background())
+
 	app := &App{
 		Config:  cfg,
 		Store:   store.NewStore(),
 		Logger:  appLogger,
+		ctx:     ctx,
+		cancel:  cancel,
 		closers: []io.Closer{},
 	}
 
 	app.initDependencies()
 	app.initGRPCServer()
 	app.initMetrics()
+	app.startSearchIndexRefresher()
 
 	return app
 }
@@ -142,6 +151,29 @@ func (a *App) initMetrics() {
 	}()
 }
 
+func (a *App) startSearchIndexRefresher() {
+	a.Logger.Info().Msg("Starting search index refresher worker...")
+
+	connString := fmt.Sprintf(
+		"postgres://%s:%s@%s:%d/%s?sslmode=%s",
+		a.Config.DB.User,
+		a.Config.DB.Password,
+		a.Config.DB.Host,
+		a.Config.DB.Port,
+		a.Config.DB.DBName,
+		a.Config.DB.SSLMode,
+	)
+
+	notesRepo := NoteRepo.NewNotesRepository(a.Store.Postgres.DB)
+
+	ctx := logger.ToContext(a.ctx, a.Logger)
+	if err := notesRepo.StartSearchIndexRefresher(ctx, connString); err != nil {
+		a.Logger.Fatal().Err(err).Msg("failed to start search index refresher")
+	}
+
+	a.Logger.Info().Msg("Search index refresher worker started successfully")
+}
+
 func (a *App) Run() {
 	a.Logger.Info().Str("addr", a.Lis.Addr().String()).Msg("gRPC server is ready to accept connections")
 	if err := a.GRPCServer.Serve(a.Lis); err != nil {
@@ -151,6 +183,11 @@ func (a *App) Run() {
 
 func (a *App) Close() error {
 	a.Logger.Info().Msg("Closing application resources...")
+
+	if a.cancel != nil {
+		a.cancel()
+		a.Logger.Info().Msg("Cancelled background workers")
+	}
 
 	if a.GRPCServer != nil {
 		a.GRPCServer.GracefulStop()

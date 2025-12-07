@@ -23,6 +23,7 @@ type NotesRepository interface {
 	DeleteNote(ctx context.Context, noteID uint64) error
 	AddFavorite(ctx context.Context, userID, noteID uint64) error
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
+	SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error)
 }
 
 type SharingRepository interface {
@@ -210,4 +211,26 @@ func (u *NoteUsecase) GetNoteByShareUUID(ctx context.Context, shareUUID string) 
 	}
 
 	return note, nil
+}
+
+func (u *NoteUsecase) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
+	log := logger.FromContext(ctx)
+
+	if query == "" {
+		log.Warn().Msg("search query is empty")
+		return nil, fmt.Errorf("search query cannot be empty")
+	}
+
+	if len(query) > 200 {
+		log.Warn().Int("length", len(query)).Msg("search query too long")
+		return nil, fmt.Errorf("search query too long (max 200 characters)")
+	}
+
+	searchResult, err := u.Repository.SearchNotes(ctx, userID, query)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to search notes in repository")
+		return nil, fmt.Errorf("failed to search notes in repository: %w", err)
+	}
+
+	return searchResult, nil
 }

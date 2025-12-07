@@ -9,8 +9,8 @@ import (
 	mw "backend/gateway_service/internal/middleware"
 	notesDelivery "backend/gateway_service/internal/notes/delivery"
 	userDelivery "backend/gateway_service/internal/user/delivery"
-	"backend/pkg/metrics"
 	"backend/gateway_service/internal/websocket"
+	"backend/pkg/metrics"
 
 	"github.com/gorilla/mux"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -52,6 +52,7 @@ func NewRouter(
 
 	notesRouter.HandleFunc("/notes", notes.GetAllNotes).Methods("GET")
 	notesRouter.HandleFunc("/notes", notes.CreateNote).Methods("POST")
+	notesRouter.HandleFunc("/notes/search", notes.SearchNotes).Methods("POST")
 	notesRouter.HandleFunc("/notes/{note_id}", notes.GetNoteById).Methods("GET")
 	notesRouter.HandleFunc("/notes/{note_id}", notes.UpdateNote).Methods("PUT")
 	notesRouter.HandleFunc("/notes/{note_id}", notes.DeleteNote).Methods("DELETE")

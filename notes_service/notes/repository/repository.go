@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 type NotesRepository struct {
@@ -458,4 +459,171 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 	}
 
 	return note, nil
+}
+
+func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
+	log := logger.FromContext(ctx)
+
+	searchQuery := `
+		SELECT 
+			note_id,
+			title,
+			CASE 
+				WHEN title_vector @@ query THEN 
+					ts_headline('russian', title, query, 'StartSel=<mark>, StopSel=</mark>')
+				ELSE title 
+			END as highlighted_title,
+			ts_headline(
+				'russian',
+				COALESCE(content, ''),
+				query,
+				'MaxWords=15, MinWords=5, ShortWord=3, MaxFragments=2,
+				 FragmentDelimiter= ... , StartSel=<mark>, StopSel=</mark>'
+			) as content_snippet,
+			ts_rank(search_vector, query) as rank,
+			updated_at
+		FROM note_search_index,
+			 plainto_tsquery('russian', $1) query,
+			 to_tsvector('russian', title) title_vector
+		WHERE search_vector @@ query
+		  AND deleted_at IS NULL
+		  AND (
+			  owner_id = $2 
+			  OR 
+			  note_id IN (  
+				  SELECT note_id 
+				  FROM note_permission 
+				  WHERE granted_to = $2
+			  )
+		  )
+		ORDER BY rank DESC, updated_at DESC
+		LIMIT 20
+	`
+
+	rows, err := r.db.QueryContext(ctx, searchQuery, query, userID)
+	if err != nil {
+		log.Error().Err(err).Str("query", query).Msg("failed to execute search query")
+		return nil, fmt.Errorf("failed to execute search query: %w", err)
+	}
+	defer func() {
+		if err := rows.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close rows")
+		}
+	}()
+
+	results := make([]models.SearchResult, 0)
+
+	for rows.Next() {
+		var result models.SearchResult
+
+		err := rows.Scan(
+			&result.NoteID,
+			&result.Title,
+			&result.HighlightedTitle,
+			&result.ContentSnippet,
+			&result.Rank,
+			&result.UpdatedAt,
+		)
+		if err != nil {
+			log.Error().Err(err).Msg("failed to scan search result")
+			return nil, fmt.Errorf("failed to scan search result: %w", err)
+		}
+
+		results = append(results, result)
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Error().Err(err).Msg("error iterating search results")
+		return nil, fmt.Errorf("error iterating search results: %w", err)
+	}
+
+	log.Info().
+		Str("query", query).
+		Uint64("user_id", userID).
+		Int("results_count", len(results)).
+		Msg("search completed successfully")
+
+	return &models.SearchNotesResponse{
+		Results: results,
+		Count:   len(results),
+	}, nil
+}
+
+func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connString string) error {
+	log := logger.FromContext(ctx)
+
+	listener := pq.NewListener(
+		connString,
+		10*time.Second,
+		time.Minute,
+		func(ev pq.ListenerEventType, err error) {
+			if err != nil {
+				log.Error().Err(err).Str("event", string(ev)).Msg("postgres listener event error")
+			}
+		},
+	)
+
+	err := listener.Listen("refresh_search_index")
+	if err != nil {
+		log.Error().Err(err).Msg("failed to start listening for search index updates")
+		return fmt.Errorf("failed to listen to refresh_search_index channel: %w", err)
+	}
+
+	log.Info().Msg("search index refresher listener started")
+
+	debounceTimer := time.NewTimer(5 * time.Second)
+	debounceTimer.Stop()
+	needsRefresh := false
+
+	go func() {
+		defer func() {
+			if err := listener.Close(); err != nil {
+				log.Error().Err(err).Msg("failed to close postgres listener")
+			}
+			log.Info().Msg("search index refresher stopped")
+		}()
+
+		for {
+			select {
+			case <-ctx.Done():
+				log.Info().Msg("context cancelled, stopping search index refresher")
+				return
+
+			case notification := <-listener.Notify:
+				if notification != nil {
+					needsRefresh = true
+					debounceTimer.Reset(5 * time.Second)
+					log.Debug().Msg("received search index refresh notification, debouncing...")
+				}
+
+			case <-debounceTimer.C:
+				if needsRefresh {
+					log.Info().Msg("debounce timer expired, refreshing search index...")
+
+					refreshCtx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+					if err := r.refreshSearchIndex(refreshCtx); err != nil {
+						log.Error().Err(err).Msg("failed to refresh search index")
+					} else {
+						log.Info().Msg("search index refreshed successfully")
+					}
+					cancel()
+
+					needsRefresh = false
+				}
+			}
+		}
+	}()
+
+	return nil
+}
+
+func (r *NotesRepository) refreshSearchIndex(ctx context.Context) error {
+	query := "REFRESH MATERIALIZED VIEW CONCURRENTLY note_search_index"
+
+	_, err := r.db.ExecContext(ctx, query)
+	if err != nil {
+		return fmt.Errorf("failed to refresh materialized view: %w", err)
+	}
+
+	return nil
 }

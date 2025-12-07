@@ -16,6 +16,7 @@ service NoteService {
   rpc DeleteNote(DeleteNoteRequest) returns (google.protobuf.Empty);
   rpc AddFavorite(FavoriteRequest) returns (google.protobuf.Empty);
   rpc RemoveFavorite(FavoriteRequest) returns (google.protobuf.Empty);
+  rpc SearchNotes(SearchNotesRequest) returns (SearchNotesResponse);
 }
 
 message Note {
@@ -27,7 +28,7 @@ message Note {
   bool is_favorite = 6;
   bool is_archived = 7;
   bool is_shared = 8;
-  optional string share_uuid = 9;  // НОВЫЙ - UUID для публичной ссылки
+  optional string share_uuid = 9;
   google.protobuf.Timestamp created_at = 10;
   google.protobuf.Timestamp updated_at = 11;
   optional google.protobuf.Timestamp deleted_at = 12;
@@ -70,4 +71,23 @@ message DeleteNoteRequest {
 message FavoriteRequest {
   uint64 user_id = 1;
   uint64 note_id = 2;
+}
+
+message SearchNotesRequest {
+  uint64 user_id = 1;
+  string query = 2;
+}
+
+message SearchResult {
+  uint64 note_id = 1;
+  string title = 2;
+  string highlighted_title = 3;
+  string content_snippet = 4;
+  float rank = 5;
+  google.protobuf.Timestamp updated_at = 6;
+}
+
+message SearchNotesResponse {
+  repeated SearchResult results = 1;
+  int32 count = 2;
 }
