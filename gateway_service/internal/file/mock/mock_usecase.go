@@ -78,6 +78,21 @@ func (mr *MockFileRepositoryMockRecorder) GetFileByID(ctx, fileID interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileByID", reflect.TypeOf((*MockFileRepository)(nil).GetFileByID), ctx, fileID)
 }
 
+// GetIcons mocks base method.
+func (m *MockFileRepository) GetIcons(ctx context.Context) ([]*models.Icon, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIcons", ctx)
+	ret0, _ := ret[0].([]*models.Icon)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetIcons indicates an expected call of GetIcons.
+func (mr *MockFileRepositoryMockRecorder) GetIcons(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIcons", reflect.TypeOf((*MockFileRepository)(nil).GetIcons), ctx)
+}
+
 // SaveFile mocks base method.
 func (m *MockFileRepository) SaveFile(ctx context.Context, url, mimeType string, sizeBytes int64, width, height *int) (*models.File, error) {
 	m.ctrl.T.Helper()

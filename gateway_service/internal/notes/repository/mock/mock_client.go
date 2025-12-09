@@ -198,6 +198,46 @@ func (mr *MockNoteClientMockRecorder) RemoveFavorite(ctx, in interface{}, opts .
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveFavorite", reflect.TypeOf((*MockNoteClient)(nil).RemoveFavorite), varargs...)
 }
 
+// SearchNotes mocks base method.
+func (m *MockNoteClient) SearchNotes(ctx context.Context, in *v10.SearchNotesRequest, opts ...grpc.CallOption) (*v10.SearchNotesResponse, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SearchNotes", varargs...)
+	ret0, _ := ret[0].(*v10.SearchNotesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchNotes indicates an expected call of SearchNotes.
+func (mr *MockNoteClientMockRecorder) SearchNotes(ctx, in interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchNotes", reflect.TypeOf((*MockNoteClient)(nil).SearchNotes), varargs...)
+}
+
+// SetIcon mocks base method.
+func (m *MockNoteClient) SetIcon(ctx context.Context, in *v10.SetIconRequest, opts ...grpc.CallOption) (*v10.Note, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SetIcon", varargs...)
+	ret0, _ := ret[0].(*v10.Note)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetIcon indicates an expected call of SetIcon.
+func (mr *MockNoteClientMockRecorder) SetIcon(ctx, in interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIcon", reflect.TypeOf((*MockNoteClient)(nil).SetIcon), varargs...)
+}
+
 // UpdateNote mocks base method.
 func (m *MockNoteClient) UpdateNote(ctx context.Context, in *v10.UpdateNoteRequest, opts ...grpc.CallOption) (*v10.Note, error) {
 	m.ctrl.T.Helper()

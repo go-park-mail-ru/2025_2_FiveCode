@@ -69,7 +69,7 @@ func TestNotesRepository_CreateNote(t *testing.T) {
 			AddRow(1, userID, nil, "Новая заметка", nil, false, false, "uuid", now, now, nil)
 
 		mock.ExpectQuery(`INSERT INTO note`).
-			WithArgs(userID, nil, "Новая заметка", false, false, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+			WithArgs(userID, nil, "Новая заметка", uint64(1), false, false, sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 			WillReturnRows(rows)
 
 		blockRows := sqlmock.NewRows([]string{"id"}).AddRow(100)

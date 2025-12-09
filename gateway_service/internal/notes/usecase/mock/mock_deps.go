@@ -301,6 +301,36 @@ func (mr *MockNotesRepositoryMockRecorder) RemoveFavorite(ctx, userID, noteID in
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "RemoveFavorite", reflect.TypeOf((*MockNotesRepository)(nil).RemoveFavorite), ctx, userID, noteID)
 }
 
+// SearchNotes mocks base method.
+func (m *MockNotesRepository) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SearchNotes", ctx, userID, query)
+	ret0, _ := ret[0].(*models.SearchNotesResponse)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SearchNotes indicates an expected call of SearchNotes.
+func (mr *MockNotesRepositoryMockRecorder) SearchNotes(ctx, userID, query interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchNotes", reflect.TypeOf((*MockNotesRepository)(nil).SearchNotes), ctx, userID, query)
+}
+
+// SetIcon mocks base method.
+func (m *MockNotesRepository) SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetIcon", ctx, userID, noteID, iconFileID)
+	ret0, _ := ret[0].(*models.Note)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetIcon indicates an expected call of SetIcon.
+func (mr *MockNotesRepositoryMockRecorder) SetIcon(ctx, userID, noteID, iconFileID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetIcon", reflect.TypeOf((*MockNotesRepository)(nil).SetIcon), ctx, userID, noteID, iconFileID)
+}
+
 // SetPublicAccess mocks base method.
 func (m *MockNotesRepository) SetPublicAccess(ctx context.Context, input *models.SetPublicAccessInput) (*models.PublicAccessResponse, error) {
 	m.ctrl.T.Helper()
