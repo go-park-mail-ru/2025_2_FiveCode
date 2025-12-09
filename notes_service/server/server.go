@@ -24,6 +24,7 @@ type NoteUsecase interface {
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 	GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error)
 	SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error)
+	SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error)
 }
 
 type BlocksUsecase interface {

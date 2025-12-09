@@ -158,3 +158,18 @@ func (s *Server) SearchNotes(ctx context.Context, req *notePB.SearchNotesRequest
 
 	return searchResponseModelToProto(response), nil
 }
+
+func (s *Server) SetIcon(ctx context.Context, req *notePB.SetIconRequest) (*notePB.Note, error) {
+	note, err := s.noteUsecase.SetIcon(ctx, req.GetUserId(), req.GetNoteId(), req.GetIconFileId())
+	if err != nil {
+		if errors.Is(err, constants.ErrNotFound) {
+			return nil, status.Error(codes.NotFound, "note not found")
+		}
+		if errors.Is(err, constants.ErrNoAccess) {
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		}
+		return nil, status.Error(codes.Internal, "failed to set icon")
+	}
+
+	return noteModelToProto(note), nil
+}

@@ -298,3 +298,47 @@ func (d *NotesDelivery) SearchNotes(w http.ResponseWriter, r *http.Request) {
 
 	apiutils.WriteJSON(w, http.StatusOK, searchResult)
 }
+
+type SetIconRequest struct {
+	IconFileID uint64 `json:"icon_file_id"`
+}
+
+func (d *NotesDelivery) SetIcon(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+	vars := mux.Vars(r)
+	noteID, err := strconv.ParseUint(vars["note_id"], 10, 64)
+	if err != nil {
+		log.Warn().Err(err).Str("note_id", vars["note_id"]).Msg("invalid note id")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid note id")
+		return
+	}
+
+	userID, ok := middleware.GetUserID(r.Context())
+	if !ok {
+		log.Error().Msg("user not authenticated")
+		apiutils.WriteError(w, http.StatusInternalServerError, "user not authenticated")
+		return
+	}
+
+	defer func() {
+		if err := r.Body.Close(); err != nil {
+			log.Error().Err(err).Msg("failed to close request body")
+		}
+	}()
+
+	var req SetIconRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		log.Warn().Err(err).Msg("invalid request body")
+		apiutils.WriteError(w, http.StatusBadRequest, "invalid request body")
+		return
+	}
+
+	note, err := d.usecase.SetIcon(r.Context(), userID, noteID, req.IconFileID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to set icon")
+		apiutils.HandleGrpcError(w, err, log)
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, note)
+}

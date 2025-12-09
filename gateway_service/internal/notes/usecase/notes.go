@@ -48,3 +48,7 @@ func (u *NotesUsecase) RemoveFavorite(ctx context.Context, userID, noteID uint64
 func (u *NotesUsecase) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
 	return u.repo.SearchNotes(ctx, userID, query)
 }
+
+func (u *NotesUsecase) SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error) {
+	return u.repo.SetIcon(ctx, userID, noteID, iconFileID)
+}
