@@ -30,9 +30,6 @@ func MapProtoToNote(p *notePB.Note) *noteModels.Note {
 	if p.ParentNoteId != nil {
 		m.ParentNoteID = p.ParentNoteId
 	}
-	if p.IconFileId != nil {
-		m.IconFileID = p.IconFileId
-	}
 	if p.DeletedAt != nil {
 		deletedAt := p.DeletedAt.AsTime()
 		m.DeletedAt = &deletedAt

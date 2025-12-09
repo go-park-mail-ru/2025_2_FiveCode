@@ -7,7 +7,6 @@ type Note struct {
 	OwnerID      uint64     `json:"owner_id"`
 	ParentNoteID *uint64    `json:"parent_note_id,omitempty"`
 	Title        string     `json:"title"`
-	IconFileID   *uint64    `json:"-"`
 	Icon         *Icon      `json:"icon,omitempty"`
 	IsFavorite   bool       `json:"is_favorite"`
 	IsArchived   bool       `json:"is_archived"`

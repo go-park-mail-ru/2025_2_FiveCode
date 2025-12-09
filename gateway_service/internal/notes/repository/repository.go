@@ -80,7 +80,7 @@ func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) ([]mod
 	notes := make([]models.Note, len(resp.Notes))
 	for i, pNote := range resp.Notes {
 		note := utils.MapProtoToNote(pNote)
-		r.enrichNoteWithIcon(ctx, note)
+		r.enrichNoteWithIcon(ctx, note, pNote.IconFileId)
 		notes[i] = *note
 	}
 	return notes, nil
@@ -97,7 +97,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 		return nil, err
 	}
 	note := utils.MapProtoToNote(resp)
-	r.enrichNoteWithIcon(ctx, note)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
 	return note, nil
 }
 
@@ -107,7 +107,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, userID, noteID uint64
 		return nil, err
 	}
 	note := utils.MapProtoToNote(resp)
-	r.enrichNoteWithIcon(ctx, note)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
 	return note, nil
 }
 
@@ -128,7 +128,7 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, input *models.UpdateNo
 		return nil, err
 	}
 	note := utils.MapProtoToNote(resp)
-	r.enrichNoteWithIcon(ctx, note)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
 	return note, nil
 }
 
@@ -170,7 +170,7 @@ func (r *NotesRepository) SetIcon(ctx context.Context, userID, noteID, iconFileI
 	}
 
 	note := utils.MapProtoToNote(resp)
-	r.enrichNoteWithIcon(ctx, note)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
 	return note, nil
 }
 
@@ -405,12 +405,12 @@ func (r *NotesRepository) enrichBlockWithFile(ctx context.Context, block *models
 	}
 }
 
-func (r *NotesRepository) enrichNoteWithIcon(ctx context.Context, note *models.Note) {
-	if note.IconFileID == nil {
+func (r *NotesRepository) enrichNoteWithIcon(ctx context.Context, note *models.Note, iconFileID *uint64) {
+	if iconFileID == nil {
 		return
 	}
 
-	file, err := r.fileRepo.GetFileByID(ctx, *note.IconFileID)
+	file, err := r.fileRepo.GetFileByID(ctx, *iconFileID)
 	if err == nil {
 		urlParts := strings.Split(file.URL, "/")
 		iconName := urlParts[len(urlParts)-1]
