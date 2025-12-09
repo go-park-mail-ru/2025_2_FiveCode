@@ -65,6 +65,21 @@ func (mr *MockFileUsecaseMockRecorder) GetFile(ctx, fileID interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFile", reflect.TypeOf((*MockFileUsecase)(nil).GetFile), ctx, fileID)
 }
 
+// GetIcons mocks base method.
+func (m *MockFileUsecase) GetIcons(ctx context.Context) ([]models.Icon, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetIcons", ctx)
+	ret0, _ := ret[0].([]models.Icon)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetIcons indicates an expected call of GetIcons.
+func (mr *MockFileUsecaseMockRecorder) GetIcons(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetIcons", reflect.TypeOf((*MockFileUsecase)(nil).GetIcons), ctx)
+}
+
 // UploadFile mocks base method.
 func (m *MockFileUsecase) UploadFile(ctx context.Context, file io.Reader, filename, contentType string, size int64) (*models.File, error) {
 	m.ctrl.T.Helper()
