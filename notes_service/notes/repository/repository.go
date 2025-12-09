@@ -41,10 +41,11 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 	}()
 
 	shareUUID := uuid.New().String()
+	defaultIconFileID := uint64(1) // default.svg
 
 	noteQuery := `
-        INSERT INTO note (owner_id, parent_note_id, title, is_archived, is_shared, share_uuid, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        INSERT INTO note (owner_id, parent_note_id, title, icon_file_id, is_archived, is_shared, share_uuid, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
         RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
                   is_archived, is_shared, share_uuid, created_at, updated_at, deleted_at
     `
@@ -62,7 +63,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 		parentNoteIDParam = nil
 	}
 
-	err = tx.QueryRowContext(ctx, noteQuery, userID, parentNoteIDParam, defaultTitle, false, false, shareUUID, now, now).Scan(
+	err = tx.QueryRowContext(ctx, noteQuery, userID, parentNoteIDParam, defaultTitle, defaultIconFileID, false, false, shareUUID, now, now).Scan(
 		&note.ID,
 		&note.OwnerID,
 		&parentNoteIDResult,
@@ -623,6 +624,30 @@ func (r *NotesRepository) refreshSearchIndex(ctx context.Context) error {
 	_, err := r.db.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("failed to refresh materialized view: %w", err)
+	}
+
+	return nil
+}
+
+func (r *NotesRepository) SetIcon(ctx context.Context, noteID, iconFileID uint64) error {
+	log := logger.FromContext(ctx)
+
+	query := `UPDATE note SET icon_file_id = $1, updated_at = $2 WHERE id = $3`
+
+	result, err := r.db.ExecContext(ctx, query, iconFileID, time.Now().UTC(), noteID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to set icon")
+		return fmt.Errorf("failed to set icon: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		log.Warn().Uint64("note_id", noteID).Msg("note not found for setting icon")
+		return constants.ErrNotFound
 	}
 
 	return nil

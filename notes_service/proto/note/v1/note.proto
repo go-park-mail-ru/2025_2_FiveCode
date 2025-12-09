@@ -17,6 +17,7 @@ service NoteService {
   rpc AddFavorite(FavoriteRequest) returns (google.protobuf.Empty);
   rpc RemoveFavorite(FavoriteRequest) returns (google.protobuf.Empty);
   rpc SearchNotes(SearchNotesRequest) returns (SearchNotesResponse);
+  rpc SetIcon(SetIconRequest) returns (Note);
 }
 
 message Note {
@@ -90,4 +91,10 @@ message SearchResult {
 message SearchNotesResponse {
   repeated SearchResult results = 1;
   int32 count = 2;
+}
+
+message SetIconRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+  uint64 icon_file_id = 3;
 }

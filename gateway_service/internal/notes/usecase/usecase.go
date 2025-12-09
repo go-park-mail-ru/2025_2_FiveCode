@@ -16,6 +16,7 @@ type NotesRepository interface {
 	AddFavorite(ctx context.Context, userID, noteID uint64) error
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 	SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error)
+	SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error)
 
 	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error)
 	GetBlock(ctx context.Context, userID, blockID uint64) (*models.Block, error)

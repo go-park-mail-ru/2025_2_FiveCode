@@ -29,6 +29,7 @@ type NoteClient interface {
 	AddFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	RemoveFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SearchNotes(ctx context.Context, in *notePB.SearchNotesRequest, opts ...grpc.CallOption) (*notePB.SearchNotesResponse, error)
+	SetIcon(ctx context.Context, in *notePB.SetIconRequest, opts ...grpc.CallOption) (*notePB.Note, error)
 }
 
 type BlockClient interface {
@@ -78,7 +79,9 @@ func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) ([]mod
 
 	notes := make([]models.Note, len(resp.Notes))
 	for i, pNote := range resp.Notes {
-		notes[i] = *utils.MapProtoToNote(pNote)
+		note := utils.MapProtoToNote(pNote)
+		r.enrichNoteWithIcon(ctx, note, pNote.IconFileId)
+		notes[i] = *note
 	}
 	return notes, nil
 }
@@ -93,7 +96,9 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 	if err != nil {
 		return nil, err
 	}
-	return utils.MapProtoToNote(resp), nil
+	note := utils.MapProtoToNote(resp)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	return note, nil
 }
 
 func (r *NotesRepository) GetNoteById(ctx context.Context, userID, noteID uint64) (*models.Note, error) {
@@ -101,7 +106,9 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, userID, noteID uint64
 	if err != nil {
 		return nil, err
 	}
-	return utils.MapProtoToNote(resp), nil
+	note := utils.MapProtoToNote(resp)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	return note, nil
 }
 
 func (r *NotesRepository) UpdateNote(ctx context.Context, input *models.UpdateNoteInput) (*models.Note, error) {
@@ -120,7 +127,9 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, input *models.UpdateNo
 	if err != nil {
 		return nil, err
 	}
-	return utils.MapProtoToNote(resp), nil
+	note := utils.MapProtoToNote(resp)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	return note, nil
 }
 
 func (r *NotesRepository) DeleteNote(ctx context.Context, userID, noteID uint64) error {
@@ -148,6 +157,21 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 	}
 
 	return utils.MapProtoToSearchNotesResponse(searchResult), nil
+}
+
+func (r *NotesRepository) SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error) {
+	resp, err := r.noteClient.SetIcon(ctx, &notePB.SetIconRequest{
+		UserId:     userID,
+		NoteId:     noteID,
+		IconFileId: iconFileID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	note := utils.MapProtoToNote(resp)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	return note, nil
 }
 
 func (r *NotesRepository) GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error) {
@@ -377,6 +401,24 @@ func (r *NotesRepository) enrichBlockWithFile(ctx context.Context, block *models
 				content.Height = file.Height
 				block.Content = content
 			}
+		}
+	}
+}
+
+func (r *NotesRepository) enrichNoteWithIcon(ctx context.Context, note *models.Note, iconFileID *uint64) {
+	if iconFileID == nil {
+		return
+	}
+
+	file, err := r.fileRepo.GetFileByID(ctx, *iconFileID)
+	if err == nil {
+		urlParts := strings.Split(file.URL, "/")
+		iconName := urlParts[len(urlParts)-1]
+
+		note.Icon = &models.Icon{
+			ID:   file.ID,
+			Name: iconName,
+			URL:  utils.TransformMinioURL(file.URL),
 		}
 	}
 }

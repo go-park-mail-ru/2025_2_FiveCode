@@ -28,6 +28,7 @@ type FileUsecase interface {
 	UploadFile(ctx context.Context, file io.Reader, filename, contentType string, size int64) (*models.File, error)
 	GetFile(ctx context.Context, fileID uint64) (*models.File, error)
 	DeleteFile(ctx context.Context, fileID uint64) error
+	GetIcons(ctx context.Context) ([]models.Icon, error)
 }
 
 func NewFileDelivery(usecase FileUsecase) *FileDelivery {
@@ -137,4 +138,17 @@ func (d *FileDelivery) DeleteFile(w http.ResponseWriter, r *http.Request) {
 
 	log.Info().Uint64("file_id", fileID).Msg("file deleted successfully")
 	w.WriteHeader(http.StatusNoContent)
+}
+
+func (d *FileDelivery) GetIcons(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	icons, err := d.Usecase.GetIcons(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get icons")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get icons")
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, icons)
 }

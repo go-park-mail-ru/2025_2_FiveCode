@@ -47,6 +47,8 @@ func NewRouter(
 	profile.HandleFunc("/profile", user.UpdateProfile).Methods("PUT")
 	profile.HandleFunc("/profile", user.DeleteProfile).Methods("DELETE")
 
+	api.HandleFunc("/icons", files.GetIcons).Methods("GET")
+
 	notesRouter := api.PathPrefix("").Subrouter()
 	notesRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))
 
@@ -58,6 +60,7 @@ func NewRouter(
 	notesRouter.HandleFunc("/notes/{note_id}", notes.DeleteNote).Methods("DELETE")
 	notesRouter.HandleFunc("/notes/{note_id}/favorite", notes.AddFavorite).Methods("POST")
 	notesRouter.HandleFunc("/notes/{note_id}/favorite", notes.RemoveFavorite).Methods("DELETE")
+	notesRouter.HandleFunc("/notes/{note_id}/icons", notes.SetIcon).Methods("PUT")
 
 	wsRouter := api.PathPrefix("/ws").Subrouter()
 	wsRouter.Use(mw.AuthMiddleware(sessionValidator))

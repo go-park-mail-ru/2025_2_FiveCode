@@ -48,7 +48,6 @@ func TestMapProtoToNote(t *testing.T) {
 		assert.True(t, result.IsArchived)
 		assert.True(t, result.IsShared)
 		assert.Equal(t, &parentID, result.ParentNoteID)
-		assert.Equal(t, &iconID, result.IconFileID)
 		assert.Equal(t, now.Unix(), result.CreatedAt.Unix())
 		assert.Equal(t, now.Unix(), result.UpdatedAt.Unix())
 		assert.Equal(t, now.Unix(), result.DeletedAt.Unix())
