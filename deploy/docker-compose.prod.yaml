@@ -139,6 +139,20 @@ services:
     networks:
       - goose_network
 
+  minio-init:
+    image: ${DOCKER_USERNAME}/goose-minio-init:${IMAGE_TAG}
+    container_name: goose_minio_init
+    depends_on:
+      - minio
+    environment:
+      MINIO_HOST: "minio"
+      MINIO_PORT: "9000"
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY}
+    networks:
+      - goose_network
+    restart: on-failure:5
+
 networks:
   goose_network:
     driver: bridge

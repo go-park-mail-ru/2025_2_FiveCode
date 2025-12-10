@@ -34,7 +34,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        service: [auth, gateway, notes, user]
+        service: [auth, gateway, notes, user, minio-init]
     steps:
       - uses: actions/checkout@v4
       - uses: docker/login-action@v3

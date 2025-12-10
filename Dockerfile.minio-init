@@ -1,0 +1,10 @@
+FROM minio/mc:latest
+
+WORKDIR /app
+
+COPY notes_service/icons /icons
+
+COPY scripts/entrypoint-icons.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
+ENTRYPOINT ["/entrypoint.sh"]
