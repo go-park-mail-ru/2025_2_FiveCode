@@ -43,6 +43,13 @@ services:
       - redis_data:/data
     restart: unless-stopped
 
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: goose_gotenberg
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+
   auth:
     build:
       context: .

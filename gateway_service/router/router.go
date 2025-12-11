@@ -5,6 +5,7 @@ import (
 
 	authDelivery "backend/gateway_service/internal/auth/delivery"
 	"backend/gateway_service/internal/config"
+	exportDelivery "backend/gateway_service/internal/export/delivery"
 	fileDelivery "backend/gateway_service/internal/file/delivery"
 	mw "backend/gateway_service/internal/middleware"
 	notesDelivery "backend/gateway_service/internal/notes/delivery"
@@ -25,6 +26,7 @@ func NewRouter(
 	user *userDelivery.UserDelivery,
 	notes *notesDelivery.NotesDelivery,
 	files *fileDelivery.FileDelivery,
+	export *exportDelivery.ExportDelivery,
 	wsHandler *websocket.Handler,
 ) http.Handler {
 
@@ -61,6 +63,10 @@ func NewRouter(
 	notesRouter.HandleFunc("/notes/{note_id}/favorite", notes.AddFavorite).Methods("POST")
 	notesRouter.HandleFunc("/notes/{note_id}/favorite", notes.RemoveFavorite).Methods("DELETE")
 	notesRouter.HandleFunc("/notes/{note_id}/icons", notes.SetIcon).Methods("PUT")
+
+	exportRouter := api.PathPrefix("").Subrouter()
+	exportRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))
+	exportRouter.HandleFunc("/notes/{note_id}/export/pdf", export.ExportNoteToPDF).Methods("GET")
 
 	wsRouter := api.PathPrefix("/ws").Subrouter()
 	wsRouter.Use(mw.AuthMiddleware(sessionValidator))

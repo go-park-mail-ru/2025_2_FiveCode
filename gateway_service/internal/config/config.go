@@ -46,14 +46,20 @@ type MinioConfig struct {
 	Secure    bool
 }
 
+type GotenbergConfig struct {
+	URL     string
+	Timeout int
+}
+
 type Config struct {
-	Server   ServerConfig
-	DB       DBConfig
-	Minio    MinioConfig
-	Services map[string]ServiceConfig `mapstructure:"services"`
-	Cors     CorsConfig               `mapstructure:"cors"`
-	Cookie   CookieConfig             `mapstructure:"cookie"`
-	CSRF     CSRFConfig               `mapstructure:"csrf"`
+	Server    ServerConfig
+	DB        DBConfig
+	Minio     MinioConfig
+	Gotenberg GotenbergConfig
+	Services  map[string]ServiceConfig `mapstructure:"services"`
+	Cors      CorsConfig               `mapstructure:"cors"`
+	Cookie    CookieConfig             `mapstructure:"cookie"`
+	CSRF      CSRFConfig               `mapstructure:"csrf"`
 }
 
 func Load() (*Config, error) {
@@ -146,6 +152,15 @@ func Load() (*Config, error) {
 
 	viper.Set("MINIO_ENDPOINT", v.GetString("MINIO_ENDPOINT"))
 	viper.Set("MINIO_PUBLIC_ENDPOINT", v.GetString("MINIO_PUBLIC_ENDPOINT"))
+
+	cfg.Gotenberg.URL = v.GetString("GOTENBERG_URL")
+	if cfg.Gotenberg.URL == "" {
+		cfg.Gotenberg.URL = "http://gotenberg:3000"
+	}
+	cfg.Gotenberg.Timeout = v.GetInt("GOTENBERG_TIMEOUT")
+	if cfg.Gotenberg.Timeout == 0 {
+		cfg.Gotenberg.Timeout = 30
+	}
 
 	return &cfg, nil
 }
