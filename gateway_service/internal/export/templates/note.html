@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<article>
+    <header>
+        {{if .IconURL}}<img src="{{.IconURL}}" alt="icon" class="note-icon">{{end}}
+        <h1>{{.Title}}</h1>
+    </header>
+    {{range .Blocks}}
+    {{if eq .Type "text"}}
+    <div class="block block-text">{{.Content}}</div>
+    {{else if eq .Type "code"}}
+    <div class="block block-code">
+        {{if .Language}}<div class="code-language">{{.Language}}</div>{{end}}
+        <pre><code>{{.Content}}</code></pre>
+    </div>
+    {{else if eq .Type "attachment"}}
+    <div class="block block-attachment">{{.Content}}</div>
+    {{end}}
+    {{end}}
+</article>
+</body>
+</html>

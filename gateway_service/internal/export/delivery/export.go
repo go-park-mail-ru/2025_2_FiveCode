@@ -7,6 +7,7 @@ import (
 	"context"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strconv"
 	"strings"
 
@@ -52,11 +53,12 @@ func (d *ExportDelivery) ExportNoteToPDF(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	// Формируем имя файла
-	filename := sanitizeFilename(title) + ".pdf"
+	filename := sanitizeFilename(title)
+
+	encodedFilename := url.PathEscape(filename + ".pdf")
 
 	w.Header().Set("Content-Type", "application/pdf")
-	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="%s"`, filename))
+	w.Header().Set("Content-Disposition", fmt.Sprintf(`attachment; filename="note.pdf"; filename*=UTF-8''%s`, encodedFilename))
 	w.Header().Set("Content-Length", strconv.Itoa(len(pdf)))
 
 	if _, err := w.Write(pdf); err != nil {
@@ -65,7 +67,6 @@ func (d *ExportDelivery) ExportNoteToPDF(w http.ResponseWriter, r *http.Request)
 }
 
 func sanitizeFilename(name string) string {
-	// Убираем символы, которые могут быть проблемой в имени файла
 	replacer := strings.NewReplacer(
 		"/", "_",
 		"\\", "_",
@@ -79,7 +80,6 @@ func sanitizeFilename(name string) string {
 	)
 	result := replacer.Replace(name)
 
-	// Ограничиваем длину
 	if len(result) > 100 {
 		result = result[:100]
 	}
