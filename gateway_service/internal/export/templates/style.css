@@ -110,3 +110,9 @@ s { text-decoration: line-through; }
     body { padding: 20px; }
     .block-code { break-inside: avoid; }
 }
+
+.block-code pre code.hljs {
+    padding: 16px;
+    background: #f4f4f5;
+    border-radius: 0;
+}
