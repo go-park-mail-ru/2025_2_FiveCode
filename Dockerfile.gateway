@@ -22,6 +22,7 @@ WORKDIR /app
 COPY --from=builder /app/bin/gateway .
 COPY config ./config/
 COPY --from=builder /app/gateway_service/db/migrations ./db/migrations
+COPY --from=builder /app/gateway_service/internal/export/templates ./internal/export/templates
 
 EXPOSE 8080
 CMD ["./gateway"]

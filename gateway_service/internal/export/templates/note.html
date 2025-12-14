@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>{{.Title}}</title>
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+</head>
+<body>
+<article>
+    <header>
+        {{if .IconURL}}<img src="{{.IconURL}}" alt="icon" class="note-icon">{{end}}
+        <h1>{{.Title}}</h1>
+    </header>
+    {{range .Blocks}}
+    {{if eq .Type "text"}}
+    <div class="block block-text">{{.Content}}</div>
+    {{else if eq .Type "code"}}
+    <div class="block block-code">
+        {{if .Language}}<div class="code-language">{{.Language}}</div>{{end}}
+        <pre><code class="language-{{.Language}}">{{.Content}}</code></pre>
+    </div>
+    {{else if eq .Type "attachment"}}
+    <div class="block block-attachment">{{.Content}}</div>
+    {{end}}
+    {{end}}
+</article>
+<script>hljs.highlightAll();</script>
+</body>
+</html>
