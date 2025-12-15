@@ -23,6 +23,13 @@ services:
       - ./certbot/conf:/etc/letsencrypt
       - ./certbot/www:/var/www/certbot
     entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew; sleep 12h & wait $${!}; done;'"
+  
+  gotenberg:
+    image: gotenberg/gotenberg:8
+    container_name: goose_gotenberg
+    restart: always
+    networks:
+      - goose_network
 
   gateway:
     image: ${DOCKER_USERNAME}/goose-gateway:${IMAGE_TAG}
@@ -44,10 +51,13 @@ services:
       SERVICES_USER_GRPC_PORT: "50052"
       SERVICES_NOTES_GRPC_HOST: "notes"
       SERVICES_NOTES_GRPC_PORT: "50053"
+
+      GOTENBERG_URL: "http://gotenberg:3000"
     depends_on:
       - auth
       - user
       - notes
+      - gotenberg
     networks:
       - goose_network
 
