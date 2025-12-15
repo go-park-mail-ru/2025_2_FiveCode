@@ -139,10 +139,10 @@ SELECT
 
     setweight(to_tsvector('russian', COALESCE(n.title, '')), 'A') ||
     setweight(to_tsvector('english', COALESCE(n.title, '')), 'A') ||
-    setweight(to_tsvector('russian', COALESCE(string_agg(DISTINCT bt.text, ' '), '')), 'B') ||
-    setweight(to_tsvector('english', COALESCE(string_agg(DISTINCT bt.text, ' '), '')), 'B') ||
-    setweight(to_tsvector('russian', COALESCE(string_agg(DISTINCT bc.code_text, ' '), '')), 'C') ||
-    setweight(to_tsvector('english', COALESCE(string_agg(DISTINCT bc.code_text, ' '), '')), 'C') as search_vector
+    setweight(to_tsvector('russian', COALESCE(string_agg(DISTINCT bt.text, ' '), '')), 'A') ||
+    setweight(to_tsvector('english', COALESCE(string_agg(DISTINCT bt.text, ' '), '')), 'A') ||
+    setweight(to_tsvector('russian', COALESCE(string_agg(DISTINCT bc.code_text, ' '), '')), 'A') ||
+    setweight(to_tsvector('english', COALESCE(string_agg(DISTINCT bc.code_text, ' '), '')), 'A') as search_vector
 FROM note n
          LEFT JOIN block b ON b.note_id = n.id
          LEFT JOIN block_text bt ON bt.block_id = b.id AND b.type = 'text'

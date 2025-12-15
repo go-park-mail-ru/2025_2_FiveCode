@@ -147,7 +147,7 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
             n.parent_note_id IN (SELECT id FROM accessible_notes) 
         )
         AND n.deleted_at IS NULL
-        ORDER BY n.updated_at DESC
+        ORDER BY n.created_at DESC
     `
 
 	rows, err := r.db.QueryContext(ctx, query, userID)
