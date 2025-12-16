@@ -9,6 +9,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -462,6 +463,22 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 	return note, nil
 }
 
+func highlightMatches(text, query string) string {
+	if query == "" || text == "" {
+		return text
+	}
+
+	lowerText := strings.ToLower(text)
+	lowerQuery := strings.ToLower(query)
+
+	idx := strings.Index(lowerText, lowerQuery)
+	if idx == -1 {
+		return text
+	}
+
+	return text[:idx] + "<mark>" + text[idx:idx+len(query)] + "</mark>" + text[idx+len(query):]
+}
+
 func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error) {
 	log := logger.FromContext(ctx)
 
@@ -469,24 +486,20 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 		SELECT 
 			note_id,
 			title,
+			title as highlighted_title,
 			CASE 
-				WHEN title_vector @@ query THEN 
-					ts_headline('russian', title, query, 'StartSel=<mark>, StopSel=</mark>')
-				ELSE title 
-			END as highlighted_title,
-			ts_headline(
-				'russian',
-				COALESCE(content, ''),
-				query,
-				'MaxWords=15, MinWords=5, ShortWord=3, MaxFragments=2,
-				 FragmentDelimiter= ... , StartSel=<mark>, StopSel=</mark>'
-			) as content_snippet,
-			ts_rank(search_vector, query) as rank,
+				WHEN content ILIKE '%' || $1 || '%' THEN
+					substring(content FROM GREATEST(1, position(lower($1) in lower(content)) - 30) FOR 80)
+				ELSE 
+					left(content, 80)
+			END as content_snippet,
+			CASE 
+				WHEN title ILIKE '%' || $1 || '%' THEN 1.0
+				ELSE 0.5
+			END as rank,
 			updated_at
-		FROM note_search_index,
-			 plainto_tsquery('russian', $1) query,
-			 to_tsvector('russian', title) title_vector
-		WHERE search_vector @@ query
+		FROM note_search_index
+		WHERE (content ILIKE '%' || $1 || '%' OR title ILIKE '%' || $1 || '%')
 		  AND deleted_at IS NULL
 		  AND (
 			  owner_id = $2 
@@ -529,6 +542,9 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 			log.Error().Err(err).Msg("failed to scan search result")
 			return nil, fmt.Errorf("failed to scan search result: %w", err)
 		}
+
+		result.HighlightedTitle = highlightMatches(result.HighlightedTitle, query)
+		result.ContentSnippet = highlightMatches(result.ContentSnippet, query)
 
 		results = append(results, result)
 	}

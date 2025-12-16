@@ -182,3 +182,8 @@ CREATE TRIGGER note_search_refresh_block_code
     AFTER INSERT OR UPDATE OR DELETE ON block_code
     FOR EACH STATEMENT
 EXECUTE FUNCTION refresh_search_index();
+
+-- Триграммный поиск для поиска подстрок
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+CREATE INDEX idx_note_content_trgm ON note_search_index USING GIN(content gin_trgm_ops);
+CREATE INDEX idx_note_title_trgm ON note_search_index USING GIN(title gin_trgm_ops);
