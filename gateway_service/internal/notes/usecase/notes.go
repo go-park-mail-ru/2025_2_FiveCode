@@ -52,3 +52,7 @@ func (u *NotesUsecase) SearchNotes(ctx context.Context, userID uint64, query str
 func (u *NotesUsecase) SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error) {
 	return u.repo.SetIcon(ctx, userID, noteID, iconFileID)
 }
+
+func (u *NotesUsecase) SetHeader(ctx context.Context, userID, noteID, headerFileID uint64) (*models.Note, error) {
+	return u.repo.SetHeader(ctx, userID, noteID, headerFileID)
+}

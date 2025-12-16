@@ -42,17 +42,18 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 
 	shareUUID := uuid.New().String()
 	defaultIconFileID := uint64(1) // default.svg
+	defaultHeaderFileID := uint64(35) // default header
 
 	noteQuery := `
-        INSERT INTO note (owner_id, parent_note_id, title, icon_file_id, is_archived, is_shared, share_uuid, created_at, updated_at)
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-        RETURNING id, owner_id, parent_note_id, title, icon_file_id, 
+        INSERT INTO note (owner_id, parent_note_id, title, icon_file_id, header_file_id, is_archived, is_shared, share_uuid, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        RETURNING id, owner_id, parent_note_id, title, icon_file_id, header_file_id,
                   is_archived, is_shared, share_uuid, created_at, updated_at, deleted_at
     `
 	defaultTitle := "Новая заметка"
 
 	note := &models.Note{}
-	var parentNoteIDResult, iconFileID sql.NullInt64
+	var parentNoteIDResult, iconFileID, headerFileID sql.NullInt64
 	var shareUUIDResult sql.NullString
 	var deletedAt sql.NullTime
 
@@ -63,12 +64,13 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 		parentNoteIDParam = nil
 	}
 
-	err = tx.QueryRowContext(ctx, noteQuery, userID, parentNoteIDParam, defaultTitle, defaultIconFileID, false, false, shareUUID, now, now).Scan(
+	err = tx.QueryRowContext(ctx, noteQuery, userID, parentNoteIDParam, defaultTitle, defaultIconFileID, defaultHeaderFileID, false, false, shareUUID, now, now).Scan(
 		&note.ID,
 		&note.OwnerID,
 		&parentNoteIDResult,
 		&note.Title,
 		&iconFileID,
+		&headerFileID,
 		&note.IsArchived,
 		&note.IsShared,
 		&shareUUIDResult,
@@ -115,6 +117,10 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 		val := uint64(iconFileID.Int64)
 		note.IconFileID = &val
 	}
+	if headerFileID.Valid {
+		val := uint64(headerFileID.Int64)
+		note.HeaderFileID = &val
+	}
 	if shareUUIDResult.Valid {
 		note.ShareUUID = &shareUUIDResult.String
 	}
@@ -136,7 +142,7 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
             WHERE (n.owner_id = $1 OR np.note_permission_id IS NOT NULL)
               AND n.deleted_at IS NULL
         )
-        SELECT DISTINCT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id,
+        SELECT DISTINCT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id, n.header_file_id,
                n.is_archived, n.is_shared, n.share_uuid, n.created_at, n.updated_at,
                f.user_id IS NOT NULL AS is_favorite
         FROM note n
@@ -165,7 +171,7 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 
 	for rows.Next() {
 		var note models.Note
-		var parentNoteID, iconFileID sql.NullInt64
+		var parentNoteID, iconFileID, headerFileID sql.NullInt64
 		var shareUUID sql.NullString
 
 		err := rows.Scan(
@@ -174,6 +180,7 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 			&parentNoteID,
 			&note.Title,
 			&iconFileID,
+			&headerFileID,
 			&note.IsArchived,
 			&note.IsShared,
 			&shareUUID,
@@ -194,6 +201,10 @@ func (r *NotesRepository) GetNotes(ctx context.Context, userID uint64) ([]models
 			val := uint64(iconFileID.Int64)
 			note.IconFileID = &val
 		}
+		if headerFileID.Valid {
+			val := uint64(headerFileID.Int64)
+			note.HeaderFileID = &val
+		}
 		if shareUUID.Valid {
 			note.ShareUUID = &shareUUID.String
 		}
@@ -213,7 +224,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64, userID
 	log := logger.FromContext(ctx)
 
 	query := `
-		SELECT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id,
+		SELECT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id, n.header_file_id,
 		       n.is_archived, n.is_shared, n.share_uuid, n.created_at, n.updated_at, n.deleted_at,
 		       f.user_id IS NOT NULL AS is_favorite
 		FROM note n
@@ -222,7 +233,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64, userID
 	`
 
 	note := &models.Note{}
-	var parentNoteID, iconFileID sql.NullInt64
+	var parentNoteID, iconFileID, headerFileID sql.NullInt64
 	var shareUUID sql.NullString
 	var deletedAt sql.NullTime
 
@@ -232,6 +243,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64, userID
 		&parentNoteID,
 		&note.Title,
 		&iconFileID,
+		&headerFileID,
 		&note.IsArchived,
 		&note.IsShared,
 		&shareUUID,
@@ -257,6 +269,10 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, noteID uint64, userID
 	if iconFileID.Valid {
 		val := uint64(iconFileID.Int64)
 		note.IconFileID = &val
+	}
+	if headerFileID.Valid {
+		val := uint64(headerFileID.Int64)
+		note.HeaderFileID = &val
 	}
 	if shareUUID.Valid {
 		note.ShareUUID = &shareUUID.String
@@ -299,11 +315,11 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 	query += fmt.Sprintf(" WHERE id = $%d", argIndex)
 	args = append(args, noteID)
 
-	query += ` RETURNING id, owner_id, parent_note_id, title, icon_file_id,
+	query += ` RETURNING id, owner_id, parent_note_id, title, icon_file_id, header_file_id,
 	          is_archived, is_shared, share_uuid, created_at, updated_at`
 
 	note := &models.Note{}
-	var parentNoteID, iconFileID sql.NullInt64
+	var parentNoteID, iconFileID, headerFileID sql.NullInt64
 	var shareUUID sql.NullString
 
 	err = r.db.QueryRowContext(ctx, query, args...).Scan(
@@ -312,6 +328,7 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 		&parentNoteID,
 		&note.Title,
 		&iconFileID,
+		&headerFileID,
 		&note.IsArchived,
 		&note.IsShared,
 		&shareUUID,
@@ -330,6 +347,10 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, noteID uint64, title *
 	if iconFileID.Valid {
 		val := uint64(iconFileID.Int64)
 		note.IconFileID = &val
+	}
+	if headerFileID.Valid {
+		val := uint64(headerFileID.Int64)
+		note.HeaderFileID = &val
 	}
 	if shareUUID.Valid {
 		note.ShareUUID = &shareUUID.String
@@ -410,7 +431,7 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 	log := logger.FromContext(ctx)
 
 	query := `
-		SELECT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id,
+		SELECT n.id, n.owner_id, n.parent_note_id, n.title, n.icon_file_id, n.header_file_id,
 		       n.is_archived, n.is_shared, n.share_uuid, n.public_access_level,
 		       n.created_at, n.updated_at, n.deleted_at
 		FROM note n
@@ -418,7 +439,7 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 	`
 
 	note := &models.Note{}
-	var parentNoteID, iconFileID sql.NullInt64
+	var parentNoteID, iconFileID, headerFileID sql.NullInt64
 	var shareUUIDResult sql.NullString
 	var publicAccessLevel sql.NullString
 	var deletedAt sql.NullTime
@@ -429,6 +450,7 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 		&parentNoteID,
 		&note.Title,
 		&iconFileID,
+		&headerFileID,
 		&note.IsArchived,
 		&note.IsShared,
 		&shareUUIDResult,
@@ -454,6 +476,10 @@ func (r *NotesRepository) GetNoteByShareUUID(ctx context.Context, shareUUID stri
 	if iconFileID.Valid {
 		val := uint64(iconFileID.Int64)
 		note.IconFileID = &val
+	}
+	if headerFileID.Valid {
+		val := uint64(headerFileID.Int64)
+		note.HeaderFileID = &val
 	}
 	if shareUUIDResult.Valid {
 		note.ShareUUID = &shareUUIDResult.String
@@ -647,6 +673,30 @@ func (r *NotesRepository) SetIcon(ctx context.Context, noteID, iconFileID uint64
 
 	if rowsAffected == 0 {
 		log.Warn().Uint64("note_id", noteID).Msg("note not found for setting icon")
+		return constants.ErrNotFound
+	}
+
+	return nil
+}
+
+func (r *NotesRepository) SetHeader(ctx context.Context, noteID, headerFileID uint64) error {
+	log := logger.FromContext(ctx)
+
+	query := `UPDATE note SET header_file_id = $1, updated_at = $2 WHERE id = $3`
+
+	result, err := r.db.ExecContext(ctx, query, headerFileID, time.Now().UTC(), noteID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to set header")
+		return fmt.Errorf("failed to set header: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		log.Warn().Uint64("note_id", noteID).Msg("note not found for setting header")
 		return constants.ErrNotFound
 	}
 

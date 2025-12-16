@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS note
     parent_note_id       INTEGER REFERENCES note (id) ON DELETE CASCADE,
     title                TEXT        NOT NULL CHECK (LENGTH(title) >= 1 AND LENGTH(title) <= 200),
     icon_file_id         INTEGER,
+    header_file_id       INTEGER,
     is_archived          BOOLEAN     NOT NULL DEFAULT false,
     is_shared            BOOLEAN     NOT NULL DEFAULT false,
     public_access_level  note_role   DEFAULT NULL,

@@ -18,6 +18,7 @@ type NotesUsecase interface {
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 	SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error)
 	SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error)
+	SetHeader(ctx context.Context, userID, noteID, headerFileID uint64) (*models.Note, error)
 
 	// Blocks
 	GetBlocks(ctx context.Context, userID, noteID uint64) ([]models.Block, error)

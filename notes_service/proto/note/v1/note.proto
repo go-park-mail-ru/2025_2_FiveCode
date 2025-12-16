@@ -18,6 +18,7 @@ service NoteService {
   rpc RemoveFavorite(FavoriteRequest) returns (google.protobuf.Empty);
   rpc SearchNotes(SearchNotesRequest) returns (SearchNotesResponse);
   rpc SetIcon(SetIconRequest) returns (Note);
+  rpc SetHeader(SetHeaderRequest) returns (Note);
 }
 
 message Note {
@@ -33,6 +34,7 @@ message Note {
   google.protobuf.Timestamp created_at = 10;
   google.protobuf.Timestamp updated_at = 11;
   optional google.protobuf.Timestamp deleted_at = 12;
+  optional uint64 header_file_id = 13;
 }
 
 message GetAllNotesRequest {
@@ -97,4 +99,10 @@ message SetIconRequest {
   uint64 user_id = 1;
   uint64 note_id = 2;
   uint64 icon_file_id = 3;
+}
+
+message SetHeaderRequest {
+  uint64 user_id = 1;
+  uint64 note_id = 2;
+  uint64 header_file_id = 3;
 }
