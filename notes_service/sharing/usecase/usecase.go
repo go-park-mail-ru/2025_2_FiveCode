@@ -88,8 +88,16 @@ func (uc *SharingUsecase) updateIsSharedFlag(ctx context.Context, noteID uint64)
 	if err != nil {
 		return fmt.Errorf("failed to get collaborators count: %w", err)
 	}
+	publicAccess, _, err := uc.sharingRepo.GetPublicAccess(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to get public access: %w", err)
+	}
 
 	isShared := len(collaborators) > 0
+
+	if publicAccess != nil {
+		isShared = true
+	}
 
 	if err := uc.sharingRepo.UpdateIsSharedFlag(ctx, noteID, isShared); err != nil {
 		return fmt.Errorf("failed to update is_shared flag: %w", err)
@@ -264,6 +272,11 @@ func (uc *SharingUsecase) SetPublicAccess(ctx context.Context, noteID, currentUs
 
 	if err := uc.sharingRepo.SetPublicAccess(ctx, noteID, accessLevel); err != nil {
 		return fmt.Errorf("failed to set public access: %w", err)
+	}
+
+	err = uc.updateIsSharedFlag(ctx, noteID)
+	if err != nil {
+		return fmt.Errorf("failed to update is_shared flag: %w", err)
 	}
 
 	return nil
