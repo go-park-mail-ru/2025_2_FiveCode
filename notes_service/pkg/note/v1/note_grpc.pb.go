@@ -30,6 +30,7 @@ const (
 	NoteService_RemoveFavorite_FullMethodName     = "/note.NoteService/RemoveFavorite"
 	NoteService_SearchNotes_FullMethodName        = "/note.NoteService/SearchNotes"
 	NoteService_SetIcon_FullMethodName            = "/note.NoteService/SetIcon"
+	NoteService_SetHeader_FullMethodName          = "/note.NoteService/SetHeader"
 )
 
 // NoteServiceClient is the client API for NoteService service.
@@ -46,6 +47,7 @@ type NoteServiceClient interface {
 	RemoveFavorite(ctx context.Context, in *FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SearchNotes(ctx context.Context, in *SearchNotesRequest, opts ...grpc.CallOption) (*SearchNotesResponse, error)
 	SetIcon(ctx context.Context, in *SetIconRequest, opts ...grpc.CallOption) (*Note, error)
+	SetHeader(ctx context.Context, in *SetHeaderRequest, opts ...grpc.CallOption) (*Note, error)
 }
 
 type noteServiceClient struct {
@@ -156,6 +158,16 @@ func (c *noteServiceClient) SetIcon(ctx context.Context, in *SetIconRequest, opt
 	return out, nil
 }
 
+func (c *noteServiceClient) SetHeader(ctx context.Context, in *SetHeaderRequest, opts ...grpc.CallOption) (*Note, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(Note)
+	err := c.cc.Invoke(ctx, NoteService_SetHeader_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // NoteServiceServer is the server API for NoteService service.
 // All implementations must embed UnimplementedNoteServiceServer
 // for forward compatibility.
@@ -170,6 +182,7 @@ type NoteServiceServer interface {
 	RemoveFavorite(context.Context, *FavoriteRequest) (*emptypb.Empty, error)
 	SearchNotes(context.Context, *SearchNotesRequest) (*SearchNotesResponse, error)
 	SetIcon(context.Context, *SetIconRequest) (*Note, error)
+	SetHeader(context.Context, *SetHeaderRequest) (*Note, error)
 	mustEmbedUnimplementedNoteServiceServer()
 }
 
@@ -209,6 +222,9 @@ func (UnimplementedNoteServiceServer) SearchNotes(context.Context, *SearchNotesR
 }
 func (UnimplementedNoteServiceServer) SetIcon(context.Context, *SetIconRequest) (*Note, error) {
 	return nil, status.Error(codes.Unimplemented, "method SetIcon not implemented")
+}
+func (UnimplementedNoteServiceServer) SetHeader(context.Context, *SetHeaderRequest) (*Note, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetHeader not implemented")
 }
 func (UnimplementedNoteServiceServer) mustEmbedUnimplementedNoteServiceServer() {}
 func (UnimplementedNoteServiceServer) testEmbeddedByValue()                     {}
@@ -411,6 +427,24 @@ func _NoteService_SetIcon_Handler(srv interface{}, ctx context.Context, dec func
 	return interceptor(ctx, in, info, handler)
 }
 
+func _NoteService_SetHeader_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetHeaderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(NoteServiceServer).SetHeader(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: NoteService_SetHeader_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(NoteServiceServer).SetHeader(ctx, req.(*SetHeaderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // NoteService_ServiceDesc is the grpc.ServiceDesc for NoteService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -457,6 +491,10 @@ var NoteService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "SetIcon",
 			Handler:    _NoteService_SetIcon_Handler,
+		},
+		{
+			MethodName: "SetHeader",
+			Handler:    _NoteService_SetHeader_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

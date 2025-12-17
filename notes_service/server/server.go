@@ -25,6 +25,7 @@ type NoteUsecase interface {
 	GetNoteByShareUUID(ctx context.Context, shareUUID string) (*models.Note, error)
 	SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error)
 	SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error)
+	SetHeader(ctx context.Context, userID, noteID, headerFileID uint64) (*models.Note, error)
 }
 
 type BlocksUsecase interface {
@@ -96,6 +97,9 @@ func noteModelToProto(note *models.Note) *notePB.Note {
 	}
 	if note.IconFileID != nil {
 		protoNote.IconFileId = note.IconFileID
+	}
+	if note.HeaderFileID != nil {
+		protoNote.HeaderFileId = note.HeaderFileID
 	}
 	if note.DeletedAt != nil {
 		protoNote.DeletedAt = timestamppb.New(*note.DeletedAt)

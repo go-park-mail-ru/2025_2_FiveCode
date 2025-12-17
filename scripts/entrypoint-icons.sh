@@ -17,3 +17,8 @@ echo "Uploading icons..."
 mc mirror --overwrite /icons myminio/notes-app/icons
 
 echo "Icons uploaded successfully!"
+
+echo "Uploading headers..."
+mc mirror --overwrite /headers myminio/notes-app/headers
+
+echo "Headers uploaded successfully!"

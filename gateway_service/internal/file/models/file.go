@@ -18,3 +18,9 @@ type Icon struct {
 	Name string `json:"name"`
 	URL  string `json:"url"`
 }
+
+type Header struct {
+	ID   uint64 `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}

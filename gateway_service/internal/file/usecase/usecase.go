@@ -23,6 +23,7 @@ type FileRepository interface {
 	DeleteFile(ctx context.Context, fileID uint64) error
 	DeleteFileFromMinIO(ctx context.Context, url string) error
 	GetIcons(ctx context.Context) ([]*models.Icon, error)
+	GetHeaders(ctx context.Context) ([]*models.Header, error)
 }
 
 type FileUsecase struct {
@@ -118,6 +119,27 @@ func (u *FileUsecase) GetIcons(ctx context.Context) ([]models.Icon, error) {
 	}
 
 	return icons, nil
+}
+
+func (u *FileUsecase) GetHeaders(ctx context.Context) ([]models.Header, error) {
+	log := logger.FromContext(ctx)
+
+	fileHeaders, err := u.Repository.GetHeaders(ctx)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get headers from repository")
+		return nil, fmt.Errorf("failed to get headers: %w", err)
+	}
+
+	headers := make([]models.Header, len(fileHeaders))
+	for i, fh := range fileHeaders {
+		headers[i] = models.Header{
+			ID:   fh.ID,
+			Name: fh.Name,
+			URL:  utils.TransformMinioURL(fh.URL),
+		}
+	}
+
+	return headers, nil
 }
 
 func (u *FileUsecase) DeleteFile(ctx context.Context, fileID uint64) error {

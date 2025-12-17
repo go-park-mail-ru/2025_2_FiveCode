@@ -78,6 +78,21 @@ func (mr *MockFileRepositoryMockRecorder) GetFileByID(ctx, fileID interface{}) *
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFileByID", reflect.TypeOf((*MockFileRepository)(nil).GetFileByID), ctx, fileID)
 }
 
+// GetHeaders mocks base method.
+func (m *MockFileRepository) GetHeaders(ctx context.Context) ([]*models.Header, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeaders", ctx)
+	ret0, _ := ret[0].([]*models.Header)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeaders indicates an expected call of GetHeaders.
+func (mr *MockFileRepositoryMockRecorder) GetHeaders(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaders", reflect.TypeOf((*MockFileRepository)(nil).GetHeaders), ctx)
+}
+
 // GetIcons mocks base method.
 func (m *MockFileRepository) GetIcons(ctx context.Context) ([]*models.Icon, error) {
 	m.ctrl.T.Helper()

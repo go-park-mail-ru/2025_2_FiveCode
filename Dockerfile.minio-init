@@ -3,6 +3,7 @@ FROM minio/mc:latest
 WORKDIR /app
 
 COPY notes_service/icons /icons
+COPY notes_service/headers /headers
 
 COPY scripts/entrypoint-icons.sh /entrypoint.sh
 RUN chmod +x /entrypoint.sh

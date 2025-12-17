@@ -29,6 +29,7 @@ type FileUsecase interface {
 	GetFile(ctx context.Context, fileID uint64) (*models.File, error)
 	DeleteFile(ctx context.Context, fileID uint64) error
 	GetIcons(ctx context.Context) ([]models.Icon, error)
+	GetHeaders(ctx context.Context) ([]models.Header, error)
 }
 
 func NewFileDelivery(usecase FileUsecase) *FileDelivery {
@@ -151,4 +152,17 @@ func (d *FileDelivery) GetIcons(w http.ResponseWriter, r *http.Request) {
 	}
 
 	apiutils.WriteJSON(w, http.StatusOK, icons)
+}
+
+func (d *FileDelivery) GetHeaders(w http.ResponseWriter, r *http.Request) {
+	log := logger.FromContext(r.Context())
+
+	headers, err := d.Usecase.GetHeaders(r.Context())
+	if err != nil {
+		log.Error().Err(err).Msg("failed to get headers")
+		apiutils.WriteError(w, http.StatusInternalServerError, "failed to get headers")
+		return
+	}
+
+	apiutils.WriteJSON(w, http.StatusOK, headers)
 }

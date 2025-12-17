@@ -8,6 +8,7 @@ type Note struct {
 	ParentNoteID *uint64    `json:"parent_note_id,omitempty"`
 	Title        string     `json:"title"`
 	Icon         *Icon      `json:"icon,omitempty"`
+	Header       *Header    `json:"header,omitempty"`
 	IsFavorite   bool       `json:"is_favorite"`
 	IsArchived   bool       `json:"is_archived"`
 	IsShared     bool       `json:"is_shared"`
@@ -31,6 +32,12 @@ type SearchNotesResponse struct {
 }
 
 type Icon struct {
+	ID   uint64 `json:"id"`
+	Name string `json:"name"`
+	URL  string `json:"url"`
+}
+
+type Header struct {
 	ID   uint64 `json:"id"`
 	Name string `json:"name"`
 	URL  string `json:"url"`

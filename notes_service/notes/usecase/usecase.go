@@ -25,6 +25,7 @@ type NotesRepository interface {
 	RemoveFavorite(ctx context.Context, userID, noteID uint64) error
 	SearchNotes(ctx context.Context, userID uint64, query string) (*models.SearchNotesResponse, error)
 	SetIcon(ctx context.Context, noteID, iconFileID uint64) error
+	SetHeader(ctx context.Context, noteID, headerFileID uint64) error
 }
 
 type SharingRepository interface {
@@ -263,6 +264,39 @@ func (u *NoteUsecase) SetIcon(ctx context.Context, userID, noteID, iconFileID ui
 	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
 	if err != nil {
 		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note after setting icon")
+		return nil, fmt.Errorf("failed to get note: %w", err)
+	}
+
+	return note, nil
+}
+
+func (u *NoteUsecase) SetHeader(ctx context.Context, userID, noteID, headerFileID uint64) (*models.Note, error) {
+	log := logger.FromContext(ctx)
+
+	accessInfo, err := u.SharingRepository.CheckNoteAccess(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Uint64("user_id", userID).Msg("failed to check note access")
+		return nil, fmt.Errorf("failed to check note access: %w", err)
+	}
+
+	if !accessInfo.HasAccess {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user has no access to note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if !accessInfo.CanEdit {
+		log.Warn().Uint64("user_id", userID).Uint64("note_id", noteID).Msg("user cannot edit note")
+		return nil, constants.ErrNoAccess
+	}
+
+	if err := u.Repository.SetHeader(ctx, noteID, headerFileID); err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to set header in repository")
+		return nil, fmt.Errorf("failed to set header: %w", err)
+	}
+
+	note, err := u.Repository.GetNoteById(ctx, noteID, userID)
+	if err != nil {
+		log.Error().Err(err).Uint64("note_id", noteID).Msg("failed to get note after setting header")
 		return nil, fmt.Errorf("failed to get note: %w", err)
 	}
 
