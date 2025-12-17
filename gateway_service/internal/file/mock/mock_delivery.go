@@ -65,6 +65,21 @@ func (mr *MockFileUsecaseMockRecorder) GetFile(ctx, fileID interface{}) *gomock.
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetFile", reflect.TypeOf((*MockFileUsecase)(nil).GetFile), ctx, fileID)
 }
 
+// GetHeaders mocks base method.
+func (m *MockFileUsecase) GetHeaders(ctx context.Context) ([]models.Header, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "GetHeaders", ctx)
+	ret0, _ := ret[0].([]models.Header)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// GetHeaders indicates an expected call of GetHeaders.
+func (mr *MockFileUsecaseMockRecorder) GetHeaders(ctx interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "GetHeaders", reflect.TypeOf((*MockFileUsecase)(nil).GetHeaders), ctx)
+}
+
 // GetIcons mocks base method.
 func (m *MockFileUsecase) GetIcons(ctx context.Context) ([]models.Icon, error) {
 	m.ctrl.T.Helper()

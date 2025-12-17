@@ -5,7 +5,7 @@ test:
 
 test-coverage:
 	go test -coverprofile=coverage.out ./...
-	grep -v "/mock/" coverage.out | grep -v ".pb.go" > coverage.out.tmp
+	grep -v "/mock/" coverage.out | grep -v ".pb.go" | grep -v "_easyjson.go" > coverage.out.tmp
 	mv coverage.out.tmp coverage.out
 	go tool cover -func=coverage.out
 
@@ -29,3 +29,11 @@ mock:
 .PHONY: lint
 lint:
 	golangci-lint run ./...
+
+.PHONY: easyjson
+easyjson:
+	easyjson -all gateway_service/internal/notes/models
+	easyjson -all gateway_service/internal/file/models
+	easyjson -all gateway_service/internal/user/models
+	easyjson -all gateway_service/internal/websocket
+	easyjson -all gateway_service/internal/apiutils

@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
@@ -45,10 +46,19 @@ func TestDBWrapper_ExecContext(t *testing.T) {
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
 
-	mock.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(1, 1))
+	t.Run("Success", func(t *testing.T) {
+		mock.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(1, 1))
 
-	_, err = wrapper.ExecContext(ctx, "INSERT INTO table")
-	assert.NoError(t, err)
+		_, err = wrapper.ExecContext(ctx, "INSERT INTO table")
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mock.ExpectExec("INSERT").WillReturnError(errors.New("exec error"))
+
+		_, err = wrapper.ExecContext(ctx, "INSERT INTO table")
+		assert.Error(t, err)
+	})
 }
 
 func TestDBWrapper_QueryContext(t *testing.T) {
@@ -65,16 +75,25 @@ func TestDBWrapper_QueryContext(t *testing.T) {
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
 
-	rows := sqlmock.NewRows([]string{"id"}).AddRow(1)
-	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id"}).AddRow(1)
+		mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	resRows, err := wrapper.QueryContext(ctx, "SELECT id")
-	assert.NoError(t, err)
-	defer func() {
-		if err := resRows.Close(); err != nil {
-			t.Logf("failed to close rows: %v", err)
-		}
-	}()
+		resRows, err := wrapper.QueryContext(ctx, "SELECT id")
+		assert.NoError(t, err)
+		defer func() {
+			if err := resRows.Close(); err != nil {
+				t.Logf("failed to close rows: %v", err)
+			}
+		}()
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mock.ExpectQuery("SELECT").WillReturnError(errors.New("query error"))
+
+		_, err := wrapper.QueryContext(ctx, "SELECT id")
+		assert.Error(t, err)
+	})
 }
 
 func TestDBWrapper_BeginTx(t *testing.T) {
@@ -91,11 +110,20 @@ func TestDBWrapper_BeginTx(t *testing.T) {
 	wrapper := &dbWrapper{DB: db}
 	ctx := context.Background()
 
-	mock.ExpectBegin()
+	t.Run("Success", func(t *testing.T) {
+		mock.ExpectBegin()
 
-	tx, err := wrapper.BeginTx(ctx, nil)
-	assert.NoError(t, err)
-	assert.NotNil(t, tx)
+		tx, err := wrapper.BeginTx(ctx, nil)
+		assert.NoError(t, err)
+		assert.NotNil(t, tx)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mock.ExpectBegin().WillReturnError(errors.New("begin error"))
+
+		_, err := wrapper.BeginTx(ctx, nil)
+		assert.Error(t, err)
+	})
 }
 
 func TestTxWrapper_QueryRowContext(t *testing.T) {
@@ -139,10 +167,19 @@ func TestTxWrapper_ExecContext(t *testing.T) {
 	wrapper := &txWrapper{Tx: tx}
 	ctx := context.Background()
 
-	mock.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(1, 1))
+	t.Run("Success", func(t *testing.T) {
+		mock.ExpectExec("INSERT").WillReturnResult(sqlmock.NewResult(1, 1))
 
-	_, err = wrapper.ExecContext(ctx, "INSERT INTO table")
-	assert.NoError(t, err)
+		_, err = wrapper.ExecContext(ctx, "INSERT INTO table")
+		assert.NoError(t, err)
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mock.ExpectExec("INSERT").WillReturnError(errors.New("exec error"))
+
+		_, err = wrapper.ExecContext(ctx, "INSERT INTO table")
+		assert.Error(t, err)
+	})
 }
 
 func TestTxWrapper_QueryContext(t *testing.T) {
@@ -161,16 +198,25 @@ func TestTxWrapper_QueryContext(t *testing.T) {
 	wrapper := &txWrapper{Tx: tx}
 	ctx := context.Background()
 
-	rows := sqlmock.NewRows([]string{"id"}).AddRow(1)
-	mock.ExpectQuery("SELECT").WillReturnRows(rows)
+	t.Run("Success", func(t *testing.T) {
+		rows := sqlmock.NewRows([]string{"id"}).AddRow(1)
+		mock.ExpectQuery("SELECT").WillReturnRows(rows)
 
-	resRows, err := wrapper.QueryContext(ctx, "SELECT id")
-	assert.NoError(t, err)
-	defer func() {
-		if err := resRows.Close(); err != nil {
-			t.Logf("failed to close rows: %v", err)
-		}
-	}()
+		resRows, err := wrapper.QueryContext(ctx, "SELECT id")
+		assert.NoError(t, err)
+		defer func() {
+			if err := resRows.Close(); err != nil {
+				t.Logf("failed to close rows: %v", err)
+			}
+		}()
+	})
+
+	t.Run("Error", func(t *testing.T) {
+		mock.ExpectQuery("SELECT").WillReturnError(errors.New("query error"))
+
+		_, err := wrapper.QueryContext(ctx, "SELECT id")
+		assert.Error(t, err)
+	})
 }
 
 func TestTxWrapper_Commit(t *testing.T) {
