@@ -64,7 +64,9 @@ func TestSharingUsecase_AddCollaborator(t *testing.T) {
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, targetUserID).Return(false, nil)
 		mockSharingRepo.EXPECT().CheckCollaboratorExists(ctx, noteID, targetUserID).Return(false, nil)
 		mockSharingRepo.EXPECT().AddCollaborator(ctx, gomock.Any()).Return(permission, nil)
+
 		mockSharingRepo.EXPECT().GetCollaboratorsByNoteID(ctx, noteID).Return([]*models.NotePermission{permission}, nil)
+		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(nil, "", nil)
 		mockSharingRepo.EXPECT().UpdateIsSharedFlag(ctx, noteID, true).Return(nil)
 
 		res, err := usecase.AddCollaborator(ctx, noteID, currentUserID, targetUserID, role)
@@ -207,7 +209,9 @@ func TestSharingUsecase_RemoveCollaborator(t *testing.T) {
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().GetCollaboratorByID(ctx, permissionID).Return(permission, nil)
 		mockSharingRepo.EXPECT().RemoveCollaborator(ctx, permissionID).Return(nil)
+
 		mockSharingRepo.EXPECT().GetCollaboratorsByNoteID(ctx, noteID).Return([]*models.NotePermission{}, nil)
+		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(nil, "", nil)
 		mockSharingRepo.EXPECT().UpdateIsSharedFlag(ctx, noteID, false).Return(nil)
 
 		err := usecase.RemoveCollaborator(ctx, noteID, currentUserID, permissionID)
@@ -242,6 +246,10 @@ func TestSharingUsecase_SetPublicAccess(t *testing.T) {
 		mockSharingRepo.EXPECT().GetParentNoteID(ctx, noteID).Return(nil, nil)
 		mockSharingRepo.EXPECT().IsNoteOwner(ctx, noteID, currentUserID).Return(true, nil)
 		mockSharingRepo.EXPECT().SetPublicAccess(ctx, noteID, &accessLevel).Return(nil)
+
+		mockSharingRepo.EXPECT().GetCollaboratorsByNoteID(ctx, noteID).Return([]*models.NotePermission{}, nil)
+		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(&accessLevel, "uuid", nil)
+		mockSharingRepo.EXPECT().UpdateIsSharedFlag(ctx, noteID, true).Return(nil)
 
 		err := usecase.SetPublicAccess(ctx, noteID, currentUserID, &accessLevel)
 		assert.NoError(t, err)
@@ -308,8 +316,10 @@ func TestSharingUsecase_ActivateAccessByLink(t *testing.T) {
 		mockSharingRepo.EXPECT().GetUserPermission(ctx, noteID, userID).Return(nil, nil)
 		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(&accessLevel, "", nil)
 		mockSharingRepo.EXPECT().AddCollaborator(ctx, gomock.Any()).Return(&models.NotePermission{Role: accessLevel}, nil)
+
 		mockSharingRepo.EXPECT().GetCollaboratorsByNoteID(ctx, noteID).Return([]*models.NotePermission{}, nil)
-		mockSharingRepo.EXPECT().UpdateIsSharedFlag(ctx, noteID, false).Return(nil)
+		mockSharingRepo.EXPECT().GetPublicAccess(ctx, noteID).Return(&accessLevel, "", nil)
+		mockSharingRepo.EXPECT().UpdateIsSharedFlag(ctx, noteID, true).Return(nil)
 
 		res, err := usecase.ActivateAccessByLink(ctx, shareUUID, userID)
 		assert.NoError(t, err)

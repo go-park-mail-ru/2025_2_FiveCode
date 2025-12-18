@@ -1,9 +1,6 @@
 package usecase
 
 import (
-	"backend/gateway_service/internal/file/models"
-	"backend/gateway_service/internal/utils"
-	"backend/pkg/logger"
 	"bytes"
 	"context"
 	"fmt"
@@ -13,6 +10,11 @@ import (
 	_ "image/png"
 	"io"
 	"net/http"
+
+	"backend/gateway_service/internal/constants"
+	"backend/gateway_service/internal/file/models"
+	"backend/gateway_service/internal/utils"
+	"backend/pkg/logger"
 )
 
 //go:generate mockgen -source=usecase.go -destination=../mock/mock_usecase.go -package=mock
@@ -48,7 +50,7 @@ func (u *FileUsecase) UploadFile(ctx context.Context, file io.Reader, filename, 
 	detectedType := http.DetectContentType(fileBytes)
 	if !isAllowedImageType(detectedType) {
 		log.Warn().Str("detected_type", detectedType).Msg("upload rejected: invalid file type")
-		return nil, fmt.Errorf("invalid file type: %s, only images (jpeg, png, gif, webp) are allowed", detectedType)
+		return nil, fmt.Errorf("%w: %s, only images (jpeg, png, gif, webp, bmp) are allowed", constants.ErrInvalidFileType, detectedType)
 	}
 
 	_ = contentType
@@ -167,5 +169,6 @@ func isAllowedImageType(contentType string) bool {
 	return contentType == "image/jpeg" ||
 		contentType == "image/png" ||
 		contentType == "image/gif" ||
-		contentType == "image/webp"
+		contentType == "image/webp" ||
+		contentType == "image/bmp"
 }
