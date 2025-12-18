@@ -288,6 +288,7 @@ func searchResultModelToProto(result *models.SearchResult) *notePB.SearchResult 
 		ContentSnippet:   result.ContentSnippet,
 		Rank:             result.Rank,
 		UpdatedAt:        timestamppb.New(result.UpdatedAt),
+		IconFileId:       result.IconFileID,
 	}
 }
 
