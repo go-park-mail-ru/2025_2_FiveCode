@@ -161,7 +161,31 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 		return nil, err
 	}
 
-	return utils.MapProtoToSearchNotesResponse(searchResult), nil
+	response := utils.MapProtoToSearchNotesResponse(searchResult)
+
+	for i, pbResult := range searchResult.Results {
+		r.enrichSearchResultWithIcon(ctx, &response.Results[i], pbResult.IconFileId)
+	}
+
+	return response, nil
+}
+
+func (r *NotesRepository) enrichSearchResultWithIcon(ctx context.Context, result *models.SearchResult, iconFileID *uint64) {
+	if iconFileID == nil {
+		return
+	}
+
+	file, err := r.fileRepo.GetFileByID(ctx, *iconFileID)
+	if err == nil {
+		urlParts := strings.Split(file.URL, "/")
+		iconName := urlParts[len(urlParts)-1]
+
+		result.Icon = &models.Icon{
+			ID:   file.ID,
+			Name: iconName,
+			URL:  utils.TransformMinioURL(file.URL),
+		}
+	}
 }
 
 func (r *NotesRepository) SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error) {

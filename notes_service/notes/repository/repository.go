@@ -42,7 +42,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 	}()
 
 	shareUUID := uuid.New().String()
-	defaultIconFileID := uint64(1) // default.svg
+	defaultIconFileID := uint64(1)    // default.svg
 	defaultHeaderFileID := uint64(35) // default header
 
 	noteQuery := `
@@ -509,36 +509,36 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 	log := logger.FromContext(ctx)
 
 	searchQuery := `
-		SELECT 
-			note_id,
-			title,
-			title as highlighted_title,
-			CASE 
-				WHEN content ILIKE '%' || $1 || '%' THEN
-					substring(content FROM GREATEST(1, position(lower($1) in lower(content)) - 30) FOR 80)
-				ELSE 
-					left(content, 80)
-			END as content_snippet,
-			CASE 
-				WHEN title ILIKE '%' || $1 || '%' THEN 1.0
-				ELSE 0.5
-			END as rank,
-			updated_at
-		FROM note_search_index
-		WHERE (content ILIKE '%' || $1 || '%' OR title ILIKE '%' || $1 || '%')
-		  AND deleted_at IS NULL
-		  AND (
-			  owner_id = $2 
-			  OR 
-			  note_id IN (  
-				  SELECT note_id 
-				  FROM note_permission 
-				  WHERE granted_to = $2
-			  )
-		  )
-		ORDER BY rank DESC, updated_at DESC
-		LIMIT 20
-	`
+       SELECT 
+          note_id,
+          title,
+          title as highlighted_title,
+          CASE 
+             WHEN content ILIKE '%' || $1 || '%' THEN
+                substring(content FROM GREATEST(1, position(lower($1) in lower(content)) - 30) FOR 80)
+             ELSE 
+                left(content, 80)
+          END as content_snippet,
+          CASE 
+             WHEN title ILIKE '%' || $1 || '%' THEN 1.0
+             ELSE 0.5
+          END as rank,
+          updated_at
+       FROM note_search_index
+       WHERE (content ILIKE '%' || $1 || '%' OR title ILIKE '%' || $1 || '%')
+         AND deleted_at IS NULL
+         AND (
+            owner_id = $2 
+            OR 
+            note_id IN (  
+               SELECT note_id 
+               FROM note_permission 
+               WHERE granted_to = $2
+            )
+         )
+       ORDER BY rank DESC, updated_at DESC
+       LIMIT 20
+    `
 
 	rows, err := r.db.QueryContext(ctx, searchQuery, query, userID)
 	if err != nil {
@@ -552,6 +552,7 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 	}()
 
 	results := make([]models.SearchResult, 0)
+	noteIDs := make([]uint64, 0)
 
 	for rows.Next() {
 		var result models.SearchResult
@@ -573,11 +574,18 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 		result.ContentSnippet = highlightMatches(result.ContentSnippet, query)
 
 		results = append(results, result)
+		noteIDs = append(noteIDs, result.NoteID)
 	}
 
 	if err := rows.Err(); err != nil {
 		log.Error().Err(err).Msg("error iterating search results")
 		return nil, fmt.Errorf("error iterating search results: %w", err)
+	}
+
+	if len(noteIDs) > 0 {
+		if err := r.fillIconFileIDs(ctx, results, noteIDs); err != nil {
+			log.Error().Err(err).Msg("failed to fill icon file ids")
+		}
 	}
 
 	log.Info().
@@ -590,6 +598,32 @@ func (r *NotesRepository) SearchNotes(ctx context.Context, userID uint64, query 
 		Results: results,
 		Count:   len(results),
 	}, nil
+}
+
+func (r *NotesRepository) fillIconFileIDs(ctx context.Context, results []models.SearchResult, noteIDs []uint64) error {
+	query := `SELECT id, icon_file_id FROM note WHERE id = ANY($1)`
+
+	rows, err := r.db.QueryContext(ctx, query, pq.Array(noteIDs))
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	iconMap := make(map[uint64]*uint64)
+	for rows.Next() {
+		var noteID uint64
+		var iconFileID *uint64
+		if err := rows.Scan(&noteID, &iconFileID); err != nil {
+			return err
+		}
+		iconMap[noteID] = iconFileID
+	}
+
+	for i := range results {
+		results[i].IconFileID = iconMap[results[i].NoteID]
+	}
+
+	return nil
 }
 
 func (r *NotesRepository) StartSearchIndexRefresher(ctx context.Context, connString string) error {

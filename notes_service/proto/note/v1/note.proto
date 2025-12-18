@@ -88,6 +88,7 @@ message SearchResult {
   string content_snippet = 4;
   float rank = 5;
   google.protobuf.Timestamp updated_at = 6;
+  optional uint64 icon_file_id = 7;
 }
 
 message SearchNotesResponse {

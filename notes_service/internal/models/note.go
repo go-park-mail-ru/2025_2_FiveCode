@@ -25,6 +25,7 @@ type SearchResult struct {
 	ContentSnippet   string    `json:"content_snippet"`
 	Rank             float32   `json:"rank"`
 	UpdatedAt        time.Time `json:"updated_at"`
+	IconFileID       *uint64   `json:"icon_file_id,omitempty"`
 }
 
 type SearchNotesResponse struct {
