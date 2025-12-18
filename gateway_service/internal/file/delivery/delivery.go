@@ -78,7 +78,11 @@ func (d *FileDelivery) UploadFile(w http.ResponseWriter, r *http.Request) {
 		Msg("uploading file")
 
 	uploadedFile, err := d.Usecase.UploadFile(r.Context(), file, header.Filename, contentType, header.Size)
-	if err != nil {
+	if errors.Is(err, constants.ErrInvalidFileType) {
+		log.Warn().Err(err).Msg("upload rejected: invalid file type")
+		apiutils.WriteError(w, http.StatusBadRequest, err.Error())
+		return
+	} else if err != nil {
 		log.Error().Err(err).Msg("failed to upload file")
 		apiutils.WriteError(w, http.StatusInternalServerError, "failed to upload file")
 		return
