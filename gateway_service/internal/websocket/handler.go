@@ -125,5 +125,8 @@ func (h *Handler) checkNoteIsShared(ctx context.Context, noteID, userID uint64) 
 		return false, err
 	}
 
-	return resp.TotalCollaborators > 1, nil
+	hasCollaborators := resp.TotalCollaborators > 1
+	hasPublicAccess := resp.PublicAccess != nil && *resp.PublicAccess.AccessLevel != sharePB.NoteRole_NOTE_ROLE_UNSPECIFIED
+
+	return hasCollaborators || hasPublicAccess, nil
 }
