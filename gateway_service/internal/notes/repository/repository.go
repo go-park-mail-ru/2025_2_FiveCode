@@ -30,6 +30,7 @@ type NoteClient interface {
 	RemoveFavorite(ctx context.Context, in *notePB.FavoriteRequest, opts ...grpc.CallOption) (*emptypb.Empty, error)
 	SearchNotes(ctx context.Context, in *notePB.SearchNotesRequest, opts ...grpc.CallOption) (*notePB.SearchNotesResponse, error)
 	SetIcon(ctx context.Context, in *notePB.SetIconRequest, opts ...grpc.CallOption) (*notePB.Note, error)
+	SetHeader(ctx context.Context, in *notePB.SetHeaderRequest, opts ...grpc.CallOption) (*notePB.Note, error)
 }
 
 type BlockClient interface {
@@ -81,6 +82,7 @@ func (r *NotesRepository) GetAllNotes(ctx context.Context, userID uint64) ([]mod
 	for i, pNote := range resp.Notes {
 		note := utils.MapProtoToNote(pNote)
 		r.enrichNoteWithIcon(ctx, note, pNote.IconFileId)
+		r.enrichNoteWithHeader(ctx, note, pNote.HeaderFileId)
 		notes[i] = *note
 	}
 	return notes, nil
@@ -98,6 +100,7 @@ func (r *NotesRepository) CreateNote(ctx context.Context, userID uint64, parentN
 	}
 	note := utils.MapProtoToNote(resp)
 	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	r.enrichNoteWithHeader(ctx, note, resp.HeaderFileId)
 	return note, nil
 }
 
@@ -108,6 +111,7 @@ func (r *NotesRepository) GetNoteById(ctx context.Context, userID, noteID uint64
 	}
 	note := utils.MapProtoToNote(resp)
 	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	r.enrichNoteWithHeader(ctx, note, resp.HeaderFileId)
 	return note, nil
 }
 
@@ -129,6 +133,7 @@ func (r *NotesRepository) UpdateNote(ctx context.Context, input *models.UpdateNo
 	}
 	note := utils.MapProtoToNote(resp)
 	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	r.enrichNoteWithHeader(ctx, note, resp.HeaderFileId)
 	return note, nil
 }
 
@@ -171,6 +176,7 @@ func (r *NotesRepository) SetIcon(ctx context.Context, userID, noteID, iconFileI
 
 	note := utils.MapProtoToNote(resp)
 	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	r.enrichNoteWithHeader(ctx, note, resp.HeaderFileId)
 	return note, nil
 }
 
@@ -421,4 +427,38 @@ func (r *NotesRepository) enrichNoteWithIcon(ctx context.Context, note *models.N
 			URL:  utils.TransformMinioURL(file.URL),
 		}
 	}
+}
+
+func (r *NotesRepository) enrichNoteWithHeader(ctx context.Context, note *models.Note, headerFileID *uint64) {
+	if headerFileID == nil {
+		return
+	}
+
+	file, err := r.fileRepo.GetFileByID(ctx, *headerFileID)
+	if err == nil {
+		urlParts := strings.Split(file.URL, "/")
+		headerName := urlParts[len(urlParts)-1]
+
+		note.Header = &models.Header{
+			ID:   file.ID,
+			Name: headerName,
+			URL:  utils.TransformMinioURL(file.URL),
+		}
+	}
+}
+
+func (r *NotesRepository) SetHeader(ctx context.Context, userID, noteID, headerFileID uint64) (*models.Note, error) {
+	resp, err := r.noteClient.SetHeader(ctx, &notePB.SetHeaderRequest{
+		UserId:       userID,
+		NoteId:       noteID,
+		HeaderFileId: headerFileID,
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	note := utils.MapProtoToNote(resp)
+	r.enrichNoteWithIcon(ctx, note, resp.IconFileId)
+	r.enrichNoteWithHeader(ctx, note, resp.HeaderFileId)
+	return note, nil
 }

@@ -218,6 +218,26 @@ func (mr *MockNoteClientMockRecorder) SearchNotes(ctx, in interface{}, opts ...i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchNotes", reflect.TypeOf((*MockNoteClient)(nil).SearchNotes), varargs...)
 }
 
+// SetHeader mocks base method.
+func (m *MockNoteClient) SetHeader(ctx context.Context, in *v10.SetHeaderRequest, opts ...grpc.CallOption) (*v10.Note, error) {
+	m.ctrl.T.Helper()
+	varargs := []interface{}{ctx, in}
+	for _, a := range opts {
+		varargs = append(varargs, a)
+	}
+	ret := m.ctrl.Call(m, "SetHeader", varargs...)
+	ret0, _ := ret[0].(*v10.Note)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetHeader indicates an expected call of SetHeader.
+func (mr *MockNoteClientMockRecorder) SetHeader(ctx, in interface{}, opts ...interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	varargs := append([]interface{}{ctx, in}, opts...)
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeader", reflect.TypeOf((*MockNoteClient)(nil).SetHeader), varargs...)
+}
+
 // SetIcon mocks base method.
 func (m *MockNoteClient) SetIcon(ctx context.Context, in *v10.SetIconRequest, opts ...grpc.CallOption) (*v10.Note, error) {
 	m.ctrl.T.Helper()

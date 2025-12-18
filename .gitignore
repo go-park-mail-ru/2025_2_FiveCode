@@ -7,3 +7,4 @@ test.sh
 *.txt
 *.out
 backend-goose
+*_easyjson.go

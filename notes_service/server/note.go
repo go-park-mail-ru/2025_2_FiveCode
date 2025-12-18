@@ -174,3 +174,19 @@ func (s *Server) SetIcon(ctx context.Context, req *notePB.SetIconRequest) (*note
 
 	return noteModelToProto(note), nil
 }
+
+func (s *Server) SetHeader(ctx context.Context, req *notePB.SetHeaderRequest) (*notePB.Note, error) {
+	note, err := s.noteUsecase.SetHeader(ctx, req.GetUserId(), req.GetNoteId(), req.GetHeaderFileId())
+	if err != nil {
+		switch {
+		case errors.Is(err, constants.ErrNotFound):
+			return nil, status.Error(codes.NotFound, "note not found")
+		case errors.Is(err, constants.ErrNoAccess):
+			return nil, status.Error(codes.PermissionDenied, "access denied")
+		default:
+			return nil, status.Error(codes.Internal, "failed to set header")
+		}
+	}
+
+	return noteModelToProto(note), nil
+}

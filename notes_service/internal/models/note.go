@@ -8,6 +8,7 @@ type Note struct {
 	ParentNoteID *uint64    `json:"parent_note_id,omitempty"`
 	Title        string     `json:"title"`
 	IconFileID   *uint64    `json:"icon_file_id,omitempty"`
+	HeaderFileID *uint64    `json:"header_file_id,omitempty"`
 	IsFavorite   bool       `json:"is_favorite"`
 	IsArchived   bool       `json:"is_archived"`
 	IsShared     bool       `json:"is_shared"`

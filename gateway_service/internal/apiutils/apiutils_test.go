@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/asaskevich/govalidator"
 	"github.com/rs/zerolog"
 	"github.com/stretchr/testify/assert"
 	"google.golang.org/grpc/codes"
@@ -35,12 +36,26 @@ func TestWriteValidationErrors(t *testing.T) {
 }
 
 func TestWriteValidationError(t *testing.T) {
-	t.Run("GovaleditorErrors", func(t *testing.T) {
+	t.Run("SimpleError", func(t *testing.T) {
 		w := httptest.NewRecorder()
 		err := errors.New("simple error")
 		WriteValidationError(w, http.StatusBadRequest, err)
 		assert.Equal(t, http.StatusBadRequest, w.Code)
 		assert.JSONEq(t, `{"error":"simple error"}`, w.Body.String())
+	})
+
+	t.Run("GovalidatorErrors", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		errs := govalidator.Errors{
+			errors.New("email: invalid format"),
+			errors.New("password: too short"),
+		}
+		WriteValidationError(w, http.StatusBadRequest, errs)
+		assert.Equal(t, http.StatusBadRequest, w.Code)
+		assert.Contains(t, w.Body.String(), "email")
+		assert.Contains(t, w.Body.String(), "invalid format")
+		assert.Contains(t, w.Body.String(), "password")
+		assert.Contains(t, w.Body.String(), "too short")
 	})
 }
 
@@ -90,14 +105,17 @@ func TestHandleGrpcError(t *testing.T) {
 		name       string
 		err        error
 		wantStatus int
+		wantBody   string
 	}{
-		{"NotFound", status.Error(codes.NotFound, "not found"), http.StatusNotFound},
-		{"InvalidArgument", status.Error(codes.InvalidArgument, "bad args"), http.StatusBadRequest},
-		{"Unauthenticated", status.Error(codes.Unauthenticated, "no auth"), http.StatusUnauthorized},
-		{"AlreadyExists", status.Error(codes.AlreadyExists, "exists"), http.StatusConflict},
-		{"PermissionDenied", status.Error(codes.PermissionDenied, "denied"), http.StatusForbidden},
-		{"Internal", status.Error(codes.Internal, "internal"), http.StatusInternalServerError},
-		{"NonGrpc", errors.New("std error"), http.StatusInternalServerError},
+		{"NotFound", status.Error(codes.NotFound, "not found"), http.StatusNotFound, "not found"},
+		{"InvalidArgument", status.Error(codes.InvalidArgument, "bad args"), http.StatusBadRequest, "bad args"},
+		{"Unauthenticated", status.Error(codes.Unauthenticated, "no auth"), http.StatusUnauthorized, "no auth"},
+		{"AlreadyExists", status.Error(codes.AlreadyExists, "exists"), http.StatusConflict, "exists"},
+		{"PermissionDenied", status.Error(codes.PermissionDenied, "denied"), http.StatusForbidden, "denied"},
+		{"Internal", status.Error(codes.Internal, "internal"), http.StatusInternalServerError, "an unexpected error occurred"},
+		{"Unimplemented", status.Error(codes.Unimplemented, "not implemented"), http.StatusInternalServerError, "an unexpected error occurred"},
+		{"Unavailable", status.Error(codes.Unavailable, "unavailable"), http.StatusInternalServerError, "an unexpected error occurred"},
+		{"NonGrpc", errors.New("std error"), http.StatusInternalServerError, "internal server error"},
 	}
 
 	for _, tt := range tests {
@@ -105,16 +123,52 @@ func TestHandleGrpcError(t *testing.T) {
 			w := httptest.NewRecorder()
 			HandleGrpcError(w, tt.err, logger)
 			assert.Equal(t, tt.wantStatus, w.Code)
+			assert.Contains(t, w.Body.String(), tt.wantBody)
 		})
 	}
 }
 
 func TestParseGovalidatorError(t *testing.T) {
-	field, msg := parseGovalidatorError("email: invalid format")
-	assert.Equal(t, "email", field)
-	assert.Equal(t, "invalid format", msg)
+	t.Run("WithField", func(t *testing.T) {
+		field, msg := parseGovalidatorError("email: invalid format")
+		assert.Equal(t, "email", field)
+		assert.Equal(t, "invalid format", msg)
+	})
 
-	field, msg = parseGovalidatorError("generic error")
-	assert.Equal(t, "", field)
-	assert.Equal(t, "generic error", msg)
+	t.Run("WithoutField", func(t *testing.T) {
+		field, msg := parseGovalidatorError("generic error")
+		assert.Equal(t, "", field)
+		assert.Equal(t, "generic error", msg)
+	})
+
+	t.Run("WithSpaces", func(t *testing.T) {
+		field, msg := parseGovalidatorError("  email  :  invalid format  ")
+		assert.Equal(t, "email", field)
+		assert.Equal(t, "invalid format", msg)
+	})
+}
+
+func TestWriteJSON(t *testing.T) {
+	t.Run("Success", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		data := map[string]string{"key": "value"}
+		WriteJSON(w, http.StatusOK, data)
+		assert.Equal(t, http.StatusOK, w.Code)
+		assert.Equal(t, "application/json", w.Header().Get("Content-Type"))
+		assert.Contains(t, w.Body.String(), "key")
+		assert.Contains(t, w.Body.String(), "value")
+	})
+
+	t.Run("WithStruct", func(t *testing.T) {
+		w := httptest.NewRecorder()
+		type TestStruct struct {
+			Name  string `json:"name"`
+			Value int    `json:"value"`
+		}
+		data := TestStruct{Name: "test", Value: 123}
+		WriteJSON(w, http.StatusCreated, data)
+		assert.Equal(t, http.StatusCreated, w.Code)
+		assert.Contains(t, w.Body.String(), "test")
+		assert.Contains(t, w.Body.String(), "123")
+	})
 }

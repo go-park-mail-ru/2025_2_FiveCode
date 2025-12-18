@@ -316,6 +316,21 @@ func (mr *MockNotesRepositoryMockRecorder) SearchNotes(ctx, userID, query interf
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SearchNotes", reflect.TypeOf((*MockNotesRepository)(nil).SearchNotes), ctx, userID, query)
 }
 
+// SetHeader mocks base method.
+func (m *MockNotesRepository) SetHeader(ctx context.Context, userID, noteID, headerFileID uint64) (*models.Note, error) {
+	m.ctrl.T.Helper()
+	ret := m.ctrl.Call(m, "SetHeader", ctx, userID, noteID, headerFileID)
+	ret0, _ := ret[0].(*models.Note)
+	ret1, _ := ret[1].(error)
+	return ret0, ret1
+}
+
+// SetHeader indicates an expected call of SetHeader.
+func (mr *MockNotesRepositoryMockRecorder) SetHeader(ctx, userID, noteID, headerFileID interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SetHeader", reflect.TypeOf((*MockNotesRepository)(nil).SetHeader), ctx, userID, noteID, headerFileID)
+}
+
 // SetIcon mocks base method.
 func (m *MockNotesRepository) SetIcon(ctx context.Context, userID, noteID, iconFileID uint64) (*models.Note, error) {
 	m.ctrl.T.Helper()

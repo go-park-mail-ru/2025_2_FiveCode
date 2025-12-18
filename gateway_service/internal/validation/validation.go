@@ -1,8 +1,12 @@
 package validation
 
 import (
+	"regexp"
+
 	"github.com/asaskevich/govalidator"
 )
+
+var emailRegex = regexp.MustCompile(`^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z0-9]{2,}$`)
 
 func init() {
 	govalidator.SetFieldsRequiredByDefault(false)
@@ -14,6 +18,10 @@ func init() {
 		}
 		return len(s) >= 8
 	}))
+
+	govalidator.TagMap["email"] = govalidator.Validator(func(str string) bool {
+		return emailRegex.MatchString(str)
+	})
 }
 
 func ValidateStruct(s interface{}) error {
