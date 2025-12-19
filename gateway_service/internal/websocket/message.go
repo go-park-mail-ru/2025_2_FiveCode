@@ -2,6 +2,8 @@ package websocket
 
 import (
 	"time"
+
+	"backend/gateway_service/internal/notes/models"
 )
 
 type MessageType string
@@ -24,4 +26,7 @@ type ServerMessage struct {
 	Blocks    interface{} `json:"blocks,omitempty"`
 	Message   string      `json:"message,omitempty"`
 	Title     string      `json:"title,omitempty"`
+
+	Icon   *models.Icon   `json:"icon,omitempty"`
+	Header *models.Header `json:"header,omitempty"`
 }
