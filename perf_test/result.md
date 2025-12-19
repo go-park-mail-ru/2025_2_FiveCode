@@ -246,3 +246,4 @@ FATAL: sorry, too many clients already
 2. **Асинхронное обновление** materialized view
 3. **Кэширование** часто читаемых заметок (Redis)
 
+в папке /images лежат скришноты результатов
