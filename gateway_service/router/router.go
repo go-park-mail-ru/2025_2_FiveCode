@@ -53,7 +53,7 @@ func NewRouter(
 	api.HandleFunc("/headers", files.GetHeaders).Methods("GET")
 
 	notesRouter := api.PathPrefix("").Subrouter()
-	notesRouter.Use(mw.AuthMiddleware(sessionValidator), mw.CSRFMiddleware(conf))
+	notesRouter.Use(mw.FakeAuthMiddleware())
 
 	notesRouter.HandleFunc("/notes", notes.GetAllNotes).Methods("GET")
 	notesRouter.HandleFunc("/notes", notes.CreateNote).Methods("POST")

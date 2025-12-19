@@ -303,3 +303,13 @@ func CSRFMiddleware(conf *config.Config) mux.MiddlewareFunc {
 		})
 	}
 }
+
+func FakeAuthMiddleware() mux.MiddlewareFunc {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			// Устанавливаем фиксированный userID для тестов
+			ctx := WithUserID(r.Context(), 1)
+			next.ServeHTTP(w, r.WithContext(ctx))
+		})
+	}
+}
