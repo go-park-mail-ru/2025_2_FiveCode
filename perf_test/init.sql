@@ -1,8 +1,3 @@
--- =====================================================
--- ИСХОДНЫЙ DDL БАЗЫ ДАННЫХ (до оптимизаций)
--- Сервис заметок (notes_db)
--- =====================================================
-
 -- ENUM TYPES
 CREATE TYPE block_type AS ENUM ('text', 'code', 'attachment');
 CREATE TYPE note_role AS ENUM ('editor', 'commenter', 'viewer');

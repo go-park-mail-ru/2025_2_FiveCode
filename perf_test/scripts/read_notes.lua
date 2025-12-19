@@ -1,16 +1,10 @@
--- wrk Lua скрипт для чтения заметок (GET /api/notes/{id})
--- Использование: wrk -t4 -c100 -d60s -s read_notes.lua http://localhost:8080
 
--- Диапазон ID заметок для чтения
--- После создания 100k заметок, ID будут от 1 до 100000
 local min_id = 1
 local max_id = 117852
 
--- Инициализация генератора случайных чисел
 math.randomseed(os.time())
 
 function request()
-    -- Генерируем случайный ID заметки
     local note_id = math.random(min_id, max_id)
     local path = "/api/notes/" .. note_id
     return wrk.format("GET", path)
@@ -18,7 +12,6 @@ end
 
 function response(status, headers, body)
     if status ~= 200 then
-        -- Заметка может быть не найдена (404) если ID не существует
         if status ~= 404 then
             io.write(string.format("Error: status=%d, body=%s\n", status, body))
         end
