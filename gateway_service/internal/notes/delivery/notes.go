@@ -247,8 +247,8 @@ func (d *NotesDelivery) notifyNoteChanged(ctx context.Context, noteID uint64, us
 		Blocks:    blocks,
 		Title:     note.Title,
 
-		Icon:      note.Icon,
-		Header:    note.Header,
+		Icon:   note.Icon,
+		Header: note.Header,
 	}
 
 	data, err := json.Marshal(message)
@@ -349,7 +349,7 @@ func (d *NotesDelivery) SetIcon(w http.ResponseWriter, r *http.Request) {
 }
 
 type SetHeaderRequest struct {
-	HeaderFileID uint64 `json:"header_file_id"`
+	HeaderFileID uint64 `json:"header_id"`
 }
 
 func (d *NotesDelivery) SetHeader(w http.ResponseWriter, r *http.Request) {
